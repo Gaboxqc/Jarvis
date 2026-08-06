@@ -96,6 +96,13 @@ class Skill:
     # stored. Anything that writes without asking should set this.
     always_report: bool = False
 
+    # Some actions must be confirmed every single time, and may never be waved
+    # through by a standing pre-approval. REQ-14 is explicit about sending mail:
+    # confirmation is per message, and a general "yes, go ahead" from an earlier
+    # turn is not authorization. Without this flag the pre-approval mechanism
+    # would be a legitimate-looking way around that rule.
+    allow_pre_approval: bool = True
+
     def severity(self, args: dict[str, Any]) -> Severity:
         """How much this specific call is worth interrupting the user for.
 

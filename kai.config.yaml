@@ -72,6 +72,44 @@ skills:
   # Disable any skill by name (REQ-33).
   disabled: []
 
+connectors:
+  # Calendars and mail accounts (REQ-8, REQ-13). Both are optional — the
+  # assistant is fully useful with none connected.
+  #
+  # No password is ever written here. Add the account below, then run
+  #   /connect calendar <label>     or     /connect mail <label>
+  # and type the password at the prompt. It goes straight into the Windows
+  # Credential Manager; this file only ever holds the account details (REQ-26).
+
+  calendar: []
+  # Read-only, works with any provider that publishes an iCal URL — in Google
+  # Calendar it's Settings > your calendar > "Secret address in iCal format":
+  #   - label: personal
+  #     provider: ics
+  #     url: https://calendar.google.com/calendar/ical/.../basic.ics
+  #
+  # Two-way, for servers that accept an app-specific password (Fastmail,
+  # Nextcloud, iCloud). Needed for creating and cancelling events:
+  #   - label: work
+  #     provider: caldav
+  #     url: https://caldav.fastmail.com/dav/
+  #     username: you@fastmail.com
+  #     writable: true
+
+  mail: []
+  # Any IMAP provider. Gmail and Outlook with 2FA require an app password
+  # rather than your normal one:
+  #   - label: gmail
+  #     provider: imap
+  #     host: imap.gmail.com
+  #     port: 993
+  #     username: you@gmail.com
+  #     smtp_host: smtp.gmail.com
+  #     smtp_port: 587
+
+  # Which briefing sections to include, in order (REQ-11).
+  briefing_sections: [calendar, reminders, tasks, mail]
+
 documents:
   # Folders indexed for document search (REQ-16). Text is extracted and indexed
   # locally with SQLite full-text search — nothing is uploaded, and no embedding

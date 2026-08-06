@@ -23,5 +23,11 @@ faster-whisper==1.2.1
 piper-tts==1.6.0
 openwakeword==0.6.0
 
+# Connectors (REQ-8, REQ-13). Mail is stdlib imaplib/smtplib -- no dependency.
+# keyring keeps secrets in the OS credential store, never in config (REQ-26).
+keyring==25.7.0
+icalendar==7.2.2
+caldav==3.2.1
+
 # dev
 pytest==9.0.1

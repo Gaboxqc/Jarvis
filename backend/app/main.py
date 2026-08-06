@@ -249,6 +249,35 @@ def clear_document_index() -> dict[str, Any]:
     return {"cleared_documents": index_store.clear()}
 
 
+# -- connectors (REQ-8, REQ-13, REQ-26) -----------------------------------
+
+
+@app.get("/connectors")
+def connector_status() -> dict[str, Any]:
+    """Account details only. Never returns a secret, by construction."""
+    from .connectors import base as connectors
+
+    return connectors.status()
+
+
+@app.delete("/connectors/{kind}/{label}/credential")
+def forget_credential(kind: str, label: str) -> dict[str, Any]:
+    from .connectors import credentials
+
+    return {"removed": credentials.delete(credentials.reference(kind, label))}
+
+
+@app.get("/briefing")
+def briefing() -> dict[str, Any]:
+    from .skills.planning.briefing import build
+
+    return {
+        "sections": [
+            {"name": s.name, "lines": s.lines, "error": s.error} for s in build()
+        ]
+    }
+
+
 # -- voice (REQ-1 to REQ-4) -----------------------------------------------
 
 

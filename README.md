@@ -8,7 +8,7 @@ Requirement IDs (`REQ-N`) are referenced throughout the source.
 
 ## What works today
 
-Phases 0–7 of `tasks.md`:
+Phases 0–8 of `tasks.md`:
 
 | Area | Capability |
 |---|---|
@@ -20,11 +20,30 @@ Phases 0–7 of `tasks.md`:
 | Files | Search by name, date or content; safe folder organization, full batch undo |
 | System | Launch/close apps, volume, lock, sleep, focus sessions |
 | Voice | Local speech in and out, wake word, confidence-gated so it asks rather than guesses |
+| Calendar | Agenda, free slots, create/cancel events (ICS or CalDAV) |
+| Mail | Unread triage split by what needs a reply, search, draft, send |
+| Briefing | One catch-up covering calendar, reminders, tasks and mail |
 | Trust | Action Gate, action history, undo, pre-approvals, one-shot data wipe |
 
-Not built yet: calendar and mail connectors (Phase 8), screen/clipboard
-assistance (T6.6), meeting capture (Phase 9), Tauri UI (Phase 10), installer
-(Phase 11).
+Not built yet: screen/clipboard assistance (T6.6), meeting capture (Phase 9),
+Tauri UI (Phase 10), installer (Phase 11).
+
+## Connecting an account
+
+Connectors are optional — everything above works without them. Add the account
+to `kai.config.yaml`, then:
+
+```bash
+cd backend && ../.venv/Scripts/python.exe -m app.cli
+```
+
+Run `/connect mail gmail`. **You type the password at the prompt**; it goes
+straight into Windows Credential Manager and is never written to the config
+file, never logged, and never echoed. `/accounts` shows what is connected.
+
+Calendars work read-only from any iCal URL (Google: Settings → your calendar →
+"Secret address in iCal format"), or two-way over CalDAV. Mail is plain IMAP —
+with 2FA you need an app password, not your normal one.
 
 ## Voice
 
@@ -119,7 +138,8 @@ assistant never proposes something it is not permitted to do.
 ## CLI commands
 
 `/skills` `/memory` `/history` `/pending` `/reminders` `/docs` `/reindex`
-`/voice` `/listen` `/speak` `/focus` `/undo` `/health` `/wipe` `/quit`
+`/brief` `/accounts` `/connect` `/voice` `/listen` `/speak` `/focus` `/undo`
+`/health` `/wipe` `/quit`
 
 These work whether or not the model is reachable.
 
