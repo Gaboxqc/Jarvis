@@ -230,12 +230,23 @@ def fetch_unread(config: ConnectorConfig, limit: int = 25, days: int = 14) -> li
     return messages
 
 
-def search_messages(config: ConnectorConfig, query: str, limit: int = 10) -> list[Message]:
+def search_messages(
+    config: ConnectorConfig, query: str, limit: int = 10, days: int = 365
+) -> list[Message]:
+    """Search recent mail.
+
+    Bounded by date on purpose. IMAP TEXT search scans message bodies server
+    side, and on a real mailbox that is enormous — the account this was first
+    run against had 33,000 unread alone, where an unbounded search exceeds the
+    connection timeout and returns nothing at all. A year covers what anyone
+    actually asks about, and `days` widens it when they don't.
+    """
     messages: list[Message] = []
     safe = query.replace('"', "")
+    since = (datetime.now(timezone.utc) - timedelta(days=max(1, days))).strftime("%d-%b-%Y")
 
     with _Session(config) as connection:
-        status, data = connection.search(None, "TEXT", f'"{safe}"')
+        status, data = connection.search(None, "TEXT", f'"{safe}"', "SINCE", since)
         if status != "OK":
             raise ConnectorError("The mail server refused the search.")
 

@@ -74,14 +74,17 @@ class ReadMailSkill(Skill):
         SkillParam("query", "string", "Words to search for."),
         SkillParam("account", "string", "Which account.", required=False),
         SkillParam("limit", "integer", "How many (default 5).", required=False, default=5),
+        SkillParam("days", "integer", "How far back to look (default 365).",
+                   required=False, default=365),
     )
 
     def run(self, args: dict[str, Any], ctx: SkillContext) -> SkillResult:
         config = connectors.find("mail", str(args.get("account", "") or ""))
         query = str(args["query"]).strip()
         limit = max(1, min(int(args.get("limit", 5) or 5), 20))
+        days = max(1, int(args.get("days", 365) or 365))
 
-        messages = mail.search_messages(config, query, limit=limit)
+        messages = mail.search_messages(config, query, limit=limit, days=days)
         if not messages:
             return SkillResult(ok=True, message=f"No mail matching '{query}'.",
                                data={"messages": []})

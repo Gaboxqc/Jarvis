@@ -8,7 +8,7 @@ Requirement IDs (`REQ-N`) are referenced throughout the source.
 
 ## What works today
 
-Phases 0–8 of `tasks.md`:
+Phases 0–9 of `tasks.md`:
 
 | Area | Capability |
 |---|---|
@@ -23,10 +23,26 @@ Phases 0–8 of `tasks.md`:
 | Calendar | Agenda, free slots, create/cancel events (ICS or CalDAV) |
 | Mail | Unread triage split by what needs a reply, search, draft, send |
 | Briefing | One catch-up covering calendar, reminders, tasks and mail |
+| Meetings | Record and transcribe locally, then summary, decisions and action items |
 | Trust | Action Gate, action history, undo, pre-approvals, one-shot data wipe |
 
-Not built yet: screen/clipboard assistance (T6.6), meeting capture (Phase 9),
-Tauri UI (Phase 10), installer (Phase 11).
+Not built yet: screen/clipboard assistance (T6.6), Tauri UI (Phase 10),
+installer (Phase 11).
+
+## Recording a meeting
+
+`/record standup` starts, `/record stop` summarises. Transcription is local —
+audio never leaves the machine, and only the text is stored. `/meetings` lists
+what has been recorded; each is individually deletable.
+
+**It records your microphone only.** Capturing the other participants on a video
+call was built and removed: `soundcard` can do WASAPI loopback, but it binds its
+COM apartment to the importing thread and any prior `sounddevice` use in the
+process — a single `/listen` is enough — makes it terminate the interpreter with
+no traceback. Subprocess isolation didn't work either. The findings are written
+up in `backend/app/capture/recorder.py` so it isn't re-attempted blind. For an
+in-person meeting or dictation it's complete; for a remote call it captures your
+side, and it says so before recording rather than after.
 
 ## Connecting an account
 
@@ -149,8 +165,8 @@ assistant never proposes something it is not permitted to do.
 ## CLI commands
 
 `/skills` `/memory` `/history` `/pending` `/reminders` `/docs` `/reindex`
-`/brief` `/accounts` `/connect` `/voice` `/listen` `/speak` `/focus` `/undo`
-`/health` `/wipe` `/quit`
+`/brief` `/accounts` `/connect` `/voice` `/listen` `/speak` `/record` `/meetings`
+`/focus` `/undo` `/health` `/wipe` `/quit`
 
 These work whether or not the model is reachable.
 
