@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from . import focus
@@ -48,6 +49,17 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Kai", version="0.1.0", lifespan=lifespan)
+
+# The desktop UI runs from a local dev server, and inside Tauri from the
+# tauri:// scheme. Localhost only -- this API reaches the user's files, mail and
+# calendar, so it must never accept a page served from anywhere else (REQ-26).
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"^(https?://(localhost|127\.0\.0\.1)(:\d+)?|tauri://localhost)$",
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # -- models ---------------------------------------------------------------
@@ -416,6 +428,32 @@ def focus_status() -> dict[str, Any]:
 def end_focus() -> dict[str, Any]:
     state = focus.end()
     return {"active": state.active}
+
+
+@app.get("/state")
+def presence_state() -> dict[str, Any]:
+    """What the presence indicator shows — REQ-32.
+
+    Deliberately the whole contract: a state name, plus an optional emotion tag.
+    The UI is given nothing about the brain, the skills or the actions, which is
+    what keeps the presentation layer replaceable.
+    """
+    from .capture import session as capture
+    from .voice import stt, tts
+
+    if capture.is_recording():
+        state = "recording"
+    elif stt.is_loaded() or tts.is_loaded():
+        state = "listening"
+    else:
+        state = "idle"
+
+    return {
+        "state": state,
+        "emotion": None,
+        "recording": capture.is_recording(),
+        "focus": focus.is_active(),
+    }
 
 
 @app.get("/health")

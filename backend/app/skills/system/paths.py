@@ -35,10 +35,6 @@ def resolve_allowed(raw: str, *, must_exist: bool = True) -> Path:
         raise SkillError("No folder was given.")
 
     expanded = os.path.expandvars(os.path.expanduser(str(raw).strip().strip('"')))
-    try:
-        candidate = Path(expanded).resolve()
-    except (OSError, ValueError) as exc:
-        raise SkillError(f"'{raw}' isn't a usable path.") from exc
 
     roots = allowed_roots()
     if not roots:
@@ -46,6 +42,20 @@ def resolve_allowed(raw: str, *, must_exist: bool = True) -> Path:
             "No folders are allowed for file operations yet. "
             "Add them under system.allowed_roots in kai.config.yaml."
         )
+
+    try:
+        candidate = Path(expanded)
+        # People say "my Downloads folder", and the model passes "Downloads".
+        # Resolving that against the process working directory produces
+        # <install dir>/Downloads, which is both wrong and confusing to be told
+        # about. A bare name is matched against the allowed roots and the home
+        # folder instead. Containment is still enforced below, so this widens
+        # what can be *named*, never what can be reached.
+        if not candidate.is_absolute():
+            candidate = _resolve_relative(expanded, roots) or candidate
+        candidate = candidate.resolve()
+    except (OSError, ValueError) as exc:
+        raise SkillError(f"'{raw}' isn't a usable path.") from exc
 
     if not any(_is_within(candidate, root) for root in roots):
         raise SkillError(
@@ -57,6 +67,33 @@ def resolve_allowed(raw: str, *, must_exist: bool = True) -> Path:
         raise SkillError(f"'{candidate}' doesn't exist.")
 
     return candidate
+
+
+def _resolve_relative(name: str, roots: list[Path]) -> Path | None:
+    """Interpret a bare folder name against the allowed roots, then home.
+
+    A root whose own name matches wins first, so "Downloads" means the allowed
+    Downloads root rather than a stray subfolder that happens to share the name.
+    Ambiguity resolves to nothing: better to say the folder wasn't found than to
+    silently reorganise the wrong one.
+    """
+    cleaned = name.strip().strip("/\\")
+    if not cleaned:
+        return None
+
+    lowered = cleaned.lower()
+    for root in roots:
+        if root.name.lower() == lowered:
+            return root
+
+    matches = [root / cleaned for root in roots if (root / cleaned).exists()]
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        return None
+
+    from_home = Path.home() / cleaned
+    return from_home if from_home.exists() else None
 
 
 def _is_within(candidate: Path, root: Path) -> bool:

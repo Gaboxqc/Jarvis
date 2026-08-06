@@ -375,7 +375,16 @@ def _guard_ungrounded_reply(user_text: str, reply: str, results: list[dict[str, 
 
 
 def _lower_first(text: str) -> str:
-    return (text[0].lower() + text[1:]) if text else "do that."
+    """First clause of a preview, lowercased, for "I didn't ..." phrasing.
+
+    Previews carry reassurance on the end ("Nothing is deleted; fully
+    undoable"), which reads as nonsense once negated -- "I didn't move 97 files
+    ... Nothing is deleted". Only the first sentence describes the action.
+    """
+    if not text:
+        return "do that."
+    first = text.split(". ")[0].rstrip(".")
+    return (first[0].lower() + first[1:]) + "."
 
 
 def _finish(session_id: str, result: TurnResult) -> TurnResult:
