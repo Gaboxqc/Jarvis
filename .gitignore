@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Local user data — never committed (REQ-26)
+*.db
+*.db-wal
+*.db-shm
+tasks.md
+data/
+
+# Local overrides of the persona/privacy config
+kai.config.local.yaml
+
+# Editors / OS
+.idea/
+.vscode/
+Thumbs.db
+desktop.ini
