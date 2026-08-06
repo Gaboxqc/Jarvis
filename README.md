@@ -8,7 +8,7 @@ Requirement IDs (`REQ-N`) are referenced throughout the source.
 
 ## What works today
 
-Phases 0–9 of `tasks.md`, plus T6.6:
+Phases 0–10 of `tasks.md`:
 
 | Area | Capability |
 |---|---|
@@ -26,8 +26,34 @@ Phases 0–9 of `tasks.md`, plus T6.6:
 | Meetings | Record and transcribe locally, then summary, decisions and action items |
 | Screen | Explain, translate or rewrite what you've copied or what's on screen |
 | Trust | Action Gate, action history, undo, pre-approvals, one-shot data wipe |
+| Desktop UI | Chat with inline confirmations, memory review, action history, privacy screen |
 
-Not built yet: Tauri UI (Phase 10), installer (Phase 11).
+Not built yet: the installer (Phase 11) — the UI runs from source for now.
+
+## The desktop UI
+
+```bash
+cd backend && ../.venv/Scripts/python.exe -m uvicorn app.main:app --port 8756
+```
+
+```bash
+cd ui && npm install && npm run dev
+```
+
+Then open http://127.0.0.1:5173. Four sections — chat, memory, history,
+settings — switchable with Ctrl+1…4.
+
+For the native window instead (tray icon, and Ctrl+Alt+K to summon it without
+changing the focused window):
+
+```bash
+cd ui && npm run tauri dev
+```
+
+The UI talks to the same API the CLI drives, so it cannot acquire capabilities
+the terminal lacks, and the Action Gate sits in front of exactly the same
+actions. Confirmations appear inline: **Go ahead** sends the action id the
+backend issued, never a bare yes.
 
 ## Screen and clipboard
 

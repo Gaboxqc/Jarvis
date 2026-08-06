@@ -158,3 +158,32 @@ def test_find_files_reports_no_matches_honestly(workspace):
     assert outcome.status == gate.EXECUTED
     assert outcome.result.data["matches"] == []
     assert "No files matching" in outcome.message
+
+
+def test_a_bare_folder_name_resolves_against_the_allowed_roots(workspace):
+    """Found through the UI: the model says "Downloads", not an absolute path.
+
+    Resolving that against the process working directory produced
+    <install dir>/Downloads and a confusing refusal.
+    """
+    resolved = paths.resolve_allowed(workspace.name)
+
+    assert resolved == workspace.resolve()
+
+
+def test_a_bare_name_still_cannot_escape_the_allowed_roots(workspace):
+    """Widening what can be *named* must not widen what can be *reached*."""
+    with pytest.raises(SkillError, match="outside the folders"):
+        paths.resolve_allowed("Windows")
+
+
+def test_a_relative_subfolder_of_an_allowed_root_resolves(workspace):
+    nested = workspace / "invoices"
+    nested.mkdir()
+
+    assert paths.resolve_allowed("invoices") == nested.resolve()
+
+
+def test_an_unknown_bare_name_is_refused(workspace):
+    with pytest.raises(SkillError):
+        paths.resolve_allowed("no-such-folder-anywhere")
