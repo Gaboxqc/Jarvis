@@ -93,8 +93,31 @@ class DocumentSettings:
 
 @dataclass(frozen=True)
 class VoiceSettings:
+    """REQ-1, REQ-2, REQ-3, REQ-4.
+
+    Input and output are separate switches on purpose: dictating to a muted
+    assistant in a shared room is a real way to want to use this, and so is
+    hearing replies while typing.
+    """
+
     enabled: bool = False
+    input_enabled: bool = True
+    output_enabled: bool = True
     voice_id: str = "en_US-amy-medium"
+    stt_model: str = "base"  # tiny | base | small | medium
+    language: str = "en"
+    # Wake word is opt-in on top of voice: it means an always-open microphone,
+    # which is a bigger ask than push-to-talk (REQ-2, REQ-26).
+    wake_enabled: bool = False
+    wake_word: str = "hey_jarvis"
+    wake_threshold: float = 0.5
+    silence_ms: int = 800
+    max_utterance_seconds: int = 30
+    # Below this, ask the user to repeat rather than acting on a guess (REQ-3).
+    min_confidence: float = 0.45
+    # Unload the models after this long idle, so a background assistant isn't
+    # holding hundreds of MB it isn't using (REQ-31).
+    unload_after_minutes: int = 10
 
 
 @dataclass(frozen=True)
@@ -147,7 +170,18 @@ def _build(raw: dict[str, Any], source: Path | None) -> Config:
         ),
         voice=VoiceSettings(
             enabled=bool(voice_raw.get("enabled", False)),
+            input_enabled=bool(voice_raw.get("input_enabled", True)),
+            output_enabled=bool(voice_raw.get("output_enabled", True)),
             voice_id=voice_raw.get("voice_id", "en_US-amy-medium"),
+            stt_model=voice_raw.get("stt_model", "base"),
+            language=voice_raw.get("language", persona_raw.get("language", "en")),
+            wake_enabled=bool(voice_raw.get("wake_enabled", False)),
+            wake_word=voice_raw.get("wake_word", "hey_jarvis"),
+            wake_threshold=float(voice_raw.get("wake_threshold", 0.5)),
+            silence_ms=int(voice_raw.get("silence_ms", 800)),
+            max_utterance_seconds=int(voice_raw.get("max_utterance_seconds", 30)),
+            min_confidence=float(voice_raw.get("min_confidence", 0.45)),
+            unload_after_minutes=int(voice_raw.get("unload_after_minutes", 10)),
         ),
         brain=BrainSettings(
             provider=brain_raw.get("provider", "ollama"),

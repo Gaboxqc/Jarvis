@@ -142,6 +142,16 @@ def tick() -> list[Delivery]:
     except Exception:  # noqa: BLE001 — indexing must never disturb reminders
         log.exception("background index scan failed to start")
 
+    # Release speech models that have gone unused, so an assistant idling in
+    # the tray isn't holding hundreds of MB it last needed hours ago (REQ-31).
+    try:
+        from ..voice import stt, tts
+
+        stt.unload_if_idle()
+        tts.unload_if_idle()
+    except Exception:  # noqa: BLE001 — voice being absent is not an error here
+        log.debug("voice idle check skipped", exc_info=True)
+
     return deliveries
 
 

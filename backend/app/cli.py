@@ -47,7 +47,7 @@ def _banner() -> None:
     lines.append("[dim]/skills /memory /history /pending /reminders /docs /reindex[/dim]"
     )
     lines.append(
-        "[dim]/focus /undo /health /wipe /quit[/dim]")
+        "[dim]/voice /listen /speak /focus /undo /health /wipe /quit[/dim]")
 
     console.print(Panel("\n".join(lines), border_style="cyan"))
 
@@ -151,8 +151,115 @@ def _print_health() -> None:
     console.print(f"  file roots: {', '.join(str(r) for r in config.system.allowed_roots) or 'none'}")
 
 
+def _print_voice() -> None:
+    from .voice import models as voice_models
+    from .voice import session as voice_session
+
+    status = voice_session.status()
+    state = "on" if status["enabled"] else "off"
+    console.print(f"  voice     : [bold]{state}[/bold] "
+                  f"(in={'on' if status['input_enabled'] else 'off'}, "
+                  f"out={'on' if status['output_enabled'] else 'off'})")
+    console.print(f"  microphone: {'found' if status['microphone'] else '[red]none[/red]'}")
+    console.print(f"  speech    : {status['stt']['model']} "
+                  f"({'installed' if status['stt']['installed'] else '[yellow]not downloaded[/yellow]'}, "
+                  f"{'loaded' if status['stt']['loaded'] else 'unloaded'})")
+    console.print(f"  reply voice: {status['tts']['voice']} "
+                  f"({'installed' if status['tts']['installed'] else '[yellow]not downloaded[/yellow]'})")
+    console.print(f"  wake word : {status['wake']['phrase']} "
+                  f"({'enabled' if status['wake']['enabled'] else 'off'}, "
+                  f"{'installed' if status['wake']['installed'] else 'not downloaded'})")
+    if status["tts"]["available"]:
+        console.print(f"  voices    : {', '.join(status['tts']['available'])}")
+    if not status["models_ready"]:
+        console.print(f"  [yellow]Run /voice setup to download "
+                      f"~{voice_models.total_download_mb()}MB of models.[/yellow]")
+
+
+def _voice_setup() -> None:
+    from .voice import models as voice_models
+
+    pending = voice_models.missing()
+    if not pending:
+        console.print("[green]All voice models are already downloaded.[/green]")
+        return
+
+    total = sum(entry.approx_mb for entry in pending)
+    console.print(f"[bold]This will download about {total}MB:[/bold]")
+    for entry in pending:
+        console.print(f"  {entry.name} ({entry.kind}, ~{entry.approx_mb}MB)")
+    console.print(f"[dim]Saved to {voice_models.models_root()}[/dim]")
+    if console.input("Continue? [y/N] ").strip().lower() not in {"y", "yes"}:
+        console.print("[dim]Cancelled.[/dim]")
+        return
+
+    with console.status("[dim]downloading...[/dim]", spinner="dots"):
+        report = voice_models.ensure_all()
+    for name in report["downloaded"]:
+        console.print(f"[green]downloaded[/green] {name}")
+    for failure in report["failed"]:
+        console.print(f"[red]failed[/red] {failure['model']}: {failure['error']}")
+    if report["ready"]:
+        console.print("[green]Voice is ready. Set voice.enabled: true in kai.config.yaml.[/green]")
+
+
+def _listen_once() -> None:
+    from .voice import audio as voice_audio
+    from .voice.session import VoiceSession
+
+    if not load_config().voice.enabled:
+        console.print("[yellow]Voice is off. Set voice.enabled: true in kai.config.yaml.[/yellow]")
+        return
+    if not voice_audio.has_microphone():
+        console.print("[red]No microphone found.[/red]")
+        return
+
+    labels = {"calibrating": "listening to the room", "listening": "go ahead",
+              "speaking": "hearing you", "thinking": "thinking", "idle": ""}
+    console.print("[cyan]Speak now — I'll stop when you pause.[/cyan]")
+    turn = VoiceSession(on_state=lambda s: console.print(f"[dim]{labels.get(s, s)}[/dim]")
+                        if labels.get(s) else None).listen_once()
+
+    if turn.heard:
+        console.print(f"[dim]heard ({turn.confidence:.0%} sure):[/dim] {turn.heard}")
+    if turn.error and not turn.reply:
+        console.print(f"[yellow]{turn.error}[/yellow]")
+    if turn.reply:
+        console.print(f"[bold green]{load_config().persona.name} ›[/bold green] {turn.reply}")
+
+
+def _speak(text: str) -> None:
+    from .voice import tts
+
+    if not text.strip():
+        console.print("[dim]Usage: /speak something to say[/dim]")
+        return
+    try:
+        speech = tts.speak(text)
+    except tts.TTSUnavailable as exc:
+        console.print(f"[red]{exc}[/red]")
+        return
+    if speech is None:
+        console.print("[yellow]Speech output is off (voice.enabled / output_enabled).[/yellow]")
+    else:
+        console.print(f"[dim]spoke {speech.seconds:.1f}s[/dim]")
+
+
 def _handle_command(command: str) -> bool:
     """Returns False to exit. These work with or without the model running."""
+    verb, _, argument = command.partition(" ")
+    argument = argument.strip()
+
+    if verb == "/voice":
+        _voice_setup() if argument == "setup" else _print_voice()
+        return True
+    if verb == "/listen":
+        _listen_once()
+        return True
+    if verb == "/speak":
+        _speak(argument)
+        return True
+
     match command:
         case "/quit" | "/exit" | "/q":
             return False
