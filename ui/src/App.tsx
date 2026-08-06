@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Chat } from "./components/Chat";
 import { History } from "./components/History";
 import { Memory } from "./components/Memory";
+import { Prerequisite } from "./components/Prerequisite";
 import { Presence } from "./components/Presence";
 import { Settings } from "./components/Settings";
 import { detectLang, translate, type Key, type Lang } from "./i18n";
@@ -72,6 +73,11 @@ export function App() {
       </header>
 
       <main id="main" tabIndex={-1}>
+        {/* The one prerequisite the installer cannot bundle (REQ-29). */}
+        <div className="view">
+          <Prerequisite t={t} />
+        </div>
+
         {/* Kept mounted: navigating away must not discard a pending confirmation. */}
         <div hidden={tab !== "chat"}>
           <Chat lang={lang} t={t} onBusyChange={onBusyChange} />

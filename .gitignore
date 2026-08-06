@@ -47,3 +47,12 @@ ui/src-tauri/icons/ios/
 ui/src-tauri/icons/Square*Logo.png
 ui/src-tauri/icons/StoreLogo.png
 ui/src-tauri/icons/64x64.png
+
+# Installer build artefacts. The frozen backend is ~550MB and is rebuilt from
+# source by installer/build.ps1.
+installer/dist/
+installer/build/
+ui/src-tauri/resources/kai-backend/
+ui/src-tauri/binaries/
+# Generated at build time from the filesystem (installer/generate_manifest.py).
+backend/app/skills/_manifest.py

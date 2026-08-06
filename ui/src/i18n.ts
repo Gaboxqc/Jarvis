@@ -69,6 +69,13 @@ const STRINGS = {
       "Delete ALL local data? Conversations, memories, reminders, tasks, transcripts and indexes. This cannot be undone.",
     "settings.wiped": "Removed {count} records.",
 
+    "prereq.backendTitle": "Kai's backend isn't running",
+    "prereq.backendBody":
+      "The assistant service isn't answering on port 8756. If you started Kai from source, run the backend too; if you installed it, try quitting from the tray and reopening.",
+    "prereq.modelTitle": "The language model isn't ready",
+    "prereq.modelBody":
+      "Everything else is installed, but Kai needs Ollama for the language model — it's the one part too large to bundle. Install it, then pull a model:",
+
     "common.on": "on",
     "common.off": "off",
     "common.retry": "Try again",
@@ -134,6 +141,13 @@ const STRINGS = {
     "settings.wipeConfirm":
       "¿Borrar TODOS los datos locales? Conversaciones, recuerdos, recordatorios, tareas, transcripciones e índices. No se puede deshacer.",
     "settings.wiped": "Se eliminaron {count} registros.",
+
+    "prereq.backendTitle": "El servicio de Kai no está en marcha",
+    "prereq.backendBody":
+      "El servicio no responde en el puerto 8756. Si iniciaste Kai desde el código, arranca también el backend; si lo instalaste, ciérralo desde la bandeja y ábrelo de nuevo.",
+    "prereq.modelTitle": "El modelo de lenguaje no está listo",
+    "prereq.modelBody":
+      "Todo lo demás está instalado, pero Kai necesita Ollama para el modelo de lenguaje: es la única pieza demasiado grande para incluir. Instálalo y descarga un modelo:",
 
     "common.on": "activado",
     "common.off": "desactivado",
