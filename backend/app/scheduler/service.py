@@ -74,6 +74,14 @@ def collect_due() -> list[Delivery]:
     Advancing before delivering means a subscriber that raises cannot cause the
     same reminder to fire forever.
     """
+    from .. import focus
+
+    # REQ-23: hold proactive output during a focus session rather than dropping
+    # it. Nothing is advanced here, so everything due stays due and comes
+    # through when the session ends, still carrying its original time.
+    if focus.is_active():
+        return []
+
     deliveries: list[Delivery] = []
     now = datetime.now(timezone.utc)
 
@@ -122,6 +130,18 @@ def tick() -> list[Delivery]:
     deliveries = collect_due()
     if deliveries:
         _dispatch(deliveries)
+
+    # The scheduler thread is already the "something happens periodically"
+    # thread, so the indexer rides along rather than starting a second one.
+    # maybe_scan() is cheap when there is nothing due and returns immediately
+    # when the machine should be left alone (REQ-31).
+    try:
+        from ..index import scanner
+
+        scanner.maybe_scan()
+    except Exception:  # noqa: BLE001 — indexing must never disturb reminders
+        log.exception("background index scan failed to start")
+
     return deliveries
 
 

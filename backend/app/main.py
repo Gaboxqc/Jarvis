@@ -14,8 +14,11 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+from . import focus
 from .actions import gate, journal, undo
 from .brain import llm, orchestrator
+from .index import scanner as index_scanner
+from .index import store as index_store
 from .memory import long_term, short_term
 from .scheduler import service as scheduler
 from .scheduler import store as sched_store
@@ -32,6 +35,11 @@ async def lifespan(app: FastAPI):
     load_skills()
     log.info("loaded %d skills", len(catalog()))
     scheduler.start()
+    # Reconcile the document index with disk in the background. Startup must not
+    # block on it: a first scan of a large Documents folder takes minutes, and
+    # the assistant is fully usable without it (REQ-16, REQ-27).
+    if load_config().documents.indexed_folders:
+        index_scanner.scan_in_background()
     try:
         yield
     finally:
@@ -210,6 +218,51 @@ def force_tick() -> dict[str, Any]:
 
 
 # -- privacy & health (REQ-26, REQ-27) ------------------------------------
+
+
+# -- documents (REQ-16) ---------------------------------------------------
+
+
+@app.get("/documents/status")
+def document_index_status() -> dict[str, Any]:
+    return {**index_scanner.status(), "failures": index_store.failures()}
+
+
+@app.get("/documents")
+def list_documents() -> dict[str, Any]:
+    return {"documents": index_store.documents()}
+
+
+@app.post("/documents/reindex")
+def reindex_documents(force: bool = True) -> dict[str, Any]:
+    return index_scanner.scan(force=force).to_dict()
+
+
+@app.get("/documents/search")
+def search_documents(q: str, limit: int = 5) -> dict[str, Any]:
+    return {"results": [hit.to_dict() for hit in index_store.search(q, limit=limit)]}
+
+
+@app.delete("/documents/index")
+def clear_document_index() -> dict[str, Any]:
+    """REQ-16/REQ-26 — the user can see what is indexed and remove all of it."""
+    return {"cleared_documents": index_store.clear()}
+
+
+# -- focus (REQ-23) -------------------------------------------------------
+
+
+@app.get("/focus")
+def focus_status() -> dict[str, Any]:
+    state = focus.state()
+    return {"active": state.active, "minutes_left": state.minutes_left,
+            "closed_apps": list(state.closed_apps)}
+
+
+@app.post("/focus/end")
+def end_focus() -> dict[str, Any]:
+    state = focus.end()
+    return {"active": state.active}
 
 
 @app.get("/health")

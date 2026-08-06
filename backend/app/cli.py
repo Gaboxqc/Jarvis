@@ -15,8 +15,11 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from . import focus
 from .actions import gate, journal, undo
 from .brain import llm, orchestrator
+from .index import scanner as index_scanner
+from .index import store as index_store
 from .memory import long_term
 from .scheduler import service as scheduler
 from .scheduler import store as sched_store
@@ -41,7 +44,10 @@ def _banner() -> None:
         lines.append("[dim]  Local commands below still work.[/dim]")
     lines.append(f"[dim]{len(skills)} skills · data in {db.db_path().parent}[/dim]")
     lines.append("")
-    lines.append("[dim]/skills /memory /history /pending /reminders /undo /health /wipe /quit[/dim]")
+    lines.append("[dim]/skills /memory /history /pending /reminders /docs /reindex[/dim]"
+    )
+    lines.append(
+        "[dim]/focus /undo /health /wipe /quit[/dim]")
 
     console.print(Panel("\n".join(lines), border_style="cyan"))
 
@@ -111,6 +117,28 @@ def _print_reminders() -> None:
         console.print(f"  {item.describe()}")
 
 
+def _print_documents() -> None:
+    status = index_scanner.status()
+    if not status["folders"]:
+        console.print("[dim]No folders configured for document search "
+                      "(documents.indexed_folders).[/dim]")
+        return
+
+    console.print(f"[bold]{status['documents']}[/bold] documents "
+                  f"([dim]{status['chunks']} passages[/dim]) from "
+                  f"{', '.join(status['folders'])}")
+    if status["deferred_because"]:
+        console.print(f"[yellow]Indexing paused: {status['deferred_because']}[/yellow]")
+    elif status["running"]:
+        console.print("[dim]A scan is running.[/dim]")
+
+    problems = index_store.failures()
+    if problems:
+        console.print(f"[yellow]{len(problems)} could not be read:[/yellow]")
+        for problem in problems[:10]:
+            console.print(f"  [dim]{problem['file']}[/dim] - {problem['error']}")
+
+
 def _print_health() -> None:
     config = load_config()
     health = llm.health()
@@ -138,6 +166,16 @@ def _handle_command(command: str) -> bool:
             _print_pending()
         case "/reminders":
             _print_reminders()
+        case "/docs":
+            _print_documents()
+        case "/reindex":
+            with console.status("[dim]scanning documents...[/dim]", spinner="dots"):
+                result = index_scanner.scan(force=True)
+            console.print(f"[green]{result.summary()}[/green] "
+                          f"[dim]({result.duration_seconds:.1f}s)[/dim]")
+        case "/focus":
+            state = focus.state()
+            console.print(state.describe())
         case "/health":
             _print_health()
         case "/undo":

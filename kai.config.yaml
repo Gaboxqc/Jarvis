@@ -46,6 +46,19 @@ skills:
   # Disable any skill by name (REQ-33).
   disabled: []
 
+documents:
+  # Folders indexed for document search (REQ-16). Text is extracted and indexed
+  # locally with SQLite full-text search — nothing is uploaded, and no embedding
+  # model is downloaded. Empty means document search is off.
+  indexed_folders:
+    - ~/Documents
+  # Files larger than this are skipped rather than stalling a scan.
+  max_file_mb: 25
+  # How often the background scan looks for changes.
+  rescan_minutes: 15
+  # Back off while unplugged, so indexing never eats battery (REQ-31).
+  pause_on_battery: true
+
 system:
   # Folders organize_folder and find_files are allowed to touch (REQ-21, REQ-26).
   # Nothing outside these roots can be modified. "~" expands to your home folder.

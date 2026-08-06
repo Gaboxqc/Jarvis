@@ -8,7 +8,7 @@ Requirement IDs (`REQ-N`) are referenced throughout the source.
 
 ## What works today
 
-Phases 0–5 of `tasks.md`, text-first:
+Phases 0–6 of `tasks.md`, text-first:
 
 | Area | Capability |
 |---|---|
@@ -16,13 +16,19 @@ Phases 0–5 of `tasks.md`, text-first:
 | Memory | Durable facts you approve, reviewable and individually deletable |
 | Planning | Reminders, timers, recurrence, missed-reminder replay, tasks/notes |
 | Knowledge | Web search with sources, exact arithmetic, units, currency, time zones |
-| Files | Search by description, safe folder organization, full batch undo |
-| System | Launch/close apps, volume, lock, sleep, running processes |
+| Documents | Q&A over your own PDFs, Word files and notes, with file + page citations |
+| Files | Search by name, date or content; safe folder organization, full batch undo |
+| System | Launch/close apps, volume, lock, sleep, focus sessions |
 | Trust | Action Gate, action history, undo, pre-approvals, one-shot data wipe |
 
 Not built yet: voice in/out (Phase 7), calendar and mail connectors (Phase 8),
-document indexing (Phase 6), meeting capture (Phase 9), Tauri UI (Phase 10),
-installer (Phase 11).
+screen/clipboard assistance (T6.6), meeting capture (Phase 9), Tauri UI
+(Phase 10), installer (Phase 11).
+
+**Document search runs on SQLite FTS5**, which ships with Python — no vector
+database, no embedding model download, and it works on a fresh install. Semantic
+retrieval can be layered in behind `backend/app/index/store.py` later without
+touching anything above it.
 
 ## The one design rule worth knowing
 
@@ -84,6 +90,7 @@ Everything lives in `kai.config.yaml`, re-read on the next turn — no restart:
 - **persona** — name, tone, verbosity, language, idle timeout
 - **privacy** — per-feature switches for anything that leaves the machine
 - **actions.pre_approved** — skills allowed to skip the confirmation prompt
+- **documents.indexed_folders** — folders searchable by content; empty disables it
 - **system.allowed_roots** — the only folders file skills may touch, ever
 - **skills.disabled** — turn individual capabilities off
 
@@ -92,7 +99,8 @@ assistant never proposes something it is not permitted to do.
 
 ## CLI commands
 
-`/skills` `/memory` `/history` `/pending` `/reminders` `/undo` `/health` `/wipe` `/quit`
+`/skills` `/memory` `/history` `/pending` `/reminders` `/docs` `/reindex` `/focus`
+`/undo` `/health` `/wipe` `/quit`
 
 These work whether or not the model is reachable.
 
