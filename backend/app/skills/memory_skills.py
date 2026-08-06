@@ -27,6 +27,7 @@ class RememberSkill(Skill):
         "time, a dietary restriction, how they like replies written) — never for passing "
         "detail from the current conversation."
     )
+    always_report = True
     parameters = (
         SkillParam("text", "string", "The fact, written as a standalone sentence in the third person."),
         SkillParam(
@@ -62,6 +63,7 @@ class ForgetSkill(Skill):
         "Delete a stored fact. Accepts either the fact id or text to match against. "
         "Use when the user says something is wrong or no longer true."
     )
+    always_report = True
     parameters = (
         SkillParam("query", "string", "The fact id, or words that appear in the fact."),
     )

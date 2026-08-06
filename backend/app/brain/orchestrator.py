@@ -258,11 +258,52 @@ def _synthesize(system: str, history: list[dict[str, str]], results: list[dict[s
         {"role": "user", "content": prompts.synthesis_prompt(payload)},
     ]
     try:
-        return llm.chat(messages).text or _fallback_summary(results)
+        reply = llm.chat(messages).text or _fallback_summary(results)
     except llm.LLMUnavailable:
         # The work already happened; report it verbatim rather than losing it
         # because the phrasing pass could not run (REQ-27).
         return _fallback_summary(results)
+
+    return _append_receipts(reply, results)
+
+
+def _append_receipts(reply: str, results: list[dict[str, Any]]) -> str:
+    """Guarantee that writes made without asking are disclosed (REQ-7).
+
+    The synthesis pass reliably turns "Noted and saved: prefers short replies"
+    into "I'll keep replies brief" — agreement, not disclosure. Since these
+    actions run without a confirmation prompt, the disclosure is the only signal
+    the user gets, so it cannot be left to the model's discretion. If the reply
+    already conveys it, nothing is added.
+    """
+    from ..skills.registry import get_skill
+
+    notes: list[str] = []
+    for entry in results:
+        if entry.get("status") != gate.EXECUTED:
+            continue
+        skill = get_skill(entry.get("skill", ""))
+        if skill is None or not getattr(skill, "always_report", False):
+            continue
+        message = (entry.get("message") or "").strip()
+        if message and not _conveys(reply, message):
+            notes.append(message)
+
+    if not notes:
+        return reply
+    return reply.rstrip() + "\n" + "\n".join(f"({note})" for note in notes)
+
+
+def _conveys(reply: str, message: str) -> bool:
+    """Whether the reply already carries the substance of a skill's message.
+
+    Compares the part after the colon — the payload — rather than the whole
+    sentence, since the model legitimately rewords the lead-in.
+    """
+    payload = message.split(":", 1)[-1].strip().rstrip(".")
+    if not payload:
+        return False
+    return payload.lower() in reply.lower()
 
 
 def _fallback_summary(results: list[dict[str, Any]]) -> str:

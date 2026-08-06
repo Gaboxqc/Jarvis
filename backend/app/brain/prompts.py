@@ -78,6 +78,28 @@ def router_prompt(catalog: list[dict[str, Any]]) -> str:
             "- Include every required argument.",
             "- Prefer one tool. Use several only when the request genuinely has several parts.",
             "- Asking to undo something is not a tool: use {\"skills\": [], \"reply\": null}.",
+            "- If the user tells you to remember, note, or forget something about them, "
+            "that is always memory.remember or memory.forget. Agreeing in conversation "
+            "does not store anything, so failing to route it means silently not doing "
+            "what they asked.",
+            "",
+            # Small models follow demonstrations far more reliably than rules. These
+            # four cover the decision boundary that matters: act, compute, recall,
+            # and — the one most often got wrong — decline to act.
+            "Examples:",
+            'user: remember that I prefer short answers',
+            '{"skills": [{"name": "memory.remember", "args": {"text": "The user prefers '
+            'short answers", "category": "preference"}}], "reply": null}',
+            "",
+            'user: what is 15% of 240?',
+            '{"skills": [{"name": "utils.calculate", "args": {"expression": "240 * 0.15"}}], '
+            '"reply": null}',
+            "",
+            'user: what do you know about me?',
+            '{"skills": [{"name": "memory.list", "args": {}}], "reply": null}',
+            "",
+            'user: thanks, that helps',
+            '{"skills": [], "reply": null}',
         ]
     )
 
@@ -93,6 +115,11 @@ def synthesis_prompt(results: list[dict[str, Any]]) -> str:
             "",
             "Now write the reply to my last message, using only these results.",
             "- Report what the tools actually returned. Do not add facts they did not contain.",
+            "- If a result says something was saved, stored, added, scheduled, moved or "
+            "changed, your reply MUST say that it happened. Never reduce it to agreement: "
+            "'Noted and saved: prefers short replies' becomes 'Saved — I'll keep replies "
+            "short', never just 'I'll keep replies short'. The user has to be able to tell "
+            "that something was written down.",
             "- If a tool failed, say plainly that it failed and what you could not do.",
             "- Do not read raw output aloud; state the answer. No JSON, no field names, no URLs "
             "unless the user asked where something came from.",

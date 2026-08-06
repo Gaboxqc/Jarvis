@@ -209,3 +209,34 @@ def test_results_survive_a_model_failure_during_synthesis(workspace, monkeypatch
     result = orchestrator.handle_turn("what is 6 times 7", "t")
 
     assert "42" in result.reply
+
+
+def test_an_ungated_write_is_always_disclosed(workspace, monkeypatch):
+    """REQ-7 — memory writes run without asking, so the telling is mandatory.
+
+    The synthesis pass reliably rewords "Noted and saved: X" into bare
+    agreement. Since there was no confirmation prompt, that disclosure is the
+    user's only signal, so it cannot depend on the model.
+    """
+    stub_llm(
+        monkeypatch,
+        route([{"name": "memory.remember", "args": {"text": "The user prefers short replies"}}]),
+        "I'll keep my responses brief.",  # drops the fact that anything was stored
+    )
+
+    result = orchestrator.handle_turn("remember I prefer short replies", "t")
+
+    assert "prefers short replies" in result.reply
+    assert "brief" in result.reply  # the model's phrasing is kept too
+
+
+def test_the_receipt_is_not_duplicated_when_already_stated(workspace, monkeypatch):
+    stub_llm(
+        monkeypatch,
+        route([{"name": "memory.remember", "args": {"text": "The user prefers short replies"}}]),
+        "Saved - the user prefers short replies.",
+    )
+
+    result = orchestrator.handle_turn("remember I prefer short replies", "t")
+
+    assert result.reply.lower().count("prefers short replies") == 1

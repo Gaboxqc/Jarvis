@@ -85,6 +85,17 @@ class Skill:
     # so the gate can refuse before any request is made (REQ-26).
     requires: tuple[str, ...] = ()
 
+    # Set when the user must be told this ran, even if the reply-writing pass
+    # decides it isn't interesting. The orchestrator appends the result verbatim
+    # when the synthesized reply doesn't already convey it.
+    #
+    # This exists because an ungated write still has to be visible (REQ-7), and
+    # asking the model nicely is not a guarantee — in practice it rewrites
+    # "Noted and saved: prefers short replies" into "I'll keep replies brief",
+    # which reads as agreement rather than as a disclosure that something was
+    # stored. Anything that writes without asking should set this.
+    always_report: bool = False
+
     def severity(self, args: dict[str, Any]) -> Severity:
         """How much this specific call is worth interrupting the user for.
 
