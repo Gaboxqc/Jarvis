@@ -152,7 +152,10 @@ def submit(
         )
         return _execute(skill, record, ctx)
 
-    if skill.name in pre_approved_skills():
+    # A skill can refuse to be pre-approvable at all. Sending a message is the
+    # case that matters: REQ-14 requires per-message confirmation, so a standing
+    # approval must not be able to satisfy it (REQ-24).
+    if skill.name in pre_approved_skills() and skill.allow_pre_approval:
         record = journal.create(
             skill_name=skill.name,
             params=cleaned,

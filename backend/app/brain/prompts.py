@@ -88,6 +88,9 @@ def router_prompt(catalog: list[dict[str, Any]]) -> str:
             "never how you look something up in a file.",
             "- A question whose answer is written down somewhere is a lookup, not a "
             "calculation. Only use utils.calculate when there is actual arithmetic to do.",
+            "- You cannot see the user's calendar, mail, files or tasks without calling a "
+            "tool. If they ask about any of those and you do not call one, you will have "
+            "made the answer up. Always route these.",
             "",
             # Small models follow demonstrations far more reliably than rules. These
             # four cover the decision boundary that matters: act, compute, recall,
@@ -108,6 +111,23 @@ def router_prompt(catalog: list[dict[str, Any]]) -> str:
             'user: when does my laptop warranty run out?',
             '{"skills": [{"name": "documents.search", "args": {"query": "laptop warranty '
             'expiry"}}], "reply": null}',
+            "",
+            'user: what is on my calendar today?',
+            '{"skills": [{"name": "calendar.agenda", "args": {"when": "today"}}], "reply": null}',
+            "",
+            'user: put lunch with Ana in my calendar tomorrow at 1pm',
+            '{"skills": [{"name": "calendar.create_event", "args": {"title": "Lunch with Ana", '
+            '"when": "tomorrow at 1pm"}}], "reply": null}',
+            "",
+            'user: what does my day look like?',
+            '{"skills": [{"name": "planning.briefing", "args": {}}], "reply": null}',
+            "",
+            'user: am I free on Thursday afternoon?',
+            '{"skills": [{"name": "calendar.find_free_time", "args": {"when": "thursday"}}], '
+            '"reply": null}',
+            "",
+            'user: anything important in my inbox?',
+            '{"skills": [{"name": "mail.inbox", "args": {}}], "reply": null}',
             "",
             'user: what do you know about me?',
             '{"skills": [{"name": "memory.list", "args": {}}], "reply": null}',

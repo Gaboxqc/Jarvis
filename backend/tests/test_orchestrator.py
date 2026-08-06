@@ -240,3 +240,60 @@ def test_the_receipt_is_not_duplicated_when_already_stated(workspace, monkeypatc
     result = orchestrator.handle_turn("remember I prefer short replies", "t")
 
     assert result.reply.lower().count("prefers short replies") == 1
+
+
+# -- the ungrounded-reply guard (REQ-27) ----------------------------------
+
+
+def test_an_invented_answer_about_the_calendar_is_blocked(workspace, monkeypatch):
+    """Found live: with no calendar connected and no tool called, llama3
+    answered "you have a meeting with John at 10am" — entirely invented."""
+    stub_llm(monkeypatch, NO_SKILLS,
+             "You have a meeting with John at 10:00 and another with Sarah at 14:00.")
+
+    result = orchestrator.handle_turn("what's on my calendar today?", "t")
+
+    assert "John" not in result.reply
+    assert "look that up" in result.reply
+
+
+def test_claiming_to_have_done_something_undone_is_blocked(workspace, monkeypatch):
+    """Also found live: it reported adding a calendar event, having added nothing."""
+    stub_llm(monkeypatch, NO_SKILLS, "I've added \"Lunch with Ana\" to your calendar.")
+
+    result = orchestrator.handle_turn("add lunch with Ana tomorrow at 1pm", "t")
+
+    assert "didn't actually do that" in result.reply
+    assert journal.history() == []
+
+
+def test_a_grounded_answer_is_never_rewritten(workspace, monkeypatch):
+    """The guard keys off there being no successful skill call, so a real
+    calendar answer passes through untouched."""
+    stub_llm(
+        monkeypatch,
+        route([{"name": "planning.add_task", "args": {"text": "buy milk"}}]),
+        "I've added buy milk to your list.",
+    )
+
+    result = orchestrator.handle_turn("add buy milk to my tasks", "t")
+
+    assert "I've added" in result.reply
+
+
+def test_ordinary_conversation_is_not_touched(workspace, monkeypatch):
+    stub_llm(monkeypatch, NO_SKILLS, "Madrid is the capital of Spain.")
+
+    result = orchestrator.handle_turn("what is the capital of spain", "t")
+
+    assert result.reply == "Madrid is the capital of Spain."
+
+
+def test_answering_from_stored_memory_is_not_blocked(workspace, monkeypatch):
+    """Memory facts live in the system prompt, so answering from them without
+    a tool call is legitimate and must not trip the guard."""
+    stub_llm(monkeypatch, NO_SKILLS, "You prefer short replies.")
+
+    result = orchestrator.handle_turn("what do you remember about me?", "t")
+
+    assert result.reply == "You prefer short replies."

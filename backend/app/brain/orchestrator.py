@@ -40,6 +40,30 @@ _UNDO = re.compile(
     re.IGNORECASE,
 )
 
+# Sources the model cannot possibly know about without calling a tool. Memory
+# facts are deliberately absent: those are injected into the system prompt, so
+# answering from them without a tool call is legitimate.
+_EXTERNAL_DATA = re.compile(
+    r"\b(my|the)\s+("
+    r"calendar|schedule|agenda|diary|meetings?|appointments?|"
+    r"inbox|e-?mails?|mail|messages?|"
+    r"documents?|files?|folders?|"
+    r"tasks?|to-?dos?|reminders?"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# First-person claims that something was carried out. Kept tight and
+# action-specific: "I've noticed" and "I've got" must not match.
+_ACTION_CLAIM = re.compile(
+    r"\b(i(?:'ve| have)?\s+(?:just\s+)?"
+    r"(added|created|scheduled|booked|set(?: up)?|sent|deleted|removed|cancelled|"
+    r"canceled|moved|saved|stored|updated|marked|organi[sz]ed|reminded)"
+    r"|(?:has|have) been (added|created|scheduled|sent|deleted|removed|cancelled|"
+    r"canceled|moved|saved|updated|marked|set))\b",
+    re.IGNORECASE,
+)
+
 
 @dataclass
 class PendingAction:
@@ -127,12 +151,16 @@ def handle_turn(
     if not calls:
         direct = (route.get("reply") or "").strip() if isinstance(route, dict) else ""
         if direct:
-            return _finish(session_id, TurnResult(reply=direct))
+            return _finish(
+                session_id, TurnResult(reply=_guard_ungrounded_reply(text, direct, []))
+            )
         try:
             answer = llm.chat([{"role": "system", "content": system}, *history])
         except llm.LLMUnavailable as exc:
             return _finish(session_id, TurnResult(reply=str(exc), error="llm_unavailable"))
-        return _finish(session_id, TurnResult(reply=answer.text))
+        return _finish(
+            session_id, TurnResult(reply=_guard_ungrounded_reply(text, answer.text, []))
+        )
 
     # 4. Execute, stopping at the first action that needs approval.
     batch_id = gate.new_batch_id()
@@ -160,7 +188,7 @@ def handle_turn(
                 ),
             )
 
-    reply = _synthesize(system, history, results)
+    reply = _guard_ungrounded_reply(text, _synthesize(system, history, results), results)
     return _finish(session_id, TurnResult(reply=reply, skill_calls=results))
 
 
@@ -308,6 +336,42 @@ def _conveys(reply: str, message: str) -> bool:
 
 def _fallback_summary(results: list[dict[str, Any]]) -> str:
     return "\n".join(r["message"] for r in results if r.get("message")) or "Done."
+
+
+def _guard_ungrounded_reply(user_text: str, reply: str, results: list[dict[str, Any]]) -> str:
+    """Catch answers the model had no way to know — REQ-27.
+
+    When routing fails, a small model does not say "I can't check that". It
+    invents a plausible answer: meetings with people who don't exist, or a
+    confirmation that it added an event when nothing ran. Both are worse than an
+    error, because they are indistinguishable from success.
+
+    The system prompt already forbids this and is ignored under pressure, so it
+    is enforced here instead. Both checks require that *no skill executed*, which
+    is what makes them safe: a grounded turn is never touched.
+    """
+    if any(r.get("status") == gate.EXECUTED for r in results):
+        return reply
+    if not reply:
+        return reply
+
+    # Claiming to have done something, having done nothing.
+    if _ACTION_CLAIM.search(reply):
+        log.warning("blocked an unperformed action claim: %r", reply[:120])
+        return (
+            "I didn't actually do that — I couldn't work out which action to run. "
+            "Could you say it again more plainly?"
+        )
+
+    # Answering about a data source that requires a tool it never called.
+    if _EXTERNAL_DATA.search(user_text):
+        log.warning("blocked an ungrounded answer about external data: %r", reply[:120])
+        return (
+            "I'd have to look that up and I wasn't able to — so I don't want to guess. "
+            "Check that the account or folder is connected, then ask me again."
+        )
+
+    return reply
 
 
 def _lower_first(text: str) -> str:

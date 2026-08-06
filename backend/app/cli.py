@@ -47,7 +47,9 @@ def _banner() -> None:
     lines.append("[dim]/skills /memory /history /pending /reminders /docs /reindex[/dim]"
     )
     lines.append(
-        "[dim]/voice /listen /speak /focus /undo /health /wipe /quit[/dim]")
+        "[dim]/brief /accounts /connect /voice /listen /speak[/dim]")
+    lines.append(
+        "[dim]/focus /undo /health /wipe /quit[/dim]")
 
     console.print(Panel("\n".join(lines), border_style="cyan"))
 
@@ -151,6 +153,90 @@ def _print_health() -> None:
     console.print(f"  file roots: {', '.join(str(r) for r in config.system.allowed_roots) or 'none'}")
 
 
+def _print_accounts() -> None:
+    from .connectors import base as connectors
+
+    status = connectors.status()
+    store = status["credential_store"]
+    console.print(f"  credential store: {store['backend']} "
+                  f"{'[green]ok[/green]' if store['available'] else '[red]' + store['detail'] + '[/red]'}")
+
+    for kind in ("calendar", "mail"):
+        entries = status[kind]
+        if not entries:
+            console.print(f"  {kind:9}: [dim]none configured "
+                          f"(add one under connectors.{kind} in kai.config.yaml)[/dim]")
+            continue
+        for entry in entries:
+            saved = ("[green]password saved[/green]" if entry["credential_stored"]
+                     else f"[yellow]no password - run /connect {kind} {entry['label']}[/yellow]")
+            write = " [dim](writable)[/dim]" if entry["writable"] else ""
+            console.print(f"  {kind:9}: {entry['label']} via {entry['provider']}{write} - {saved}")
+
+
+def _connect(argument: str) -> None:
+    """Store a password for an account. The user types it; it is never echoed."""
+    from .connectors import base as connectors
+    from .connectors import credentials, mail
+
+    parts = argument.split()
+    if len(parts) < 1 or parts[0] not in {"calendar", "mail"}:
+        console.print("[dim]Usage: /connect mail <label>   or   /connect calendar <label>[/dim]")
+        _print_accounts()
+        return
+
+    kind = parts[0]
+    label = parts[1] if len(parts) > 1 else ""
+
+    store = credentials.status()
+    if not store.available:
+        console.print(f"[red]{store.detail}[/red]")
+        return
+
+    try:
+        config = connectors.find(kind, label)
+    except connectors.ConnectorError as exc:
+        console.print(f"[yellow]{exc}[/yellow]")
+        return
+
+    console.print(f"Password for [bold]{config.username or config.label}[/bold] "
+                  f"({config.provider}).")
+    console.print("[dim]It goes straight into the Windows Credential Manager. "
+                  "It is not echoed, not logged, and never written to the config file.[/dim]")
+    if config.provider == "imap":
+        console.print("[dim]With 2FA enabled you need an app password, not your normal one.[/dim]")
+
+    try:
+        if not credentials.prompt_and_store(config.credential_ref):
+            console.print("[dim]Cancelled - nothing was saved.[/dim]")
+            return
+    except credentials.CredentialError as exc:
+        console.print(f"[red]{exc}[/red]")
+        return
+
+    console.print("[green]Saved.[/green]")
+
+    if kind == "mail":
+        with console.status("[dim]checking the connection...[/dim]", spinner="dots"):
+            result = mail.check(config)
+        if result["ok"]:
+            console.print(f"[green]Connected - {result['unread']} unread.[/green]")
+        else:
+            console.print(f"[red]Couldn't connect: {result['error']}[/red]")
+
+
+def _briefing() -> None:
+    from .skills.planning.briefing import build
+
+    with console.status("[dim]gathering...[/dim]", spinner="dots"):
+        sections = build()
+    for section in sections:
+        rendered = section.render()
+        if rendered:
+            console.print(rendered)
+            console.print()
+
+
 def _print_voice() -> None:
     from .voice import models as voice_models
     from .voice import session as voice_session
@@ -250,6 +336,15 @@ def _handle_command(command: str) -> bool:
     verb, _, argument = command.partition(" ")
     argument = argument.strip()
 
+    if verb == "/connect":
+        _connect(argument)
+        return True
+    if verb == "/accounts":
+        _print_accounts()
+        return True
+    if verb == "/brief":
+        _briefing()
+        return True
     if verb == "/voice":
         _voice_setup() if argument == "setup" else _print_voice()
         return True

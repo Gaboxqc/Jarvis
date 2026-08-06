@@ -129,6 +129,10 @@ class Config:
     actions: ActionSettings
     system: SystemSettings
     documents: DocumentSettings
+    # Raw connector entries (REQ-8, REQ-13). Kept as plain data because
+    # connectors/base.py owns their shape, and because they must never hold
+    # a secret -- only a reference to one in the OS credential store.
+    connectors: dict[str, Any] = field(default_factory=dict)
     disabled_skills: tuple[str, ...] = ()
     source_path: Path | None = None
 
@@ -203,6 +207,10 @@ def _build(raw: dict[str, Any], source: Path | None) -> Config:
             allowed_roots=tuple(roots),
             distracting_apps=tuple(system_raw.get("distracting_apps") or ()),
         ),
+        connectors={
+            kind: list(raw.get("connectors", {}).get(kind) or [])
+            for kind in ("calendar", "mail")
+        },
         documents=DocumentSettings(
             indexed_folders=_paths(documents_raw.get("indexed_folders")),
             max_file_mb=int(documents_raw.get("max_file_mb", 25)),
