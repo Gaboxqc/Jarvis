@@ -82,6 +82,16 @@ class SystemSettings:
 
 
 @dataclass(frozen=True)
+class DocumentSettings:
+    """REQ-16 — which folders are searchable, and REQ-31 — when to back off."""
+
+    indexed_folders: tuple[Path, ...] = ()
+    max_file_mb: int = 25
+    rescan_minutes: int = 15
+    pause_on_battery: bool = True
+
+
+@dataclass(frozen=True)
 class VoiceSettings:
     enabled: bool = False
     voice_id: str = "en_US-amy-medium"
@@ -95,6 +105,7 @@ class Config:
     privacy: PrivacySettings
     actions: ActionSettings
     system: SystemSettings
+    documents: DocumentSettings
     disabled_skills: tuple[str, ...] = ()
     source_path: Path | None = None
 
@@ -111,14 +122,19 @@ def _build(raw: dict[str, Any], source: Path | None) -> Config:
     actions_raw = raw.get("actions") or {}
     skills_raw = raw.get("skills") or {}
     system_raw = raw.get("system") or {}
+    documents_raw = raw.get("documents") or {}
 
-    roots: list[Path] = []
-    for entry in system_raw.get("allowed_roots") or []:
-        try:
-            roots.append(_expand(str(entry)))
-        except (OSError, ValueError):
-            # A bad root must not take the whole assistant down (REQ-27).
-            continue
+    def _paths(entries: Any) -> tuple[Path, ...]:
+        resolved: list[Path] = []
+        for entry in entries or []:
+            try:
+                resolved.append(_expand(str(entry)))
+            except (OSError, ValueError):
+                # A bad path must not take the whole assistant down (REQ-27).
+                continue
+        return tuple(resolved)
+
+    roots = list(_paths(system_raw.get("allowed_roots")))
 
     return Config(
         persona=Persona(
@@ -152,6 +168,12 @@ def _build(raw: dict[str, Any], source: Path | None) -> Config:
         system=SystemSettings(
             allowed_roots=tuple(roots),
             distracting_apps=tuple(system_raw.get("distracting_apps") or ()),
+        ),
+        documents=DocumentSettings(
+            indexed_folders=_paths(documents_raw.get("indexed_folders")),
+            max_file_mb=int(documents_raw.get("max_file_mb", 25)),
+            rescan_minutes=int(documents_raw.get("rescan_minutes", 15)),
+            pause_on_battery=bool(documents_raw.get("pause_on_battery", True)),
         ),
         disabled_skills=tuple(skills_raw.get("disabled") or ()),
         source_path=source,

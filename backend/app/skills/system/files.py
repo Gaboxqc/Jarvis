@@ -196,9 +196,9 @@ class OrganizeFolderSkill(Skill):
 class FindFilesSkill(Skill):
     name = "system.find_files"
     description = (
-        "Find files by name fragment, extension, or how recently they changed. "
-        "Searches only the folders Kai is allowed to read. Returns candidates for the "
-        "user to choose from — it does not open anything."
+        "Find files by name fragment, extension, how recently they changed, or what "
+        "they contain. Searches only the folders Kai is allowed to read. Returns "
+        "candidates for the user to choose from — it does not open anything."
     )
     parameters = (
         SkillParam("query", "string", "Words from the filename, or an extension like '.pdf'.",
@@ -206,13 +206,34 @@ class FindFilesSkill(Skill):
         SkillParam("folder", "string", "Limit to one folder. Defaults to all allowed folders.",
                    required=False),
         SkillParam("days", "integer", "Only files modified in the last N days.", required=False),
+        SkillParam("contains", "string", "Words the file's text should contain.",
+                   required=False),
         SkillParam("limit", "integer", "Max results (default 15).", required=False, default=15),
     )
 
     def run(self, args: dict[str, Any], ctx: SkillContext) -> SkillResult:
         query = str(args.get("query", "") or "").strip().lower()
+        contains = str(args.get("contains", "") or "").strip()
         days = args.get("days")
         limit = int(args.get("limit", 15) or 15)
+
+        # Content matching is answered from the document index (REQ-16, REQ-20)
+        # rather than by opening every file on disk, which would be unusable on
+        # a real Documents folder.
+        content_paths: set[str] | None = None
+        if contains:
+            from ...index import store as index_store
+
+            content_paths = {hit.path for hit in index_store.search(contains, limit=50)}
+            if not content_paths:
+                return SkillResult(
+                    ok=True,
+                    message=(
+                        f"No indexed document contains '{contains}'. "
+                        "Only indexed folders can be searched by content."
+                    ),
+                    data={"matches": []},
+                )
 
         if args.get("folder"):
             roots: Iterable[Path] = [paths.resolve_allowed(str(args["folder"]))]
@@ -231,13 +252,17 @@ class FindFilesSkill(Skill):
         hits: list[tuple[float, Path, os.stat_result]] = []
         for root in roots:
             for path in _walk(root):
+                if content_paths is not None and str(path) not in content_paths:
+                    continue
                 try:
                     stat = path.stat()
                 except OSError:
                     continue
                 if cutoff is not None and stat.st_mtime < cutoff:
                     continue
-                score = _match_score(path, query)
+                # With a content filter and no name query, matching content is
+                # enough on its own.
+                score = _match_score(path, query) if query else (2.0 if content_paths else 1.0)
                 if score <= 0:
                     continue
                 hits.append((score + stat.st_mtime / 1e12, path, stat))

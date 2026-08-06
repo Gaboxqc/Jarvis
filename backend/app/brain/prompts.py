@@ -82,6 +82,12 @@ def router_prompt(catalog: list[dict[str, Any]]) -> str:
             "that is always memory.remember or memory.forget. Agreeing in conversation "
             "does not store anything, so failing to route it means silently not doing "
             "what they asked.",
+            "- Anything the user asks about the content of their own paperwork -- a "
+            "contract, lease, warranty, invoice, report, notes -- is documents.search. "
+            "memory.list is only for facts they explicitly asked you to remember, and is "
+            "never how you look something up in a file.",
+            "- A question whose answer is written down somewhere is a lookup, not a "
+            "calculation. Only use utils.calculate when there is actual arithmetic to do.",
             "",
             # Small models follow demonstrations far more reliably than rules. These
             # four cover the decision boundary that matters: act, compute, recall,
@@ -94,6 +100,14 @@ def router_prompt(catalog: list[dict[str, Any]]) -> str:
             'user: what is 15% of 240?',
             '{"skills": [{"name": "utils.calculate", "args": {"expression": "240 * 0.15"}}], '
             '"reply": null}',
+            "",
+            'user: how much was the security deposit on my tenancy?',
+            '{"skills": [{"name": "documents.search", "args": {"query": "security deposit '
+            'tenancy"}}], "reply": null}',
+            "",
+            'user: when does my laptop warranty run out?',
+            '{"skills": [{"name": "documents.search", "args": {"query": "laptop warranty '
+            'expiry"}}], "reply": null}',
             "",
             'user: what do you know about me?',
             '{"skills": [{"name": "memory.list", "args": {}}], "reply": null}',

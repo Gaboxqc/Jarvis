@@ -103,6 +103,30 @@ CREATE TABLE IF NOT EXISTS scheduled_items (
 );
 CREATE INDEX IF NOT EXISTS idx_sched_due ON scheduled_items(active, next_fire_at);
 
+-- REQ-16: one row per indexed file. size+mtime is the change detector, so a
+-- rescan only touches files that actually changed.
+CREATE TABLE IF NOT EXISTS indexed_documents (
+    path        TEXT PRIMARY KEY,
+    title       TEXT NOT NULL DEFAULT '',
+    size        INTEGER NOT NULL DEFAULT 0,
+    mtime       REAL NOT NULL DEFAULT 0,
+    chunk_count INTEGER NOT NULL DEFAULT 0,
+    indexed_at  TEXT NOT NULL,
+    error       TEXT
+);
+
+-- Full-text search over chunk text. FTS5 ships with SQLite, so document search
+-- works on a fresh install with no model download and no vector store. Semantic
+-- retrieval can be layered on later behind index/search.py without touching
+-- anything above it.
+CREATE VIRTUAL TABLE IF NOT EXISTS document_chunks USING fts5(
+    text,
+    path    UNINDEXED,
+    section UNINDEXED,
+    ordinal UNINDEXED,
+    tokenize = 'porter unicode61'
+);
+
 -- REQ-10: tasks and notes
 CREATE TABLE IF NOT EXISTS tasks (
     id           TEXT PRIMARY KEY,
@@ -207,6 +231,8 @@ def wipe_all_local_data() -> dict[str, int]:
         "pre_approvals",
         "scheduled_items",
         "tasks",
+        "document_chunks",
+        "indexed_documents",
     ]
     removed: dict[str, int] = {}
     conn = connect()
