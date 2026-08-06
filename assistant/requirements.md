@@ -83,11 +83,12 @@ User story: As the user, I want to say "and add that to my calendar too" without
 **REQ-7 — Long-term personal memory**
 User story: As the user, I want to tell the assistant something once — where my project folder is, that I'm allergic to shellfish, that "the standup" means 9:15 Tuesdays — and never repeat it.
 
-- WHEN the user states a durable fact or preference, THE SYSTEM SHALL offer to remember it, and SHALL store it locally on confirmation.
+- WHEN the user states a durable fact or preference, THE SYSTEM SHALL store it locally and SHALL state in its reply that it did so.
 - WHEN a stored fact is relevant to the current request, THE SYSTEM SHALL apply it without being reminded.
 - WHEN the user corrects a stored fact, THE SYSTEM SHALL update or remove it.
 - THE SYSTEM SHALL provide a screen where every stored memory can be reviewed, edited, and deleted individually or all at once.
-- THE SYSTEM SHALL NOT store a fact silently: each write SHALL be visible to the user at the time it happens.
+- THE SYSTEM SHALL NOT store a fact silently: each write SHALL be visible to the user at the time it happens, and SHALL be reversible.
+- THE SYSTEM SHALL NOT require confirmation before storing a fact. Visibility is the requirement here, not approval — a memory write is reversible and costs the user nothing, and prompting for it would spend attention that REQ-24 needs for actions that genuinely warrant it.
 
 ### 5.2 Daily planning
 
@@ -218,10 +219,15 @@ User story: As the user, I want help actually starting work and actually taking 
 ### 5.6 Trust & control
 
 **REQ-24 — Confirmation before consequential actions**
-User story: As the user, I want to be asked before anything happens that I can't shrug off.
+User story: As the user, I want to be asked before anything happens that I can't shrug off — and *not* asked about anything else.
 
-- THE SYSTEM SHALL classify each action as routine or consequential. Consequential actions include at minimum: sending or replying to any message, creating/modifying/cancelling calendar events, moving or deleting files, closing applications with unsaved state, and changing system settings.
+The test for whether an action is consequential is: **would the user be upset if this had happened and they had not been asked?** Asking about everything is not the safer default. A prompt on every action trains people to approve without reading, which costs more safety than it buys and makes the assistant tiring to use.
+
+- THE SYSTEM SHALL classify each action as routine or consequential. Consequential actions include at minimum: sending or replying to any message, creating/modifying/cancelling calendar events, moving or deleting files, closing applications with unsaved state, and any action that interrupts what the user is currently doing (locking, sleeping, or restarting the machine).
+- THE SYSTEM SHALL classify as routine any action that is reversible, confined to Kai's own stored data, or trivially repeatable — including storing or forgetting a memory, creating or completing a task or reminder, adjusting volume, launching an application, and any read-only lookup.
+- THE SYSTEM SHALL decide severity per action instance, not per capability, WHERE the arguments change the stakes — for example the same system-control capability adjusting volume (routine) versus suspending the machine (consequential).
 - WHEN a consequential action is about to run, THE SYSTEM SHALL state exactly what it will do — naming targets and counts — and SHALL wait for explicit confirmation.
+- WHEN a routine action has run, THE SYSTEM SHALL report what it did in its reply, so that not asking never means not telling.
 - THE SYSTEM SHALL treat confirmation as valid for that single action only, and SHALL NOT carry approval forward to later actions.
 - THE SYSTEM SHALL allow the user to mark specific action types as pre-approved, and SHALL make that setting reviewable and revocable.
 

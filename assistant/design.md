@@ -27,6 +27,8 @@ Three ideas hold the design together:
 
 1. **One skill router, many skills.** Every capability — calendar, reminders, search, documents, file ops, system control — is registered as a skill with a schema. The brain's only job per turn is: answer directly, or pick skills and then answer. Adding a capability means registering a skill, not editing the router (REQ-33).
 2. **Every side effect passes through the Action Gate.** Nothing writes to the calendar, the mailbox, or the filesystem without going through one component that classifies the action, asks for confirmation when it's consequential, and journals it for undo (REQ-24, REQ-25). This is the difference between an assistant people trust and one they turn off.
+
+   Classification is per *call*, not per capability: a skill exposes `severity(args)`, so adjusting the volume and suspending the machine can be the same capability while only one of them stops to ask. The gate is deliberately quiet — most actions are reversible and simply get reported after the fact. Prompting on everything would train the user to approve without reading, which would leave the prompts that matter no better than no prompts at all.
 3. **The Presence Layer consumes only state + audio + an optional emotion tag.** It knows nothing about the LLM, skills, or actions — so it can be a 40px tray dot or a full animated character without touching anything else (REQ-32).
 
 ## 2. Components

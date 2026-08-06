@@ -6,11 +6,12 @@ venv/
 *.egg-info/
 .pytest_cache/
 
-# Local user data — never committed (REQ-26)
+# Local user data — never committed (REQ-26).
+# The task Markdown mirror lives in %LOCALAPPDATA%\Kai, not in the repo, so it
+# needs no rule here — and a bare `tasks.md` rule would swallow the SDD's own.
 *.db
 *.db-wal
 *.db-shm
-tasks.md
 data/
 
 # Local overrides of the persona/privacy config
