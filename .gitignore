@@ -14,7 +14,18 @@ venv/
 *.db-shm
 data/
 
-# Local overrides of the persona/privacy config
+# Your real config. Never tracked.
+#
+# It was tracked once, and that was a mistake. The file was designed to hold no
+# secrets -- passwords live in the OS credential store -- but some connector
+# values are bearer credentials in their own right. A Google "secret address in
+# iCal format" grants read access to a whole calendar to anyone holding the URL,
+# with no login. Committing one publishes it, and git history keeps it after the
+# line is deleted.
+#
+# kai.config.example.yaml is the tracked template. Copy it to kai.config.yaml
+# and edit that.
+kai.config.yaml
 kai.config.local.yaml
 
 # Editors / OS

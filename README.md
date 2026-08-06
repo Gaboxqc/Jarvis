@@ -123,7 +123,18 @@ cd backend && ../.venv/Scripts/python.exe -m pytest
 
 ## Configuring it
 
-Everything lives in `kai.config.yaml`, re-read on the next turn — no restart:
+Copy the template, then edit your copy:
+
+```bash
+cp kai.config.example.yaml kai.config.yaml
+```
+
+`kai.config.yaml` is gitignored and must stay that way. It holds no passwords —
+those go in the OS credential store via `/connect` — but some connector values
+are credentials in their own right. A calendar's "secret address in iCal format"
+grants read access to anyone holding the URL, with no login.
+
+Settings, re-read on the next turn — no restart:
 
 - **persona** — name, tone, verbosity, language, idle timeout
 - **privacy** — per-feature switches for anything that leaves the machine
