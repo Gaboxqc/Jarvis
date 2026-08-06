@@ -8,7 +8,7 @@ Requirement IDs (`REQ-N`) are referenced throughout the source.
 
 ## What works today
 
-Phases 0–9 of `tasks.md`:
+Phases 0–9 of `tasks.md`, plus T6.6:
 
 | Area | Capability |
 |---|---|
@@ -24,10 +24,22 @@ Phases 0–9 of `tasks.md`:
 | Mail | Unread triage split by what needs a reply, search, draft, send |
 | Briefing | One catch-up covering calendar, reminders, tasks and mail |
 | Meetings | Record and transcribe locally, then summary, decisions and action items |
+| Screen | Explain, translate or rewrite what you've copied or what's on screen |
 | Trust | Action Gate, action history, undo, pre-approvals, one-shot data wipe |
 
-Not built yet: screen/clipboard assistance (T6.6), Tauri UI (Phase 10),
-installer (Phase 11).
+Not built yet: Tauri UI (Phase 10), installer (Phase 11).
+
+## Screen and clipboard
+
+`/clip` reads what you've copied; `/screen` reads the active window (`/screen
+full` for the whole display). Or just ask — "what does this mean, I just copied
+it" routes to the clipboard on its own.
+
+Reading the clipboard is instant and needs no dependency. Reading the *screen*
+runs local OCR and takes several seconds, which is the cost of not sending your
+display to a cloud vision API. Both happen only when asked — there is no
+watcher, no polling — the capture is announced in the reply, and the image is
+never written anywhere.
 
 ## Recording a meeting
 
@@ -166,7 +178,7 @@ assistant never proposes something it is not permitted to do.
 
 `/skills` `/memory` `/history` `/pending` `/reminders` `/docs` `/reindex`
 `/brief` `/accounts` `/connect` `/voice` `/listen` `/speak` `/record` `/meetings`
-`/focus` `/undo` `/health` `/wipe` `/quit`
+`/clip` `/screen` `/focus` `/undo` `/health` `/wipe` `/quit`
 
 These work whether or not the model is reachable.
 

@@ -49,7 +49,7 @@ def _banner() -> None:
     lines.append(
         "[dim]/brief /accounts /connect /voice /listen /speak[/dim]")
     lines.append(
-        "[dim]/record /record stop /meetings[/dim]")
+        "[dim]/record /record stop /meetings /clip /screen[/dim]")
     lines.append(
         "[dim]/focus /undo /health /wipe /quit[/dim]")
 
@@ -153,6 +153,17 @@ def _print_health() -> None:
     console.print(f"  data      : {db.db_path()}")
     console.print(f"  web search: {'on' if config.privacy.allow_web_search else 'off'}")
     console.print(f"  file roots: {', '.join(str(r) for r in config.system.allowed_roots) or 'none'}")
+
+
+def _show_skill(name: str, args: dict) -> None:
+    """Run a read-only skill and print whatever it returned."""
+    from .skills.base import SkillContext
+
+    outcome = gate.submit(name, args, SkillContext(session_id=SESSION, config=load_config()))
+    if outcome.status == gate.EXECUTED:
+        console.print(outcome.message)
+    else:
+        console.print(f"[yellow]{outcome.error}[/yellow]")
 
 
 def _record(argument: str) -> None:
@@ -384,6 +395,13 @@ def _handle_command(command: str) -> bool:
     verb, _, argument = command.partition(" ")
     argument = argument.strip()
 
+    if verb == "/clip":
+        _show_skill("screen.clipboard", {})
+        return True
+    if verb == "/screen":
+        console.print("[dim]reading the screen (this takes a few seconds)...[/dim]")
+        _show_skill("screen.read", {"full_screen": argument.strip() == "full"})
+        return True
     if verb == "/record":
         _record(argument)
         return True
