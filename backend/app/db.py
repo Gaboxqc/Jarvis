@@ -127,6 +127,19 @@ CREATE VIRTUAL TABLE IF NOT EXISTS document_chunks USING fts5(
     tokenize = 'porter unicode61'
 );
 
+-- REQ-19: meeting transcripts. Stored locally, listable, individually deletable.
+CREATE TABLE IF NOT EXISTS transcripts (
+    id               TEXT PRIMARY KEY,
+    label            TEXT NOT NULL DEFAULT '',
+    started_at       TEXT NOT NULL,
+    ended_at         TEXT,
+    sources          TEXT NOT NULL DEFAULT '[]',
+    text             TEXT NOT NULL DEFAULT '',
+    summary          TEXT,
+    duration_seconds REAL NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_transcripts_started ON transcripts(started_at DESC);
+
 -- REQ-10: tasks and notes
 CREATE TABLE IF NOT EXISTS tasks (
     id           TEXT PRIMARY KEY,
@@ -233,6 +246,7 @@ def wipe_all_local_data() -> dict[str, int]:
         "tasks",
         "document_chunks",
         "indexed_documents",
+        "transcripts",
     ]
     removed: dict[str, int] = {}
     conn = connect()

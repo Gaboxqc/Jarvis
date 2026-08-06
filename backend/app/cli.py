@@ -49,6 +49,8 @@ def _banner() -> None:
     lines.append(
         "[dim]/brief /accounts /connect /voice /listen /speak[/dim]")
     lines.append(
+        "[dim]/record /record stop /meetings[/dim]")
+    lines.append(
         "[dim]/focus /undo /health /wipe /quit[/dim]")
 
     console.print(Panel("\n".join(lines), border_style="cyan"))
@@ -151,6 +153,52 @@ def _print_health() -> None:
     console.print(f"  data      : {db.db_path()}")
     console.print(f"  web search: {'on' if config.privacy.allow_web_search else 'off'}")
     console.print(f"  file roots: {', '.join(str(r) for r in config.system.allowed_roots) or 'none'}")
+
+
+def _record(argument: str) -> None:
+    """Start or stop a meeting recording."""
+    from .capture import session as capture
+    from .capture import store as capture_store
+    from .capture import summarize
+
+    if argument.strip().lower() in {"stop", "end"}:
+        try:
+            transcript = capture.stop()
+        except capture.CaptureError as exc:
+            console.print(f"[yellow]{exc}[/yellow]")
+            return
+        console.print(f"[dim]{transcript.word_count} words transcribed. Summarising...[/dim]")
+        with console.status("[dim]thinking...[/dim]", spinner="dots"):
+            result = summarize.summarise(transcript.text)
+        capture_store.set_summary(transcript.id, result.to_dict())
+        console.print(Panel(result.render(), title=transcript.label, border_style="green"))
+        return
+
+    label = argument.strip() or "Meeting"
+    try:
+        status = capture.start(label)
+    except capture.CaptureError as exc:
+        console.print(f"[red]{exc}[/red]")
+        return
+    lines = [f"Recording \"{label}\" - capturing {', '.join(status.sources or [])}."]
+    if status.note:
+        # What is *not* being captured, stated before the meeting rather than
+        # discovered afterwards in the transcript (REQ-19).
+        lines.append(f"{status.note}.")
+    lines.append("Recording others may need their agreement.")
+    lines.append("Type /record stop when you're done.")
+    console.print(Panel("\n".join(lines), title="[red]REC[/red]", border_style="red"))
+
+
+def _print_meetings(argument: str) -> None:
+    from .capture import store as capture_store
+
+    found = capture_store.find(argument) if argument.strip() else capture_store.recent()
+    if not found:
+        console.print("[dim]No meetings recorded yet.[/dim]")
+        return
+    for transcript in found:
+        console.print(f"  [dim]{transcript.id[:8]}[/dim]  {transcript.describe()}")
 
 
 def _print_accounts() -> None:
@@ -336,6 +384,12 @@ def _handle_command(command: str) -> bool:
     verb, _, argument = command.partition(" ")
     argument = argument.strip()
 
+    if verb == "/record":
+        _record(argument)
+        return True
+    if verb == "/meetings":
+        _print_meetings(argument)
+        return True
     if verb == "/connect":
         _connect(argument)
         return True
@@ -412,7 +466,10 @@ def main() -> int:
     try:
         while True:
             try:
-                text = console.input("[bold cyan]you ›[/bold cyan] ").strip()
+                from .capture import session as capture_session
+
+                marker = "[red]● REC[/red] " if capture_session.is_recording() else ""
+                text = console.input(f"{marker}[bold cyan]you ›[/bold cyan] ").strip()
             except (EOFError, KeyboardInterrupt):
                 console.print()
                 break

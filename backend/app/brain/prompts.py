@@ -126,6 +126,12 @@ def router_prompt(catalog: list[dict[str, Any]]) -> str:
             '{"skills": [{"name": "calendar.find_free_time", "args": {"when": "thursday"}}], '
             '"reply": null}',
             "",
+            'user: record this meeting',
+            '{"skills": [{"name": "capture.start", "args": {"label": "meeting"}}], "reply": null}',
+            "",
+            'user: stop recording',
+            '{"skills": [{"name": "capture.stop", "args": {}}], "reply": null}',
+            "",
             'user: anything important in my inbox?',
             '{"skills": [{"name": "mail.inbox", "args": {}}], "reply": null}',
             "",

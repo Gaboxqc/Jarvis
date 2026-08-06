@@ -83,10 +83,12 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     performed.clear()
 
     from app import focus
+    from app.capture import session as capture
     from app.index import scanner
 
     scanner.reset_state()
     focus.reset()
+    capture.reset()
 
     yield sandbox
 
@@ -96,6 +98,7 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     registry.reset()
     scanner.reset_state()
     focus.reset()
+    capture.reset()
 
 
 @pytest.fixture
