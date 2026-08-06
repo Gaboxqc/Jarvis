@@ -91,6 +91,10 @@ def router_prompt(catalog: list[dict[str, Any]]) -> str:
             "- You cannot see the user's calendar, mail, files or tasks without calling a "
             "tool. If they ask about any of those and you do not call one, you will have "
             "made the answer up. Always route these.",
+            "- You also cannot see their screen or clipboard. If they say 'this', 'what I "
+            "copied' or 'what I'm looking at' without giving you the text, call "
+            "screen.clipboard (fast) or screen.read (slow, only when it could not have "
+            "been copied).",
             "",
             # Small models follow demonstrations far more reliably than rules. These
             # four cover the decision boundary that matters: act, compute, recall,
@@ -125,6 +129,12 @@ def router_prompt(catalog: list[dict[str, Any]]) -> str:
             'user: am I free on Thursday afternoon?',
             '{"skills": [{"name": "calendar.find_free_time", "args": {"when": "thursday"}}], '
             '"reply": null}',
+            "",
+            'user: what does this mean? I just copied it',
+            '{"skills": [{"name": "screen.clipboard", "args": {}}], "reply": null}',
+            "",
+            'user: explain what is on my screen right now',
+            '{"skills": [{"name": "screen.read", "args": {}}], "reply": null}',
             "",
             'user: record this meeting',
             '{"skills": [{"name": "capture.start", "args": {"label": "meeting"}}], "reply": null}',

@@ -149,6 +149,10 @@ def tick() -> list[Delivery]:
 
         stt.unload_if_idle()
         tts.unload_if_idle()
+
+        from ..screen import capture as screen_capture
+
+        screen_capture.unload_if_idle()
     except Exception:  # noqa: BLE001 — voice being absent is not an error here
         log.debug("voice idle check skipped", exc_info=True)
 
