@@ -17,8 +17,34 @@ persona:
   idle_timeout_minutes: 30
 
 voice:
-  enabled: false          # REQ-4 — text-only until Phase 7 lands
+  # Master switch. Everything works without it — voice is a way in and out,
+  # not a separate set of capabilities (REQ-1).
+  enabled: false
+  input_enabled: true     # speak to it
+  output_enabled: true    # it speaks back; muting disables nothing else (REQ-4)
+
+  # Speech recognition, running locally (REQ-3, REQ-26).
+  # tiny (~75MB) | base (~145MB) | small (~480MB)
+  stt_model: base
+  language: en
+  # Below this confidence Kai asks you to repeat instead of guessing (REQ-3).
+  min_confidence: 0.45
+
+  # Voice for spoken replies. Downloaded voices are listed by `/voice`.
   voice_id: en_US-amy-medium
+
+  # Wake word means an always-open microphone, so it is opt-in on top of voice.
+  # With it off, use push-to-talk. Nothing is transcribed before the phrase
+  # fires either way (REQ-2, REQ-26).
+  wake_enabled: false
+  wake_word: hey_jarvis
+  wake_threshold: 0.5
+
+  # How long a pause ends your turn, and the hard cap on one utterance.
+  silence_ms: 800
+  max_utterance_seconds: 30
+  # Release the speech models after this long unused (REQ-31).
+  unload_after_minutes: 10
 
 brain:
   provider: ollama        # ollama | groq | gemini

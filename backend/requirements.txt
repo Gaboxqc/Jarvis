@@ -16,5 +16,12 @@ ddgs==9.7.1
 pypdf==6.4.0
 python-docx==1.2.0
 
+# Voice (REQ-1 to REQ-4). All local: audio never leaves the machine.
+# Models are downloaded separately by an explicit action, not on import.
+sounddevice==0.5.5
+faster-whisper==1.2.1
+piper-tts==1.6.0
+openwakeword==0.6.0
+
 # dev
 pytest==9.0.1

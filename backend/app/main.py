@@ -249,6 +249,65 @@ def clear_document_index() -> dict[str, Any]:
     return {"cleared_documents": index_store.clear()}
 
 
+# -- voice (REQ-1 to REQ-4) -----------------------------------------------
+
+
+@app.get("/voice/status")
+def voice_status() -> dict[str, Any]:
+    from .voice import session as voice_session
+
+    return voice_session.status()
+
+
+@app.get("/voice/models")
+def voice_models() -> dict[str, Any]:
+    from .voice import models as voice_models_module
+
+    return {
+        "models": [entry.to_dict() for entry in voice_models_module.status()],
+        "missing_mb": voice_models_module.total_download_mb(),
+        "location": str(voice_models_module.models_root()),
+    }
+
+
+@app.post("/voice/models")
+def download_voice_models(include_wake: bool = False) -> dict[str, Any]:
+    """Explicit download. Hundreds of MB never move without being asked for."""
+    from .voice import models as voice_models_module
+
+    return voice_models_module.ensure_all(include_wake=include_wake)
+
+
+@app.delete("/voice/models")
+def delete_voice_models() -> dict[str, Any]:
+    from .voice import models as voice_models_module
+
+    return {"freed_mb": voice_models_module.remove_all()}
+
+
+class SpeakRequest(BaseModel):
+    text: str
+
+
+@app.post("/voice/speak")
+def speak(request: SpeakRequest) -> dict[str, Any]:
+    from .voice import tts
+
+    try:
+        speech = tts.synthesize(request.text)
+    except tts.TTSUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {"seconds": round(speech.seconds, 2), "sample_rate": speech.sample_rate}
+
+
+@app.post("/voice/listen")
+def listen_once() -> dict[str, Any]:
+    """Capture one utterance and run it as a normal turn."""
+    from .voice.session import VoiceSession
+
+    return VoiceSession().listen_once().to_dict()
+
+
 # -- focus (REQ-23) -------------------------------------------------------
 
 
