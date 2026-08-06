@@ -1,5 +1,15 @@
-# Kai — persona and preferences (REQ-5)
-# Edit this file freely; changes are picked up on the next turn, no restart needed.
+# Kai — example configuration.
+#
+# Copy this to kai.config.yaml and edit that copy. Your real file is gitignored,
+# because some values here are credentials even though none of them is a
+# password: a Google "secret address in iCal format" lets anyone holding the URL
+# read your whole calendar without logging in. Committing one publishes it, and
+# git history keeps it even after you delete the line.
+#
+# Passwords are never stored in any config file. Add the account below, then run
+# /connect and type it at the prompt; it goes into the OS credential store.
+#
+# Changes are picked up on the next turn, no restart needed.
 
 persona:
   name: Kai

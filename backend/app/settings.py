@@ -15,6 +15,7 @@ from typing import Any
 import yaml
 
 DEFAULT_CONFIG_NAME = "kai.config.yaml"
+EXAMPLE_CONFIG_NAME = "kai.config.example.yaml"
 
 
 def project_root() -> Path:
@@ -37,10 +38,23 @@ def data_dir() -> Path:
 
 
 def config_path() -> Path:
+    """The config file in use.
+
+    `kai.config.yaml` is deliberately untracked, because connector settings can
+    themselves be credentials — a calendar's "secret address in iCal format" is
+    a bearer token in URL form. A fresh clone therefore has only the example,
+    which is used until the real file exists so the assistant still starts.
+    """
     override = os.environ.get("KAI_CONFIG")
     if override:
         return Path(override)
-    return project_root() / DEFAULT_CONFIG_NAME
+
+    real = project_root() / DEFAULT_CONFIG_NAME
+    if real.exists():
+        return real
+
+    example = project_root() / EXAMPLE_CONFIG_NAME
+    return example if example.exists() else real
 
 
 @dataclass(frozen=True)
