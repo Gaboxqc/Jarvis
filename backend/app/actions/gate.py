@@ -2,9 +2,15 @@
 
 Nothing in Kai performs a side effect except through here. The rules, in order:
 
-1. A skill's own `consequential` flag decides whether approval is needed. The
-   brain does not get a vote; a persuasive turn of phrase cannot downgrade an
-   action's severity.
+1. The skill decides whether approval is needed, per call, via `severity()`.
+   The brain does not get a vote; a persuasive turn of phrase in the
+   conversation cannot downgrade an action.
+
+   Only genuinely costly actions are gated — irreversible loss, bulk changes to
+   the user's files, or anything that interrupts what they are doing. Low-stakes
+   writes are reported in the reply and left undoable instead. Confirming
+   everything is not a safer default: it trains people to approve without
+   reading, which is worse than not asking.
 2. Approval is bound to one ActionRecord id. Confirming action A never
    authorizes action B, even for the identical skill with identical arguments
    one second later. `confirm()` takes an id, and the id is consumed.
@@ -130,7 +136,11 @@ def submit(
     except SkillError as exc:
         return GateOutcome(status=FAILED, skill_name=skill_name, error=str(exc))
 
-    if not skill.consequential:
+    # Severity is asked of the skill per call, so arguments can downgrade it
+    # (volume vs. sleep). The skill decides; the conversation cannot.
+    severity = skill.severity(cleaned)
+
+    if severity != "consequential":
         record = journal.create(
             skill_name=skill.name,
             params=cleaned,

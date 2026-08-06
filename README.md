@@ -31,6 +31,14 @@ Nothing performs a side effect except through the **Action Gate**
 consequential, and for consequential ones it shows you exactly what will happen —
 with real names and counts — then waits.
 
+It is deliberately quiet. Only three things ask: closing an app (unsaved work),
+locking or sleeping the machine, and organizing a folder (bulk file moves).
+Everything else — storing a memory, setting a reminder, changing volume,
+searching, calculating — just runs and tells you what it did, and stays
+undoable. Severity is decided per call, so `system.control` asks about *sleep*
+and not about *volume*. Prompting on everything trains people to click yes
+without reading, which is worse than not asking.
+
 Approval is bound to a single action id. Confirming one action never authorizes
 another, even an identical one a second later. `gate.confirm()` takes an id, not
 a "yes", so there is no call shape that could approve something you were not

@@ -6,12 +6,24 @@ not editing the router.
 
 Two flags carry the whole trust model:
 
-    consequential -> the Action Gate must get explicit confirmation first (REQ-24)
+    consequential -> this skill *can* require confirmation (REQ-24)
     reversible    -> the skill can undo itself from its undo_payload (REQ-25)
 
 `reversible` is a promise. If you set it True you must implement `undo()`, and
 `run()` must return an undo_payload sufficient to reverse the change. The
 registry enforces the first half of that at import time.
+
+Severity is decided per *call*, not per skill — override `severity()` when the
+arguments change the stakes. Turning the volume down and putting the machine to
+sleep are the same skill; only one of them is worth interrupting someone for.
+
+The bar for confirming is: **would the user be upset if this happened and they
+had not been asked?** Irreversible loss, bulk changes to their files, and
+anything that interrupts what they are doing clear it. Storing a fact,
+adjusting volume, and adding a reminder do not — those are reported in the reply
+and undoable, which is the right cost for a low-stakes action. Prompting for
+everything trains people to click yes without reading, which quietly destroys
+the value of the prompts that actually matter.
 """
 
 from __future__ import annotations
@@ -72,6 +84,19 @@ class Skill:
     # Skills that need the network declare which privacy switch governs them
     # so the gate can refuse before any request is made (REQ-26).
     requires: tuple[str, ...] = ()
+
+    def severity(self, args: dict[str, Any]) -> Severity:
+        """How much this specific call is worth interrupting the user for.
+
+        Defaults to the class flag. Override when the arguments decide: a skill
+        that both mutes the speakers and suspends the machine should only stop
+        to ask about the second one.
+
+        A skill may downgrade a call to routine, but a skill declared routine
+        can never upgrade — the gate would have nothing to show, since only
+        `consequential` skills are required to implement `preview()`.
+        """
+        return "consequential" if self.consequential else "routine"
 
     def preview(self, args: dict[str, Any]) -> str:
         """One line naming exactly what will happen, with targets and counts.

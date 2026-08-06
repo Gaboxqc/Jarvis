@@ -182,12 +182,16 @@ class SystemControlSkill(Skill):
                    required=False, default=4),
     )
 
-    # Locking and sleeping interrupt whatever the user is doing, so they are
-    # gated even though they destroy nothing (REQ-24: "changing system settings").
+    # Declared consequential so the class *may* gate, but severity() decides per
+    # call. Locking and sleeping interrupt whatever the user is doing; changing
+    # the volume does not, and asking about it would be absurd.
     consequential = True
     reversible = False
 
     _GATED = {"lock", "sleep"}
+
+    def severity(self, args: dict[str, Any]) -> str:
+        return "consequential" if str(args.get("action", "")) in self._GATED else "routine"
 
     def preview(self, args: dict[str, Any]) -> str:
         action = str(args.get("action", ""))

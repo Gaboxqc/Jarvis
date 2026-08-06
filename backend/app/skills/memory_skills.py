@@ -1,10 +1,14 @@
 """Memory skills — REQ-7.
 
-`memory.remember` is deliberately marked consequential. It is not destructive,
-but REQ-7 requires that nothing is stored without the user seeing it, and the
-Action Gate is already the component that shows a user what is about to happen
-and waits for an answer. Reusing it here means there is exactly one confirmation
-mechanism in the system rather than a second, weaker one for memory.
+These are deliberately *not* gated. REQ-7 requires that a memory write is
+visible to the user, not that they approve it — and those are different bars.
+Interrupting someone to ask permission before writing down "prefers short
+replies" is the kind of prompt that gets clicked through without reading, which
+devalues the prompts that matter.
+
+Visibility is met three other ways: the write is stated in the reply, every
+entry is listed and individually deletable, and both skills are reversible so
+"undo" takes the last one back. Nothing is stored silently.
 """
 
 from __future__ import annotations
@@ -30,11 +34,7 @@ class RememberSkill(Skill):
             required=False, default="fact", enum=long_term.CATEGORIES,
         ),
     )
-    consequential = True
     reversible = True
-
-    def preview(self, args: dict[str, Any]) -> str:
-        return f"Remember, permanently: \"{args.get('text', '')}\""
 
     def run(self, args: dict[str, Any], ctx: SkillContext) -> SkillResult:
         text = str(args["text"]).strip()
@@ -43,7 +43,8 @@ class RememberSkill(Skill):
         fact = long_term.add(text, str(args.get("category", "fact")))
         return SkillResult(
             ok=True,
-            message=f"Stored: {fact.text}",
+            # Stated back so the write is visible in the reply, per REQ-7.
+            message=f"Noted and saved: {fact.text}",
             data=fact.to_dict(),
             undo_payload={"fact_id": fact.id},
         )
@@ -64,17 +65,7 @@ class ForgetSkill(Skill):
     parameters = (
         SkillParam("query", "string", "The fact id, or words that appear in the fact."),
     )
-    consequential = True
     reversible = True
-
-    def preview(self, args: dict[str, Any]) -> str:
-        matches = self._matches(str(args.get("query", "")))
-        if not matches:
-            return f"Forget anything matching \"{args.get('query', '')}\" (nothing matches right now)"
-        if len(matches) == 1:
-            return f"Forget: \"{matches[0].text}\""
-        listed = "; ".join(f"\"{m.text}\"" for m in matches[:5])
-        return f"Forget {len(matches)} memories: {listed}"
 
     @staticmethod
     def _matches(query: str) -> list[long_term.MemoryFact]:
