@@ -1,0 +1,59 @@
+# Kai — persona and preferences (REQ-5)
+# Edit this file freely; changes are picked up on the next turn, no restart needed.
+
+persona:
+  name: Kai
+  # Free text, injected into the system prompt. Say how you want to be talked to.
+  tone_description: >
+    Direct and warm. You are a competent assistant, not a cheerful mascot.
+    You never pad replies with filler or restate the question back.
+  # terse | normal | chatty
+  verbosity: terse
+  # How the assistant addresses the user. Leave empty for no form of address.
+  address_style: ""
+  # "en" or "es" (REQ-28)
+  language: en
+  # Minutes of inactivity before short-term conversation memory resets (REQ-6)
+  idle_timeout_minutes: 30
+
+voice:
+  enabled: false          # REQ-4 — text-only until Phase 7 lands
+  voice_id: en_US-amy-medium
+
+brain:
+  provider: ollama        # ollama | groq | gemini
+  model: llama3
+  ollama_host: http://localhost:11434
+  temperature: 0.4
+  # Seconds before an LLM call is abandoned and reported as a failure (REQ-27)
+  timeout_seconds: 120
+
+privacy:
+  # Every switch here controls data leaving this machine (REQ-26).
+  # Everything not listed runs locally by construction.
+  allow_web_search: true
+  allow_live_data: true   # currency rates, weather
+  allow_cloud_llm: false  # when false, only the local provider is ever used
+
+actions:
+  # Skills the user has pre-approved so the gate stops asking (REQ-24).
+  # Reviewable and revocable here or in settings. Empty by default.
+  pre_approved: []
+  # Minutes a pending confirmation stays valid before it expires.
+  confirmation_ttl_minutes: 10
+
+skills:
+  # Disable any skill by name (REQ-33).
+  disabled: []
+
+system:
+  # Folders organize_folder and find_files are allowed to touch (REQ-21, REQ-26).
+  # Nothing outside these roots can be modified. "~" expands to your home folder.
+  allowed_roots:
+    - ~/Downloads
+    - ~/Documents
+    - ~/Desktop
+  # Apps closed when a focus session starts (REQ-23)
+  distracting_apps:
+    - Discord.exe
+    - Steam.exe
