@@ -45,10 +45,10 @@ def test_unrelated_facts_are_not_returned(workspace):
 
 
 def test_forgetting_is_undoable(workspace):
+    """Forgetting is not gated — it is reported and reversible instead."""
     long_term.add("Temporary fact about scheduling", "fact")
 
-    parked = gate.submit("memory.forget", {"query": "Temporary fact"}, SkillContext())
-    executed = gate.confirm(parked.action_id, SkillContext())
+    executed = gate.submit("memory.forget", {"query": "Temporary fact"}, SkillContext())
     assert executed.status == gate.EXECUTED
     assert long_term.all_facts() == []
 
