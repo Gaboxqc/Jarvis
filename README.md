@@ -8,7 +8,7 @@ Requirement IDs (`REQ-N`) are referenced throughout the source.
 
 ## What works today
 
-Phases 0–10 of `tasks.md`:
+All eleven phases of `tasks.md`:
 
 | Area | Capability |
 |---|---|
@@ -28,7 +28,24 @@ Phases 0–10 of `tasks.md`:
 | Trust | Action Gate, action history, undo, pre-approvals, one-shot data wipe |
 | Desktop UI | Chat with inline confirmations, memory review, action history, privacy screen |
 
-Not built yet: the installer (Phase 11) — the UI runs from source for now.
+## Building the installer
+
+```bash
+powershell -File installer/build.ps1
+```
+
+Freezes the backend with PyInstaller, checks the result, then bundles it with
+the UI into an MSI and an NSIS installer.
+
+The check between those steps is not ceremony. Skills are discovered at runtime,
+so freezing can drop every one of them while leaving an app that starts, serves
+and answers questions — broken in the only way that matters and indistinguishable
+from working. That happened on the first build: 1 skill out of 48. The build now
+runs `kai-backend.exe --selftest` and refuses to package anything that fails it.
+
+**Ollama is the one prerequisite that isn't bundled** — it's a separate installer
+and gigabytes of model. The app detects it and says so, with the command to fix
+it, rather than reporting a generic failure.
 
 ## The desktop UI
 

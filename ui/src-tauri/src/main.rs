@@ -1,23 +1,27 @@
-// Kai desktop shell — REQ-1, REQ-32.
+// Kai desktop shell — REQ-1, REQ-29, REQ-32.
 //
 // Deliberately thin. The window hosts the same React UI that runs in a browser,
-// which talks to the same FastAPI the CLI drives, so the desktop build cannot
+// talking to the same FastAPI the CLI drives, so the desktop build cannot
 // acquire capabilities the other two front ends lack.
 //
-// The shell owns exactly two things the web page cannot do for itself: a tray
-// icon, and a global hotkey that reaches the assistant without changing the
-// focused window (REQ-1).
+// The shell owns three things the web page cannot do for itself: a tray icon, a
+// global hotkey that reaches the assistant without changing the focused window,
+// and the lifetime of the bundled backend process.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+use std::sync::Mutex;
 
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    Manager, WindowEvent,
+    Manager, RunEvent, WindowEvent,
 };
 use tauri_plugin_global_shortcut::{
     Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState,
 };
+use tauri_plugin_shell::process::{CommandChild, CommandEvent};
+use tauri_plugin_shell::ShellExt;
 
 /// Ctrl+Alt+K. Chosen to avoid colliding with anything Windows or common apps use.
 ///
@@ -25,6 +29,10 @@ use tauri_plugin_global_shortcut::{
 fn hotkey() -> Shortcut {
     Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyK)
 }
+
+/// The spawned backend, kept so it can be shut down with the app.
+#[derive(Default)]
+struct Backend(Mutex<Option<CommandChild>>);
 
 fn toggle(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
@@ -42,8 +50,66 @@ fn toggle(app: &tauri::AppHandle) {
     }
 }
 
+/// Start the bundled backend.
+///
+/// In development there is usually one already running from a terminal, and a
+/// second copy would just lose the port race and exit; the sidecar is only
+/// spawned in release builds, where it is the only copy there is.
+fn start_backend(app: &tauri::AppHandle) {
+    if cfg!(debug_assertions) {
+        println!("dev build: expecting a backend on 127.0.0.1:8756");
+        return;
+    }
+
+    // The backend ships as a resource directory, not an externalBin: PyInstaller
+    // produces an executable that needs its _internal folder as a sibling, and
+    // externalBin carries only one file.
+    let executable = match app.path().resolve(
+        "resources/kai-backend/kai-backend.exe",
+        tauri::path::BaseDirectory::Resource,
+    ) {
+        Ok(path) if path.exists() => path,
+        Ok(path) => {
+            eprintln!("backend missing at {}", path.display());
+            return;
+        }
+        Err(error) => {
+            eprintln!("could not locate the backend: {error}");
+            return;
+        }
+    };
+
+    match app.shell().command(executable).spawn() {
+        Ok((mut rx, child)) => {
+            app.state::<Backend>().0.lock().unwrap().replace(child);
+            // Drain the pipes. Left unread they fill and block the child.
+            tauri::async_runtime::spawn(async move {
+                while let Some(event) = rx.recv().await {
+                    if let CommandEvent::Stderr(line) = event {
+                        eprintln!("[backend] {}", String::from_utf8_lossy(&line));
+                    }
+                }
+            });
+        }
+        Err(error) => eprintln!("backend failed to start: {error}"),
+    }
+}
+
+/// Stop the backend we started.
+///
+/// Without this the sidecar outlives the window and keeps the port, so the next
+/// launch finds 8756 taken and refuses to start — by a process the user cannot
+/// see and would have no reason to look for.
+fn stop_backend(app: &tauri::AppHandle) {
+    if let Some(child) = app.state::<Backend>().0.lock().unwrap().take() {
+        let _ = child.kill();
+    }
+}
+
 fn main() {
     tauri::Builder::default()
+        .manage(Backend::default())
+        .plugin(tauri_plugin_shell::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {
@@ -55,6 +121,7 @@ fn main() {
         )
         .setup(|app| {
             app.global_shortcut().register(hotkey())?;
+            start_backend(app.handle());
 
             let show = MenuItem::with_id(app, "show", "Show Kai", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
@@ -66,7 +133,10 @@ fn main() {
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => toggle(app),
-                    "quit" => app.exit(0),
+                    "quit" => {
+                        stop_backend(app);
+                        app.exit(0);
+                    }
                     _ => {}
                 })
                 .build(app)?;
@@ -81,6 +151,13 @@ fn main() {
                 let _ = window.hide();
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Kai");
+        .build(tauri::generate_context!())
+        .expect("error while building Kai")
+        .run(|app, event| {
+            // Covers every exit path, including ones that never reach the tray
+            // menu — a logout, a taskbar close, a crash in the webview.
+            if let RunEvent::ExitRequested { .. } | RunEvent::Exit = event {
+                stop_backend(app);
+            }
+        });
 }

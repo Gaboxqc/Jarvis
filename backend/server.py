@@ -1,0 +1,123 @@
+"""Entry point for the packaged backend — REQ-29.
+
+The CLI form (`uvicorn app.main:app`) needs a Python interpreter and an import
+path, neither of which exists once frozen. This starts the same app in-process
+so PyInstaller has a real script to build from.
+
+It is also the process the desktop app spawns as a sidecar, so its failure modes
+are user-visible: a port already in use has to say so plainly rather than dying
+with a traceback the user cannot act on.
+"""
+
+from __future__ import annotations
+
+import argparse
+import multiprocessing
+import socket
+import sys
+
+DEFAULT_HOST = "127.0.0.1"
+DEFAULT_PORT = 8756
+
+# Below this, packaging has silently dropped capabilities (see _selftest).
+MIN_EXPECTED_SKILLS = 40
+
+
+def port_is_free(host: str, port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            probe.bind((host, port))
+            return True
+        except OSError:
+            return False
+
+
+def main(argv: list[str] | None = None) -> int:
+    # PyInstaller re-executes the bundle for each child process; without this a
+    # frozen app that touches multiprocessing forks itself indefinitely.
+    multiprocessing.freeze_support()
+
+    parser = argparse.ArgumentParser(prog="kai-backend", description="Kai backend service")
+    parser.add_argument("--host", default=DEFAULT_HOST)
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    parser.add_argument("--log-level", default="info")
+    parser.add_argument(
+        "--selftest",
+        action="store_true",
+        help="Report what this build can actually do, then exit.",
+    )
+    args = parser.parse_args(argv)
+
+    # Bound to loopback and refused otherwise. This service reaches the user's
+    # files, mail and calendar; it must never be listening on a LAN (REQ-26).
+    if args.host not in {"127.0.0.1", "localhost", "::1"}:
+        print(
+            f"Refusing to listen on {args.host}. Kai's backend is loopback-only.",
+            file=sys.stderr,
+        )
+        return 2
+
+    if args.selftest:
+        return _selftest()
+
+    if not port_is_free(args.host, args.port):
+        print(
+            f"Port {args.port} is already in use. Kai may already be running - "
+            f"check the system tray before starting another copy.",
+            file=sys.stderr,
+        )
+        return 3
+
+    import uvicorn
+
+    from app.main import app
+
+    uvicorn.run(app, host=args.host, port=args.port, log_level=args.log_level)
+    return 0
+
+
+def _selftest() -> int:
+    """Check that a packaged build kept the parts that are easy to lose.
+
+    Skills are discovered at runtime, so freezing can drop every one of them
+    while leaving an app that starts, serves and answers -- the failure is
+    invisible from the outside. This makes it visible, and non-zero on failure
+    so a build script can refuse to ship it.
+    """
+    from app.skills.registry import discovered_module_names, load_errors, load_skills
+
+    frozen = getattr(sys, "frozen", False)
+    discovered = discovered_module_names()
+    skills = load_skills()
+    problems = load_errors()
+
+    print(f"frozen        : {frozen}")
+    print(f"modules found : {len(discovered)}")
+    for name in discovered:
+        print(f"    {name}")
+    print(f"skills loaded : {len(skills)}")
+    for name in sorted(skills):
+        print(f"  {name}")
+
+    if problems:
+        # The whole point: in a packaged build these are otherwise invisible.
+        print(f"\nskipped ({len(problems)}):")
+        for name, reason in problems:
+            print(f"  {name}")
+            print(f"      {reason}")
+
+    if len(skills) < MIN_EXPECTED_SKILLS:
+        print(
+            f"\nFAIL: expected {MIN_EXPECTED_SKILLS}+ skills, found {len(skills)}. "
+            "Skill discovery did not survive packaging.",
+            file=sys.stderr,
+        )
+        return 1
+
+    print("\nOK")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

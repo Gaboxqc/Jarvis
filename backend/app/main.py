@@ -459,10 +459,15 @@ def presence_state() -> dict[str, Any]:
 @app.get("/health")
 def health() -> dict[str, Any]:
     config = load_config()
+    skill_count = len(catalog())
+    # A packaged build that lost its dynamically-discovered skills still serves
+    # every endpoint and answers questions, so nothing else would reveal it.
+    # Reporting ok=True there would make the one signal anyone checks a lie.
     return {
-        "ok": True,
+        "ok": skill_count > 0,
+        "problem": None if skill_count else "No skills loaded - this build is broken.",
         "brain": llm.health(),
-        "skills": len(catalog()),
+        "skills": skill_count,
         "persona": config.persona.name,
         "config_file": str(config.source_path) if config.source_path else None,
         "data_dir": str(db.db_path().parent),
