@@ -11,35 +11,50 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, type PendingAction } from "../api";
 import type { Key, Lang } from "../i18n";
+import type { Voice } from "../useVoice";
 
 interface Message {
   id: number;
   who: "user" | "kai";
   text: string;
   error?: boolean;
+  heard?: boolean;
 }
 
 interface Props {
   lang: Lang;
   t: (key: Key, vars?: Record<string, string | number>) => string;
   onBusyChange: (busy: boolean) => void;
+  voice: Voice;
 }
 
 const SESSION = "ui";
 
-export function Chat({ t, onBusyChange }: Props) {
+export function Chat({ t, onBusyChange, voice }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const [listening, setListening] = useState(false);
 
   const nextId = useRef(1);
   const logEnd = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => onBusyChange(busy), [busy, onBusyChange]);
-  useEffect(() => logEnd.current?.scrollIntoView({ block: "end" }), [messages, pending]);
+  // Both of these need braces. An arrow with an expression body returns that
+  // expression, React takes an effect's return value to be its cleanup, and it
+  // calls whatever it was given. Edge -- which is the engine behind the
+  // packaged Windows build -- returns a Promise from `scrollIntoView`, so the
+  // shorter spelling crashed the whole view on the second message with
+  // "TypeError: y is not a function".
+  useEffect(() => {
+    onBusyChange(busy);
+  }, [busy, onBusyChange]);
+
+  useEffect(() => {
+    logEnd.current?.scrollIntoView({ block: "end" });
+  }, [messages, pending]);
 
   // Move focus to the confirmation when one appears: a keyboard user must not
   // have to hunt for the thing that is blocking their request (REQ-28).
@@ -48,8 +63,23 @@ export function Chat({ t, onBusyChange }: Props) {
     else inputRef.current?.focus();
   }, [pending]);
 
-  function push(who: Message["who"], text: string, error = false) {
-    setMessages((prior) => [...prior, { id: nextId.current++, who, text, error }]);
+  function push(
+    who: Message["who"],
+    text: string,
+    error = false,
+    heard = false,
+  ) {
+    setMessages((prior) => [...prior, { id: nextId.current++, who, text, error, heard }]);
+  }
+
+  /** Say a reply aloud, if speech is on and it wasn't spoken already. */
+  async function maybeSpeak(text: string, alreadySpoken = false) {
+    if (!text || alreadySpoken || !voice.speaks) return;
+    try {
+      await api.speak(text);
+    } catch {
+      // Losing the audio is a degradation; the reply is already on screen.
+    }
   }
 
   function apply(result: Awaited<ReturnType<typeof api.turn>>) {
@@ -59,6 +89,50 @@ export function Chat({ t, onBusyChange }: Props) {
       push("kai", result.reply, Boolean(result.error));
     }
     setPending(result.pending ?? null);
+    // A confirmation is spoken too: with the screen not being looked at, an
+    // unspoken "go ahead?" is a turn that silently stalls.
+    void maybeSpeak(result.reply);
+  }
+
+  async function listen() {
+    if (listening || busy) return;
+
+    if (!voice.canListen) {
+      // Offer the fix rather than refusing: the usual reason is that voice is
+      // simply switched off, and the button they just pressed says what they want.
+      if (voice.status && !voice.status.enabled && voice.status.models_ready) {
+        try {
+          await voice.setEnabled(true);
+        } catch (error) {
+          push("kai", error instanceof ApiError ? error.message : t("common.error"), true);
+          return;
+        }
+      } else {
+        push("kai", t((voice.blockedBecause ?? "voiceBlocked.offline") as Key), true);
+        return;
+      }
+    }
+
+    setListening(true);
+    try {
+      const turn = await api.listen();
+      if (turn.heard) push("user", turn.heard, false, true);
+
+      if (turn.error && !turn.reply) {
+        push("kai", turn.error, true);
+      } else if (turn.reply) {
+        push("kai", turn.reply, Boolean(turn.error));
+        // listen() already spoke it when output is enabled; speaking again
+        // would repeat the whole reply over itself.
+        void maybeSpeak(turn.reply, turn.spoke);
+      }
+      setPending(null);
+      void api.state().catch(() => undefined);
+    } catch (error) {
+      push("kai", error instanceof ApiError ? error.message : t("voiceBlocked.failed"), true);
+    } finally {
+      setListening(false);
+    }
   }
 
   async function send(event: React.FormEvent) {
@@ -112,7 +186,10 @@ export function Chat({ t, onBusyChange }: Props) {
             key={message.id}
             className={`msg ${message.who}${message.error ? " error" : ""}`}
           >
-            <div className="who">{message.who === "user" ? t("chat.you") : "Kai"}</div>
+            <div className="who">
+              {message.who === "user" ? t("chat.you") : "Kai"}
+              {message.heard && <span className="tag"> {t("voice.heard")}</span>}
+            </div>
             <div className="body">{message.text}</div>
           </div>
         ))}
@@ -140,6 +217,7 @@ export function Chat({ t, onBusyChange }: Props) {
           </div>
         )}
 
+        {listening && <p className="listening small">{t("voice.listening")}…</p>}
         {busy && <p className="muted small">{t("chat.thinking")}…</p>}
         <div ref={logEnd} />
       </div>
@@ -155,9 +233,24 @@ export function Chat({ t, onBusyChange }: Props) {
           onChange={(event) => setDraft(event.target.value)}
           placeholder={t("chat.placeholder")}
           autoComplete="off"
-          disabled={busy}
+          disabled={busy || listening}
         />
-        <button className="primary" type="submit" disabled={busy || !draft.trim()}>
+        <button
+          type="button"
+          className={listening ? "mic recording" : "mic"}
+          onClick={listen}
+          disabled={busy}
+          aria-pressed={listening}
+          title={voice.canListen ? t("voice.talk") : t((voice.blockedBecause ?? "voice.talk") as Key)}
+        >
+          <span aria-hidden="true">●</span>
+          <span className="sr-only">{t("voice.talk")}</span>
+        </button>
+        <button
+          className="primary"
+          type="submit"
+          disabled={busy || listening || !draft.trim()}
+        >
           {t("chat.send")}
         </button>
       </form>

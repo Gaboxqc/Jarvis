@@ -14,17 +14,41 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type Health } from "../api";
 import type { Key, Lang } from "../i18n";
+import type { Voice } from "../useVoice";
 
 interface Props {
   lang: Lang;
   setLang: (lang: Lang) => void;
   t: (key: Key, vars?: Record<string, string | number>) => string;
+  voice: Voice;
 }
 
-export function Settings({ lang, setLang, t }: Props) {
+export function Settings({ lang, setLang, t, voice }: Props) {
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
+
+  async function downloadModels() {
+    setDownloading(true);
+    try {
+      await api.downloadVoiceModels(Boolean(voice.status?.wake.enabled));
+      await voice.refresh();
+    } catch (caught) {
+      setNote(caught instanceof ApiError ? caught.message : t("common.error"));
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  function toggle(key: string, value: boolean) {
+    void api
+      .saveSettings({ voice: { [key]: value } })
+      .then(() => voice.refresh())
+      .catch((caught) =>
+        setNote(caught instanceof ApiError ? caught.message : t("common.error")),
+      );
+  }
 
   const load = useCallback(async () => {
     try {
@@ -56,6 +80,77 @@ export function Settings({ lang, setLang, t }: Props) {
     <div className="view">
       <h1>{t("settings.title")}</h1>
       {error && <div className="banner">{error}</div>}
+
+      <section className="card">
+        <h2 className="small muted">{t("settings.voice")}</h2>
+
+        {voice.status && !voice.status.models_ready && (
+          <div className="spread">
+            <span className="small">{t("settings.voiceModels")}</span>
+            <button className="primary" onClick={downloadModels} disabled={downloading}>
+              {downloading
+                ? t("settings.voiceDownloading")
+                : t("settings.voiceDownload", { mb: voice.status.download_mb })}
+            </button>
+          </div>
+        )}
+
+        {voice.status?.models_ready && (
+          <>
+            <label className="spread">
+              <span>{t("settings.voiceEnabled")}</span>
+              <input
+                type="checkbox"
+                checked={voice.status.enabled}
+                disabled={voice.busy}
+                onChange={(event) => toggle("enabled", event.target.checked)}
+              />
+            </label>
+            <label className="spread">
+              <span>{t("settings.voiceInput")}</span>
+              <input
+                type="checkbox"
+                checked={voice.status.input_enabled}
+                disabled={voice.busy || !voice.status.enabled}
+                onChange={(event) => toggle("input_enabled", event.target.checked)}
+              />
+            </label>
+            <label className="spread">
+              <span>{t("settings.voiceOutput")}</span>
+              <input
+                type="checkbox"
+                checked={voice.status.output_enabled}
+                disabled={voice.busy || !voice.status.enabled}
+                onChange={(event) => toggle("output_enabled", event.target.checked)}
+              />
+            </label>
+            <label className="spread">
+              <span>
+                {t("settings.voiceWake")}{" "}
+                <span className="muted">({voice.status.wake.phrase})</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={voice.status.wake.enabled}
+                disabled={voice.busy || !voice.status.enabled || !voice.status.wake.installed}
+                onChange={(event) => toggle("wake_enabled", event.target.checked)}
+              />
+            </label>
+            <p className="small muted">{t("settings.voiceWakeNote")}</p>
+            <div className="spread">
+              <span className="small muted">{t("settings.voiceModels")}</span>
+              <span className="small muted">
+                {voice.status.stt.model} · {voice.status.tts.voice}
+              </span>
+            </div>
+          </>
+        )}
+
+        {voice.status && !voice.status.microphone && (
+          <p className="small muted">{t("settings.voiceNoMic")}</p>
+        )}
+        <p className="small muted">{t("settings.voiceLocal")}</p>
+      </section>
 
       <section className="card">
         <h2 className="small muted">{t("settings.language")}</h2>

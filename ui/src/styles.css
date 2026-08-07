@@ -223,3 +223,41 @@ ul.plain li:last-child { border-bottom: 0; }
   padding: 0; margin: -1px; overflow: hidden;
   clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
+
+/* -- voice controls -- */
+
+button.mic, button.speaker {
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.7rem;
+  cursor: pointer;
+  line-height: 1;
+}
+button.mic[aria-pressed="true"], button.speaker[aria-pressed="true"] {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+button.mic.recording { border-color: var(--danger); color: var(--danger); }
+button.mic.recording span[aria-hidden] { animation: pulse 1.2s ease-in-out infinite; }
+
+.listening { color: var(--ok); }
+
+/* -- reminder toasts (REQ-9) -- */
+
+.toasts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.toast {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  border: 2px solid var(--warn);
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 0.7rem 0.85rem;
+}
