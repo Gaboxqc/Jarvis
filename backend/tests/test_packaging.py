@@ -292,3 +292,55 @@ def test_the_install_directory_is_not_the_data_directory():
     assert config["productName"] != data_dir().name, (
         "the installer would unpack into the data directory"
     )
+
+
+# -- surviving a damaged database (REQ-27) --------------------------------
+
+
+def test_a_corrupt_database_is_quarantined_and_replaced(tmp_path, monkeypatch):
+    """A corrupt file otherwise fails every open, forever.
+
+    The scheduler thread then raises every few seconds, anything touching
+    storage returns 500, and the app is wedged with no way out from inside it.
+    Seen for real after a force-kill during a write.
+    """
+    import sqlite3
+
+    from app import db
+
+    broken = tmp_path / "kai.db"
+    broken.write_bytes(b"SQLite format 3\x00" + b"\xde\xad\xbe\xef" * 4096)
+
+    db.close_connection()
+    db.set_db_path(broken)
+    try:
+        conn = db.connect()  # must not raise
+        assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        assert db.query("SELECT COUNT(*) c FROM memory_facts")[0]["c"] == 0
+
+        quarantined = list(tmp_path.glob("corrupt-*/kai.db"))
+        assert quarantined, "the damaged file was destroyed instead of kept"
+        assert quarantined[0].read_bytes()[:16] == b"SQLite format 3\x00"
+    finally:
+        db.close_connection()
+        db.set_db_path(None)
+
+
+def test_a_healthy_database_is_left_alone(tmp_path):
+    from app import db
+
+    good = tmp_path / "kai.db"
+    db.close_connection()
+    db.set_db_path(good)
+    try:
+        db.connect()
+        db.execute("INSERT INTO memory_facts(id, text, category, created_at) "
+                   "VALUES('x', 'a fact', 'fact', '2026-01-01T00:00:00+00:00')")
+        db.close_connection()
+
+        db.connect()
+        assert db.query("SELECT COUNT(*) c FROM memory_facts")[0]["c"] == 1
+        assert not list(tmp_path.glob("corrupt-*"))
+    finally:
+        db.close_connection()
+        db.set_db_path(None)

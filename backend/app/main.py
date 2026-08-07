@@ -15,7 +15,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from . import focus
+from . import focus, notifications, preferences
 from .actions import gate, journal, undo
 from .brain import llm, orchestrator
 from .index import scanner as index_scanner
@@ -35,6 +35,9 @@ log = logging.getLogger("kai")
 async def lifespan(app: FastAPI):
     load_skills()
     log.info("loaded %d skills", len(catalog()))
+    # Without this the API process has no subscriber and a due reminder is
+    # consumed with nobody told -- the reminder is lost, not merely late.
+    scheduler.subscribe(notifications.on_scheduler_delivery)
     scheduler.start()
     # Reconcile the document index with disk in the background. Startup must not
     # block on it: a first scan of a large Documents folder takes minutes, and
@@ -45,6 +48,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         scheduler.stop()
+        scheduler.unsubscribe(notifications.on_scheduler_delivery)
         db.close_connection()
 
 
@@ -298,6 +302,42 @@ def briefing() -> dict[str, Any]:
             {"name": s.name, "lines": s.lines, "error": s.error} for s in build()
         ]
     }
+
+
+# -- notifications (REQ-9) ------------------------------------------------
+
+
+@app.get("/notifications")
+def take_notifications() -> dict[str, Any]:
+    """Drain queued notifications. Destructive: each is handed out once."""
+    return {"notifications": [n.to_dict() for n in notifications.drain()]}
+
+
+# -- settings (REQ-5, REQ-26) ---------------------------------------------
+
+
+class SettingsPatch(BaseModel):
+    changes: dict[str, dict[str, Any]] = Field(default_factory=dict)
+
+
+@app.get("/settings")
+def read_settings() -> dict[str, Any]:
+    return {"current": preferences.current(), "writable": preferences.writable_keys()}
+
+
+@app.patch("/settings")
+def write_settings(patch: SettingsPatch) -> dict[str, Any]:
+    """Change a local preference.
+
+    Deliberately narrow. Anything governing what leaves this machine or what the
+    assistant may touch -- privacy switches, connectors, allowed file roots,
+    indexed folders -- is refused here and stays editable only by opening
+    kai.config.yaml (REQ-26).
+    """
+    try:
+        return preferences.update(patch.changes)
+    except preferences.NotWritable as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
 # -- voice (REQ-1 to REQ-4) -----------------------------------------------

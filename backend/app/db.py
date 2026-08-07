@@ -7,6 +7,7 @@ scheduler thread and the request threads both touch the same database.
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 import threading
 from datetime import datetime, timezone
@@ -14,6 +15,8 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .settings import data_dir
+
+log = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 1
 
@@ -154,6 +157,38 @@ CREATE TABLE IF NOT EXISTS tasks (
 """
 
 
+def _quarantine(path: Path, reason: str) -> Path:
+    """Move a damaged database aside so a fresh one can be created.
+
+    A corrupt file otherwise fails every single open, which means the scheduler
+    thread raises every few seconds, the API returns 500 for anything touching
+    storage, and the app is permanently wedged with no way out from inside it.
+    Losing the contents is bad; being unable to start at all is worse, and the
+    file is kept so nothing is destroyed by this decision.
+    """
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    quarantine = path.parent / f"corrupt-{stamp}"
+    quarantine.mkdir(parents=True, exist_ok=True)
+
+    for suffix in ("", "-wal", "-shm"):
+        candidate = Path(str(path) + suffix)
+        if candidate.exists():
+            try:
+                candidate.replace(quarantine / candidate.name)
+            except OSError:
+                # Still held open by something; deleting is the only way past.
+                try:
+                    candidate.unlink()
+                except OSError:
+                    pass
+
+    log.error(
+        "database at %s was unusable (%s). Moved to %s and started a fresh one.",
+        path, reason, quarantine,
+    )
+    return quarantine
+
+
 def connect() -> sqlite3.Connection:
     conn = getattr(_local, "conn", None)
     path = db_path()
@@ -164,7 +199,32 @@ def connect() -> sqlite3.Connection:
         conn.close()
 
     path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        conn = _open(path)
+    except sqlite3.DatabaseError as exc:
+        # "database disk image is malformed" and friends. Retried once against a
+        # clean file; a second failure is the filesystem's problem, not ours.
+        _quarantine(path, str(exc))
+        conn = _open(path)
+
+    _local.conn = conn
+    _local.path = path
+    return conn
+
+
+def _open(path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(path, check_same_thread=False, timeout=15.0)
+    try:
+        return _prepare(conn, path)
+    except Exception:
+        # The handle must be released before the caller can move the file out of
+        # the way: on Windows an open handle makes both rename and delete fail,
+        # so the retry would meet the same broken file and raise again.
+        conn.close()
+        raise
+
+
+def _prepare(conn: sqlite3.Connection, path: Path) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
@@ -175,9 +235,6 @@ def connect() -> sqlite3.Connection:
         (str(SCHEMA_VERSION),),
     )
     conn.commit()
-
-    _local.conn = conn
-    _local.path = path
     return conn
 
 
