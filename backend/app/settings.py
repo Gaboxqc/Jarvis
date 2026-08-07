@@ -6,7 +6,9 @@ mtime changes, so edits apply on the next turn without a restart (REQ-5).
 
 from __future__ import annotations
 
+import logging
 import os
+import sys
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -16,6 +18,8 @@ import yaml
 
 DEFAULT_CONFIG_NAME = "kai.config.yaml"
 EXAMPLE_CONFIG_NAME = "kai.config.example.yaml"
+
+log = logging.getLogger(__name__)
 
 
 def project_root() -> Path:
@@ -37,24 +41,57 @@ def data_dir() -> Path:
     return path
 
 
+def _bundled_example() -> Path | None:
+    """The example config, wherever this build keeps it."""
+    candidates = [project_root() / EXAMPLE_CONFIG_NAME]
+    # PyInstaller unpacks data files under _MEIPASS, which is nowhere near the
+    # source tree the other candidate assumes.
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        candidates.insert(0, Path(meipass) / EXAMPLE_CONFIG_NAME)
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def config_path() -> Path:
     """The config file in use.
 
-    `kai.config.yaml` is deliberately untracked, because connector settings can
-    themselves be credentials — a calendar's "secret address in iCal format" is
-    a bearer token in URL form. A fresh clone therefore has only the example,
-    which is used until the real file exists so the assistant still starts.
+    Three cases, in order:
+
+    1. `KAI_CONFIG` — explicit, used by tests.
+    2. A `kai.config.yaml` beside the source tree — the developer case.
+    3. `<data dir>/kai.config.yaml` — the installed case, seeded from the
+       bundled example the first time.
+
+    Case 3 exists because an installed build has no source tree. Resolving the
+    config relative to `__file__` lands inside PyInstaller's archive, so the
+    packaged app found no config at all and silently ran on defaults: no
+    allowed file roots, no connectors, no indexed folders. Everything still
+    *worked*, it just could not be configured, which is a worse failure than
+    refusing to start.
     """
     override = os.environ.get("KAI_CONFIG")
     if override:
         return Path(override)
 
-    real = project_root() / DEFAULT_CONFIG_NAME
-    if real.exists():
-        return real
+    from_source = project_root() / DEFAULT_CONFIG_NAME
+    if from_source.exists():
+        return from_source
 
-    example = project_root() / EXAMPLE_CONFIG_NAME
-    return example if example.exists() else real
+    installed = data_dir() / DEFAULT_CONFIG_NAME
+    if not installed.exists():
+        example = _bundled_example()
+        if example is not None:
+            try:
+                installed.write_text(example.read_text(encoding="utf-8"), encoding="utf-8")
+                log.info("seeded %s from the bundled example", installed)
+            except OSError:
+                # Read-only or full disk: fall back to reading the example
+                # directly rather than failing to start.
+                return example
+    return installed
 
 
 @dataclass(frozen=True)

@@ -69,6 +69,9 @@ const STRINGS = {
       "Delete ALL local data? Conversations, memories, reminders, tasks, transcripts and indexes. This cannot be undone.",
     "settings.wiped": "Removed {count} records.",
 
+    "prereq.startingTitle": "Starting up…",
+    "prereq.startingBody":
+      "Kai is loading its skills. This takes a few seconds on the first launch after installing.",
     "prereq.backendTitle": "Kai's backend isn't running",
     "prereq.backendBody":
       "The assistant service isn't answering on port 8756. If you started Kai from source, run the backend too; if you installed it, try quitting from the tray and reopening.",
@@ -142,6 +145,9 @@ const STRINGS = {
       "¿Borrar TODOS los datos locales? Conversaciones, recuerdos, recordatorios, tareas, transcripciones e índices. No se puede deshacer.",
     "settings.wiped": "Se eliminaron {count} registros.",
 
+    "prereq.startingTitle": "Iniciando…",
+    "prereq.startingBody":
+      "Kai está cargando sus habilidades. Tarda unos segundos la primera vez tras instalarlo.",
     "prereq.backendTitle": "El servicio de Kai no está en marcha",
     "prereq.backendBody":
       "El servicio no responde en el puerto 8756. Si iniciaste Kai desde el código, arranca también el backend; si lo instalaste, ciérralo desde la bandeja y ábrelo de nuevo.",

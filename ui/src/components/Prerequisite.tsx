@@ -11,15 +11,21 @@
  * llama3`" tells them what to do.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import type { Key } from "../i18n";
 
-type Problem = "none" | "backend" | "model";
+type Problem = "none" | "starting" | "backend" | "model";
+
+// The packaged backend loads 48 skills from a 550 MB bundle; a cold start
+// takes tens of seconds. Calling that "not running" is wrong and sends the
+// user chasing a fault that is about to resolve itself.
+const STARTUP_GRACE_MS = 45_000;
 
 export function Prerequisite({ t }: { t: (key: Key) => string }) {
   const [problem, setProblem] = useState<Problem>("none");
   const [detail, setDetail] = useState("");
+  const firstSeen = useRef(Date.now());
 
   useEffect(() => {
     let alive = true;
@@ -35,7 +41,10 @@ export function Prerequisite({ t }: { t: (key: Key) => string }) {
           setProblem("none");
         }
       } catch {
-        if (alive) setProblem("backend");
+        if (!alive) return;
+        // Within the grace window this is almost certainly a cold start.
+        const waited = Date.now() - firstSeen.current;
+        setProblem(waited < STARTUP_GRACE_MS ? "starting" : "backend");
       }
     }
 
@@ -52,12 +61,20 @@ export function Prerequisite({ t }: { t: (key: Key) => string }) {
   if (problem === "none") return null;
 
   return (
-    <div className="banner" role="status">
+    <div className={problem === "starting" ? "card" : "banner"} role="status">
       <strong>
-        {problem === "backend" ? t("prereq.backendTitle") : t("prereq.modelTitle")}
+        {problem === "starting"
+          ? t("prereq.startingTitle")
+          : problem === "backend"
+            ? t("prereq.backendTitle")
+            : t("prereq.modelTitle")}
       </strong>
       <p className="small" style={{ margin: "0.35rem 0 0" }}>
-        {problem === "backend" ? t("prereq.backendBody") : t("prereq.modelBody")}
+        {problem === "starting"
+          ? t("prereq.startingBody")
+          : problem === "backend"
+            ? t("prereq.backendBody")
+            : t("prereq.modelBody")}
       </p>
       {detail && <p className="small muted" style={{ margin: "0.25rem 0 0" }}>{detail}</p>}
       {problem === "model" && (

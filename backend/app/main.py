@@ -50,12 +50,22 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Kai", version="0.1.0", lifespan=lifespan)
 
-# The desktop UI runs from a local dev server, and inside Tauri from the
-# tauri:// scheme. Localhost only -- this API reaches the user's files, mail and
-# calendar, so it must never accept a page served from anywhere else (REQ-26).
+# The desktop UI runs from a local dev server, and inside Tauri from a
+# platform-specific origin. Localhost only -- this API reaches the user's files,
+# mail and calendar, so it must never accept a page served from anywhere else
+# (REQ-26).
+#
+# `tauri.localhost` is not optional. Windows WebView2 serves the packaged app
+# from http://tauri.localhost, while tauri:// is the macOS and Linux scheme.
+# Allowing only the latter meant the installed Windows app was CORS-blocked from
+# its own backend on every request -- it reported "backend unreachable" against a
+# backend that was running and healthy.
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^(https?://(localhost|127\.0\.0\.1)(:\d+)?|tauri://localhost)$",
+    allow_origin_regex=(
+        r"^(https?://(localhost|127\.0\.0\.1|tauri\.localhost)(:\d+)?"
+        r"|tauri://localhost)$"
+    ),
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
