@@ -54,6 +54,35 @@ def system_prompt(config: Config, facts: list[MemoryFact]) -> str:
     return "\n".join(lines)
 
 
+def tool_lines(catalog: list[dict[str, Any]]) -> str:
+    """The tool list, one line per tool.
+
+    This used to be `json.dumps(catalog, indent=2)`, and that was a bug rather
+    than a style choice. Indented JSON for 48 skills is 5,627 tokens; llama3 runs
+    with a 4,096-token context, so Ollama silently truncated the prompt and the
+    router chose from a catalog with its middle cut out. Nothing errored — the
+    routing was just wrong in ways we kept trying to fix by adding examples,
+    which made the prompt longer, which truncated more.
+
+    One line per tool is ~1,100 tokens for the same information the router
+    actually uses: what it is called, what it takes, and what it does. Parameter
+    prose is dropped because the router does not read it; enums are kept because
+    passing the wrong one is a real failure.
+    """
+    lines = []
+    for entry in catalog:
+        args = []
+        for name, spec in (entry.get("parameters") or {}).items():
+            token = name if spec.get("required") else f"{name}?"
+            if spec.get("enum"):
+                token += "=" + "|".join(str(v) for v in spec["enum"])
+            args.append(token)
+        # First sentence only. The rest is guidance for humans reading the code.
+        summary = (entry.get("description") or "").strip().split(". ")[0].rstrip(".")
+        lines.append(f"{entry['name']}({', '.join(args)}) - {summary}.")
+    return "\n".join(lines)
+
+
 def router_prompt(catalog: list[dict[str, Any]]) -> str:
     """Instructions for the routing pass. Returns JSON, always."""
     return "\n".join(
@@ -62,7 +91,7 @@ def router_prompt(catalog: list[dict[str, Any]]) -> str:
             "needs one or more tools, then reply with JSON and nothing else.",
             "",
             "Available tools:",
-            json.dumps(catalog, indent=2),
+            tool_lines(catalog),
             "",
             "Reply with exactly this shape:",
             '{"skills": [{"name": "<tool name>", "args": {...}}], "reply": null}',

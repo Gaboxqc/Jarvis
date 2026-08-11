@@ -116,6 +116,11 @@ class BrainSettings:
     ollama_host: str = "http://127.0.0.1:11434"
     temperature: float = 0.4
     timeout_seconds: int = 120
+    # Ollama defaults to a 4,096-token context regardless of what the model
+    # supports, and silently drops whatever does not fit rather than failing.
+    # The router prompt exceeded it, so the model was choosing skills from a
+    # truncated tool list and nothing anywhere said so. Set it explicitly.
+    context_tokens: int = 8192
 
 
 @dataclass(frozen=True)
@@ -265,6 +270,7 @@ def _build(raw: dict[str, Any], source: Path | None) -> Config:
             ollama_host=_prefer_ipv4(brain_raw.get("ollama_host", BrainSettings.ollama_host)),
             temperature=float(brain_raw.get("temperature", 0.4)),
             timeout_seconds=int(brain_raw.get("timeout_seconds", 120)),
+            context_tokens=int(brain_raw.get("context_tokens", BrainSettings.context_tokens)),
         ),
         privacy=PrivacySettings(
             allow_web_search=bool(privacy_raw.get("allow_web_search", True)),

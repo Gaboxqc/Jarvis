@@ -51,10 +51,13 @@ def chat(
         "stream": False,
         "options": {
             "temperature": settings.temperature if temperature is None else temperature,
+            "num_ctx": settings.context_tokens,
         },
     }
     if json_mode:
         payload["format"] = "json"
+
+    _warn_if_oversized(messages, settings)
 
     url = f"{settings.ollama_host.rstrip('/')}/api/chat"
     try:
@@ -82,6 +85,38 @@ def chat(
 
     text = ((body.get("message") or {}).get("content") or "").strip()
     return LLMReply(text=text, raw=body)
+
+
+def estimate_tokens(messages: list[dict[str, str]]) -> int:
+    """Rough token count for a message list.
+
+    Deliberately approximate — this exists to catch a prompt that is twice the
+    context window, not to budget the last hundred tokens. Four characters per
+    token is the usual rule of thumb and is close enough for that job without
+    dragging a tokenizer into the runtime.
+    """
+    return sum(len(m.get("content") or "") for m in messages) // 4
+
+
+def _warn_if_oversized(messages: list[dict[str, str]], settings: BrainSettings) -> None:
+    """Say something when the prompt cannot fit.
+
+    Ollama's response to an over-long prompt is to drop the overflow and answer
+    anyway, so an oversized prompt looks exactly like a working one — it just
+    produces worse answers forever. This is the only warning anyone gets.
+    """
+    estimate = estimate_tokens(messages)
+    # Leave room for the reply; a prompt that fills the window leaves nowhere
+    # to generate into.
+    budget = int(settings.context_tokens * 0.75)
+    if estimate > budget:
+        log.warning(
+            "prompt is ~%d tokens against a %d-token context: Ollama will silently "
+            "truncate it and the answer will be based on part of the input. "
+            "Raise brain.context_tokens or shorten the prompt.",
+            estimate,
+            settings.context_tokens,
+        )
 
 
 def _error_detail(response: httpx.Response) -> str:

@@ -63,6 +63,10 @@ brain:
   # on IPv4 only, and the failed attempt costs about two seconds per call.
   ollama_host: http://127.0.0.1:11434
   temperature: 0.4
+  # Ollama's own default is 4096 whatever the model supports, and it truncates
+  # anything longer without saying so. Raise this if you switch to a model with
+  # a bigger window; lower it only if you are short of VRAM.
+  context_tokens: 8192
   # Seconds before an LLM call is abandoned and reported as a failure (REQ-27)
   timeout_seconds: 120
 
