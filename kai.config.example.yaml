@@ -59,7 +59,9 @@ voice:
 brain:
   provider: ollama        # ollama | groq | gemini
   model: llama3
-  ollama_host: http://localhost:11434
+  # 127.0.0.1 rather than "localhost": Windows tries ::1 first, Ollama listens
+  # on IPv4 only, and the failed attempt costs about two seconds per call.
+  ollama_host: http://127.0.0.1:11434
   temperature: 0.4
   # Seconds before an LLM call is abandoned and reported as a failure (REQ-27)
   timeout_seconds: 120

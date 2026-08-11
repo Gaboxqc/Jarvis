@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import sys
 import threading
 from dataclasses import dataclass, field
@@ -108,7 +109,11 @@ class Persona:
 class BrainSettings:
     provider: str = "ollama"
     model: str = "llama3"
-    ollama_host: str = "http://localhost:11434"
+    # 127.0.0.1, never "localhost". On Windows localhost resolves to ::1 first,
+    # Ollama listens on IPv4 only, and every request therefore spends ~2s
+    # failing over from IPv6 before it is even sent. At two model calls per
+    # turn that was four seconds of dead time on every message.
+    ollama_host: str = "http://127.0.0.1:11434"
     temperature: float = 0.4
     timeout_seconds: int = 120
 
@@ -192,6 +197,22 @@ def _expand(p: str) -> Path:
     return Path(os.path.expandvars(os.path.expanduser(p))).resolve()
 
 
+def _prefer_ipv4(host: str) -> str:
+    """Rewrite a loopback "localhost" to 127.0.0.1.
+
+    Windows resolves localhost to ::1 before 127.0.0.1, and Ollama binds IPv4
+    only, so each call stalls ~2s on a connection that was never going to
+    succeed. Every config written before this was found says localhost, so
+    correcting the default is not enough -- the existing file has to be fixed
+    as it is read, or the machines already installed keep the four-second tax.
+
+    Only the loopback name is touched. A real hostname is left alone: it may
+    legitimately be IPv6, and silently redirecting it would point the assistant
+    at the wrong machine.
+    """
+    return re.sub(r"(?<=//)localhost(?=[:/]|$)", "127.0.0.1", host or "", count=1)
+
+
 def _build(raw: dict[str, Any], source: Path | None) -> Config:
     persona_raw = raw.get("persona") or {}
     voice_raw = raw.get("voice") or {}
@@ -241,7 +262,7 @@ def _build(raw: dict[str, Any], source: Path | None) -> Config:
         brain=BrainSettings(
             provider=brain_raw.get("provider", "ollama"),
             model=brain_raw.get("model", "llama3"),
-            ollama_host=brain_raw.get("ollama_host", "http://localhost:11434"),
+            ollama_host=_prefer_ipv4(brain_raw.get("ollama_host", BrainSettings.ollama_host)),
             temperature=float(brain_raw.get("temperature", 0.4)),
             timeout_seconds=int(brain_raw.get("timeout_seconds", 120)),
         ),
