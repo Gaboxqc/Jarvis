@@ -28,6 +28,7 @@ import json
 import sys
 import time
 from collections import Counter
+from dataclasses import replace
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -213,7 +214,7 @@ def route_once(prompt: str, text: str, model: str) -> tuple[str, dict]:
     ]
     settings = llm.load_config().brain
     if model:
-        settings = type(settings)(**{**settings.__dict__, "model": model})
+        settings = replace(settings, model=model)
 
     reply = llm.chat(messages, json_mode=True, temperature=0.0, settings=settings)
     parsed = reply.as_json() or {}
@@ -226,32 +227,12 @@ def route_once(prompt: str, text: str, model: str) -> tuple[str, dict]:
     return str(first.get("name") or "<unnamed>"), (first.get("args") or {})
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--only", default="", help="Substring filter on the expected skill.")
-    parser.add_argument("--model", default="", help="Override brain.model for this run.")
-    parser.add_argument("--json", default="", help="Write full results to this path.")
-    parser.add_argument("--holdout", action="store_true",
-                        help="Run the held-out phrasings the prompt was not tuned on.")
-    args = parser.parse_args()
-
-    load_skills()
-    known = {entry["name"] for entry in catalog()}
-    required = {
-        entry["name"]: [n for n, s in (entry["parameters"] or {}).items() if s.get("required")]
-        for entry in catalog()
-    }
-    prompt = prompts.router_prompt(catalog())
-
-    source = HELDOUT if args.holdout else CASES
-    cases = [c for c in source if args.only in str(c[1])] if args.only else source
-    print(f"{len(cases)} cases, {len(known)} skills, "
-          f"prompt ~{llm.estimate_tokens([{'content': prompt}])} tokens\n")
-
+def run(prompt, cases, model, known, required, *, verbose=True) -> tuple[list[dict], float]:
+    """Route every case once and classify the answer."""
     rows = []
     started = time.perf_counter()
     for text, want in cases:
-        got, got_args = route_once(prompt, text, args.model)
+        got, got_args = route_once(prompt, text, model)
 
         acceptable = (want,) if isinstance(want, str) else want
         if got in acceptable:
@@ -272,12 +253,72 @@ def main() -> int:
         rows.append({"text": text, "want": "|".join(acceptable), "got": got,
                      "verdict": verdict, "missing_args": missing})
 
-        mark = {"ok": "  ok  ", "wrong": " WRONG", "invented": " INVNT",
-                "missed": " MISS ", "overrouted": " OVER "}[verdict]
-        note = f"  !! missing required {missing}" if missing else ""
-        print(f"{mark}  {text[:46]:48} -> {got or '(none)':26} want {'|'.join(acceptable) or '(none)'}{note}")
+        if verbose:
+            mark = {"ok": "  ok  ", "wrong": " WRONG", "invented": " INVNT",
+                    "missed": " MISS ", "overrouted": " OVER "}[verdict]
+            note = f"  !! missing required {missing}" if missing else ""
+            print(f"{mark}  {text[:46]:48} -> {got or '(none)':26} "
+                  f"want {'|'.join(acceptable) or '(none)'}{note}")
 
-    elapsed = time.perf_counter() - started
+    return rows, time.perf_counter() - started
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--only", default="", help="Substring filter on the expected skill.")
+    parser.add_argument("--model", default="", help="Override brain.model for this run.")
+    parser.add_argument("--compare", default="",
+                        help="Comma-separated models to score side by side, e.g. llama3,qwen2.5")
+    parser.add_argument("--json", default="", help="Write full results to this path.")
+    parser.add_argument("--holdout", action="store_true",
+                        help="Run the held-out phrasings the prompt was not tuned on.")
+    args = parser.parse_args()
+
+    load_skills()
+    known = {entry["name"] for entry in catalog()}
+    required = {
+        entry["name"]: [n for n, s in (entry["parameters"] or {}).items() if s.get("required")]
+        for entry in catalog()
+    }
+    prompt = prompts.router_prompt(catalog())
+
+    source = HELDOUT if args.holdout else CASES
+    cases = [c for c in source if args.only in str(c[1])] if args.only else source
+    label = "held-out" if args.holdout else "tuned"
+    print(f"{len(cases)} {label} cases, {len(known)} skills, "
+          f"prompt ~{llm.estimate_tokens([{'content': prompt}])} tokens\n")
+
+    # -- comparing models -------------------------------------------------
+    if args.compare:
+        models = [m.strip() for m in args.compare.split(",") if m.strip()]
+        results = {}
+        for model in models:
+            print(f"--- {model} ---")
+            rows, elapsed = run(prompt, cases, model, known, required, verbose=False)
+            ok = sum(1 for r in rows if r["verdict"] == "ok")
+            results[model] = rows
+            print(f"    {ok}/{len(rows)}  ({ok / len(rows):.0%})  {elapsed:.0f}s")
+
+        print(f"\n{'-' * 78}\nDisagreements:\n")
+        first, *rest = models
+        for i, (text, _) in enumerate(cases):
+            answers = {m: results[m][i] for m in models}
+            if len({a["got"] for a in answers.values()}) == 1:
+                continue
+            print(f"  {text}")
+            print(f"      want {results[first][i]['want'] or '(none)'}")
+            for model in models:
+                row = answers[model]
+                print(f"      {'OK ' if row['verdict'] == 'ok' else '   '} "
+                      f"{model:12} {row['got'] or '(none)'}")
+
+        if args.json:
+            Path(args.json).write_text(json.dumps(results, indent=2), encoding="utf-8")
+            print(f"\nfull results -> {args.json}")
+        return 0
+
+    # -- a single model ---------------------------------------------------
+    rows, elapsed = run(prompt, cases, args.model, known, required)
     counts = Counter(r["verdict"] for r in rows)
     covered = {r["got"] for r in rows if r["verdict"] == "ok" and r["got"]}
     unreachable = sorted(known - covered)
