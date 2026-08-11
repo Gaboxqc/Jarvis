@@ -53,11 +53,35 @@ def test_optional_arguments_are_marked():
     assert "query," in line and "limit?" in line
 
 
-def test_only_the_first_sentence_survives():
-    """The rest is written for maintainers, and the router does not read it."""
+def test_the_whole_description_survives():
+    """The disambiguation lives in the second sentence, so it cannot be dropped.
+
+    An earlier version of tool_lines kept only the first sentence. mail.read's
+    second sentence is "Use for 'what did Ana say about the invoice'", and
+    losing it sent that exact question to documents.search. The routing sweep
+    caught it; nothing else would have.
+    """
     line = prompts.tool_lines(make_catalog(1))
     assert "Does the demonstration thing." in line
-    assert "maintains the code" not in line
+    assert "guidance for whoever maintains the code" in line
+
+
+def test_a_wrapped_description_stays_on_one_line():
+    """Descriptions are wrapped in source; a newline would break the format."""
+    skill = Skill()
+    skill.name = "demo.wrapped"
+    skill.description = "First part\n    and the continuation."
+    skill.parameters = ()
+
+    line = prompts.tool_lines([skill.to_catalog_entry()])
+    assert "\n" not in line
+    assert "First part and the continuation." in line
+
+
+def test_descriptions_do_not_end_in_a_double_stop():
+    load_skills()
+    for line in prompts.tool_lines(catalog()).splitlines():
+        assert not line.endswith(".."), line
 
 
 def test_enums_are_kept():
@@ -94,14 +118,21 @@ def test_the_real_prompt_fits_the_context_window():
 
 
 def test_the_compact_form_is_much_smaller_than_json():
-    """Pins the reason for the format, so nobody 'tidies' it back to JSON."""
+    """Pins the reason for the format, so nobody 'tidies' it back to JSON.
+
+    Measured on the real catalog rather than a synthetic one: the saving comes
+    from dropping JSON structure and parameter prose, and how big that is
+    depends on the actual skills. Half is the bar — the real figure is a third,
+    and the margin is there so restoring a description cannot fail the build.
+    """
     import json
 
-    entries = make_catalog(48)
+    load_skills()
+    entries = catalog()
     compact = len(prompts.tool_lines(entries))
     verbose = len(json.dumps(entries, indent=2))
 
-    assert compact < verbose / 3
+    assert compact < verbose / 2, f"{compact} vs {verbose}"
 
 
 def test_every_skill_still_names_itself_and_its_required_args():
