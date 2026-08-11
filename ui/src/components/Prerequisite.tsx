@@ -8,7 +8,7 @@
  *
  * It names the actual remedy rather than reporting a failure. "Backend
  * unreachable" tells someone nothing; "install Ollama, then run `ollama pull
- * llama3`" tells them what to do.
+ * qwen2.5`" tells them what to do.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -79,7 +79,7 @@ export function Prerequisite({ t }: { t: (key: Key) => string }) {
       {detail && <p className="small muted" style={{ margin: "0.25rem 0 0" }}>{detail}</p>}
       {problem === "model" && (
         <p className="small" style={{ margin: "0.35rem 0 0" }}>
-          <code>ollama pull llama3</code> ·{" "}
+          <code>ollama pull qwen2.5</code> ·{" "}
           <a href="https://ollama.com" target="_blank" rel="noreferrer">
             ollama.com
           </a>

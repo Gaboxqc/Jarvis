@@ -58,7 +58,11 @@ voice:
 
 brain:
   provider: ollama        # ollama | groq | gemini
-  model: llama3
+  # Measured on the routing sweep's held-out phrasings, qwen2.5 picks the right
+  # skill 88% of the time against llama3's 62%, at the same speed. llama3 still
+  # works if you prefer it -- everything degrades to a plain conversational
+  # answer when routing fails.
+  model: qwen2.5
   # 127.0.0.1 rather than "localhost": Windows tries ::1 first, Ollama listens
   # on IPv4 only, and the failed attempt costs about two seconds per call.
   ollama_host: http://127.0.0.1:11434

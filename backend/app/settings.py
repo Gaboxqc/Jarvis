@@ -108,7 +108,17 @@ class Persona:
 @dataclass(frozen=True)
 class BrainSettings:
     provider: str = "ollama"
-    model: str = "llama3"
+    # qwen2.5 rather than llama3. Measured on the routing sweep's held-out set
+    # -- phrasings the prompt was never tuned against, which is the only number
+    # that reflects real use:
+    #
+    #     llama3    15/24  (62%)
+    #     qwen2.5   21/24  (88%)
+    #
+    # Warm, they cost the same: 1.04s versus 1.05s per call, both ~50 tok/s.
+    # qwen2.5 also carries a 32k context against llama3's 8k, and unlike llama3
+    # it advertises native tool-calling, which is the next thing to use.
+    model: str = "qwen2.5"
     # 127.0.0.1, never "localhost". On Windows localhost resolves to ::1 first,
     # Ollama listens on IPv4 only, and every request therefore spends ~2s
     # failing over from IPv6 before it is even sent. At two model calls per
@@ -266,7 +276,7 @@ def _build(raw: dict[str, Any], source: Path | None) -> Config:
         ),
         brain=BrainSettings(
             provider=brain_raw.get("provider", "ollama"),
-            model=brain_raw.get("model", "llama3"),
+            model=brain_raw.get("model", BrainSettings.model),
             ollama_host=_prefer_ipv4(brain_raw.get("ollama_host", BrainSettings.ollama_host)),
             temperature=float(brain_raw.get("temperature", 0.4)),
             timeout_seconds=int(brain_raw.get("timeout_seconds", 120)),

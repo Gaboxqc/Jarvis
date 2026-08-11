@@ -5,9 +5,13 @@ cover any OpenAI-compatible endpoint later.
 
 Structured output is requested via Ollama's `format: json` rather than native
 tool-calling. That is a deliberate compatibility choice: tool-calling support
-varies sharply by model (llama3 does not have it; llama3.1 does), and a router
-that only works on some models is a router that breaks when the user changes a
-line of config. JSON mode is supported by every model Ollama serves.
+varies sharply by model -- the default qwen2.5 advertises it, llama3 does not --
+and a router that only works on some models is a router that breaks when the
+user changes a line of config. JSON mode is supported by every model Ollama
+serves, so it is the floor everything else stands on.
+
+Using native tool-calling where the model offers it, and falling back to this,
+is T12.6 and not yet done.
 """
 
 from __future__ import annotations
