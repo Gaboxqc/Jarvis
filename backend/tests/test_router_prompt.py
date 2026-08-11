@@ -134,3 +134,39 @@ def test_a_normal_prompt_says_nothing(caplog):
     with caplog.at_level("WARNING"):
         llm._warn_if_oversized([{"role": "user", "content": "what time is it?"}], settings)
     assert caplog.text == ""
+
+
+# -- the time skill's unasked-for argument --------------------------------
+
+
+def test_an_unrecognised_zone_does_not_fail_the_answer():
+    """"What time is it?" must never fail over an argument the user didn't give.
+
+    The router supplies timezone_name unprompted, filled with the machine's
+    Windows zone name ("Central America Standard Time"), which is not IANA and
+    resolves to nothing. This used to raise, so the simplest question the
+    assistant can be asked returned an error. It only surfaced once the catalog
+    stopped being truncated and the call started reaching the skill at all.
+    """
+    from app.skills.base import SkillContext
+    from app.skills.knowledge.utilities import TimeSkill
+
+    result = TimeSkill().run(
+        {"timezone_name": "Central America Standard Time"}, SkillContext()
+    )
+
+    assert result.ok
+    assert "Local time:" in result.message
+    assert "don't recognise" in result.message
+    assert result.data["unknown_zone"] == "Central America Standard Time"
+
+
+def test_a_real_zone_still_resolves():
+    from app.skills.base import SkillContext
+    from app.skills.knowledge.utilities import TimeSkill
+
+    result = TimeSkill().run({"timezone_name": "Asia/Tokyo"}, SkillContext())
+
+    assert result.ok
+    assert "Asia/Tokyo:" in result.message
+    assert "zoned" in result.data

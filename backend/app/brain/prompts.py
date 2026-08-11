@@ -177,6 +177,15 @@ def router_prompt(catalog: list[dict[str, Any]]) -> str:
             'user: what do you know about me?',
             '{"skills": [{"name": "memory.list", "args": {}}], "reply": null}',
             "",
+            # Without this the model helpfully supplies the machine's Windows
+            # zone name, which is not IANA and resolves to nothing.
+            'user: what time is it?',
+            '{"skills": [{"name": "utils.time", "args": {}}], "reply": null}',
+            "",
+            'user: what time is it in Tokyo?',
+            '{"skills": [{"name": "utils.time", "args": {"timezone_name": "Asia/Tokyo"}}], '
+            '"reply": null}',
+            "",
             'user: thanks, that helps',
             '{"skills": [], "reply": null}',
         ]
