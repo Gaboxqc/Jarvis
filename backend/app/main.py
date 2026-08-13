@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from . import focus, notifications, preferences
 from .actions import gate, journal, undo
 from .brain import llm, orchestrator
+from .connectors import setup as connector_setup
 from .index import scanner as index_scanner
 from .index import store as index_store
 from .memory import long_term, short_term
@@ -165,6 +166,35 @@ def turn_stream(request: TurnRequest) -> StreamingResponse:
         # streaming exists to avoid.
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+class AccountRequest(BaseModel):
+    kind: str                       # "mail" | "calendar"
+    provider: str                   # "imap" | "caldav"
+    fields: dict[str, Any] = Field(default_factory=dict)
+
+
+@app.post("/connectors/accounts")
+def add_account(request: AccountRequest) -> dict[str, Any]:
+    """Add an account without hand-editing YAML (REQ-13, REQ-26).
+
+    Details only. No password crosses this boundary — `fields` is rejected
+    outright if it carries anything that looks like one, and the response says
+    to run `/connect`, which prompts at the terminal and writes to the OS
+    credential store.
+    """
+    try:
+        return connector_setup.add_account(request.kind, request.provider, request.fields)
+    except connector_setup.SetupError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/connectors/accounts/{kind}/{label}")
+def remove_account(kind: str, label: str) -> dict[str, Any]:
+    try:
+        return connector_setup.remove_account(kind, label)
+    except connector_setup.SetupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.delete("/session/{session_id}")
