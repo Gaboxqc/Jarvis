@@ -12,6 +12,10 @@ documentation, and a PyYAML round-trip silently deletes all 74 of them.
 
 from __future__ import annotations
 
+import os
+import sys
+from pathlib import Path
+
 import pytest
 import yaml
 
@@ -85,23 +89,117 @@ def test_the_file_stays_valid_yaml(commented_config):
     assert parsed["privacy"]["allow_web_search"] is True  # untouched
 
 
-# -- what may not (REQ-26) ------------------------------------------------
+# -- what may not, and what now may with guards (REQ-26) -------------------
+#
+# Most of this section used to assert that privacy, system and documents were
+# unwritable. They are writable now: the app is required to be configurable
+# without a text editor, and the old exclusion was protecting *visibility*,
+# which logging serves better than making a setting hard to reach.
+#
+# What replaced it is narrower and about blast radius, so that is what is
+# tested here.
 
 
 @pytest.mark.parametrize(
     "section,key,value",
     [
-        ("privacy", "allow_web_search", False),
-        ("privacy", "allow_cloud_llm", True),
-        ("system", "allowed_roots", ["C:/"]),
-        ("documents", "indexed_folders", ["C:/"]),
+        # Secrets. These go through connectors/setup.py, which refuses them too.
         ("connectors", "mail", []),
+        ("connectors", "calendar", []),
+        # Not exposed on purpose: pointing the assistant at a different model
+        # host is how you would exfiltrate every prompt, and it is not something
+        # anyone needs a settings screen for.
         ("brain", "ollama_host", "http://evil.example.com"),
+        ("actions", "pre_approved", ["system.organize_folder"]),
+        ("skills", "disabled", []),
     ],
 )
-def test_security_relevant_settings_are_refused(commented_config, section, key, value):
+def test_settings_outside_the_allow_list_are_refused(commented_config, section, key, value):
     with pytest.raises(preferences.NotWritable, match="kai.config.yaml"):
         preferences.update({section: {key: value}})
+
+
+def test_connectors_are_never_writable_here():
+    """A regression guard on the one section that carries secrets."""
+    assert "connectors" not in preferences.WRITABLE
+
+
+def test_the_model_host_is_not_writable():
+    """Redirecting the model host would send every prompt somewhere else."""
+    assert "ollama_host" not in preferences.WRITABLE.get("brain", {})
+
+
+def test_an_egress_switch_can_be_changed(commented_config):
+    preferences.update({"privacy": {"allow_web_search": False}})
+    assert load_config().privacy.allow_web_search is False
+
+
+def test_changing_egress_is_logged_loudly_with_the_old_value(commented_config, caplog):
+    """Turning on web search has to leave a mark somewhere the user can find.
+
+    This is the whole trade for making these writable: they stopped being hard
+    to reach, so they became impossible to change quietly.
+    """
+    with caplog.at_level("WARNING"):
+        preferences.update({"privacy": {"allow_web_search": False}})
+
+    assert "egress setting changed" in caplog.text
+    assert "privacy.allow_web_search" in caplog.text
+    assert "was True" in caplog.text
+
+
+def test_an_ordinary_preference_is_not_logged_as_egress(commented_config, caplog):
+    with caplog.at_level("WARNING"):
+        preferences.update({"voice": {"enabled": True}})
+    assert "egress setting changed" not in caplog.text
+
+
+# -- folders: the blast radius of every file skill -------------------------
+
+
+def test_folders_must_exist(commented_config, tmp_path):
+    with pytest.raises(preferences.NotWritable, match="doesn't exist"):
+        preferences.update({"system": {"allowed_roots": [str(tmp_path / "nope")]}})
+
+
+def test_a_file_is_not_a_folder(commented_config, tmp_path):
+    target = tmp_path / "a.txt"
+    target.write_text("x", encoding="utf-8")
+    with pytest.raises(preferences.NotWritable, match="not a folder"):
+        preferences.update({"documents": {"indexed_folders": [str(target)]}})
+
+
+def test_a_whole_drive_is_refused(commented_config):
+    """Handing over a drive is not a preference someone sets by accident."""
+    root = Path(sys.executable).anchor
+    with pytest.raises(preferences.NotWritable, match="whole drive"):
+        preferences.update({"system": {"allowed_roots": [root]}})
+
+
+def test_a_windows_directory_is_refused(commented_config):
+    windows = Path(os.environ.get("SystemRoot", "C:/Windows"))
+    if not windows.exists():
+        pytest.skip("no Windows directory on this machine")
+    with pytest.raises(preferences.NotWritable, match="belongs to Windows"):
+        preferences.update({"system": {"allowed_roots": [str(windows)]}})
+
+
+def test_an_empty_folder_list_is_refused(commented_config):
+    """Silently ending up with no roots would disable every file skill."""
+    with pytest.raises(preferences.NotWritable, match="at least one folder"):
+        preferences.update({"system": {"allowed_roots": []}})
+
+
+def test_folders_are_stored_resolved(commented_config, tmp_path):
+    """A relative or ~-relative path in the file would resolve against whatever
+    directory the backend happened to start in."""
+    # Not "docs": the workspace fixture already made one.
+    nested = tmp_path / "indexed-here"
+    nested.mkdir()
+    preferences.update({"documents": {"indexed_folders": [str(nested)]}})
+
+    stored = load_config().documents.indexed_folders
+    assert [str(p) for p in stored] == [str(nested.resolve())]
 
 
 def test_a_refused_key_leaves_the_file_untouched(commented_config):
@@ -110,29 +208,12 @@ def test_a_refused_key_leaves_the_file_untouched(commented_config):
 
     with pytest.raises(preferences.NotWritable):
         preferences.update({
-            "voice": {"enabled": True},              # allowed
-            "privacy": {"allow_web_search": False},  # refused
+            "voice": {"enabled": True},          # allowed
+            "connectors": {"mail": []},          # refused
         })
 
     assert commented_config.read_text(encoding="utf-8") == before
     assert load_config().voice.enabled is False
-
-
-def test_a_bad_value_is_refused(commented_config):
-    with pytest.raises(preferences.NotWritable, match="one of"):
-        preferences.update({"voice": {"stt_model": "gigantic"}})
-    with pytest.raises(preferences.NotWritable, match="true or false"):
-        preferences.update({"voice": {"enabled": "yes please"}})
-
-
-def test_the_allow_list_names_no_security_setting():
-    """A regression guard on the boundary itself."""
-    flat = {f"{s}.{k}" for s, keys in preferences.WRITABLE.items() for k in keys}
-
-    for forbidden in ("privacy", "connectors", "system", "documents", "brain", "actions"):
-        assert not any(name.startswith(forbidden + ".") for name in flat), (
-            f"{forbidden}.* must not be writable from the UI"
-        )
 
 
 # -- notifications (REQ-9) ------------------------------------------------
@@ -192,3 +273,95 @@ def test_a_broken_delivery_does_not_raise(workspace):
     notifications.clear()
     notifications.on_scheduler_delivery(Broken())  # must not raise
     assert notifications.peek() == []
+
+
+# -- the boundary that did not move ---------------------------------------
+
+
+def test_no_skill_can_write_settings():
+    """Widening the assistant's reach must stay a human decision.
+
+    The API can now change allowed_roots, which is exactly what a
+    prompt-injected model would want to do — point the assistant at the whole
+    disk and then read it. That is safe only while nothing the *model* can
+    invoke reaches this module. Skills are the only thing the model can invoke.
+    """
+    import pkgutil
+    from pathlib import Path as _Path
+
+    import app.skills as skills_package
+
+    offenders = []
+    for module in pkgutil.walk_packages(skills_package.__path__, "app.skills."):
+        path = _Path(skills_package.__path__[0]).parent.parent / (
+            module.name.replace(".", "/") + ".py"
+        )
+        if not path.exists():
+            continue
+        source = path.read_text(encoding="utf-8")
+        if "preferences" in source or "connectors.setup" in source:
+            offenders.append(module.name)
+
+    assert not offenders, (
+        f"these skills can reach the settings writer: {offenders}. "
+        "A skill is model-invokable, so this would let a prompt injection "
+        "widen allowed_roots and then read whatever it liked."
+    )
+
+
+# -- the file must still look hand-written afterwards -----------------------
+
+
+def test_changing_a_list_keeps_the_comment_that_follows_it(workspace, config_file, tmp_path):
+    """ruamel hangs a comment off the index of the item it follows.
+
+    So the comment documenting `max_file_mb` is stored against the last entry of
+    `indexed_folders`, and replacing that list threw it away — deleting the
+    documentation of a setting the user never touched.
+    """
+    folder = tmp_path / "papers"
+    folder.mkdir()
+    config_file.write_text(
+        "documents:\n"
+        "  indexed_folders:\n"
+        "    - ~/Documents\n"
+        "  # Files larger than this are skipped rather than stalling a scan.\n"
+        "  max_file_mb: 25\n",
+        encoding="utf-8",
+    )
+    reset_config_cache()
+
+    preferences.update({"documents": {"indexed_folders": [str(folder)]}})
+
+    text = config_file.read_text(encoding="utf-8")
+    assert "# Files larger than this are skipped" in text
+    assert str(folder) in text
+
+
+def test_untouched_lists_are_not_reindented(workspace, config_file, tmp_path):
+    """Changing one setting must not rewrite the shape of unrelated ones.
+
+    ruamel re-emits every sequence at its own default indent unless told
+    otherwise, so a one-key change produced a diff across the whole file and
+    made the config look rewritten rather than edited.
+    """
+    folder = tmp_path / "papers"
+    folder.mkdir()
+    config_file.write_text(
+        "documents:\n"
+        "  indexed_folders:\n"
+        "    - ~/Documents\n"
+        "system:\n"
+        "  allowed_roots:\n"
+        "    - ~/Downloads\n"
+        "    - ~/Desktop\n",
+        encoding="utf-8",
+    )
+    reset_config_cache()
+
+    preferences.update({"documents": {"indexed_folders": [str(folder)]}})
+
+    text = config_file.read_text(encoding="utf-8")
+    # The list nobody asked to change keeps its four-space entries.
+    assert "    - ~/Downloads" in text
+    assert "    - ~/Desktop" in text

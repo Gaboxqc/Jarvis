@@ -129,7 +129,15 @@ export interface Notification {
 }
 
 export interface Settings {
-  current: { voice: Record<string, unknown>; persona: Record<string, unknown> };
+  current: {
+    voice: Record<string, unknown>;
+    persona: Record<string, unknown>;
+    privacy?: Record<string, unknown>;
+    documents?: Record<string, unknown>;
+    system?: Record<string, unknown>;
+    brain?: Record<string, unknown>;
+  };
+  /** section -> keys the API will accept. Anything absent is refused. */
   writable: Record<string, string[]>;
 }
 

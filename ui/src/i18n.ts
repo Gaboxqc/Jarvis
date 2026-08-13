@@ -64,7 +64,19 @@ const STRINGS = {
     "settings.liveData": "Live data (rates, weather)",
     "settings.cloudLlm": "Cloud language model",
     "settings.egressNote":
-      "Everything not listed here runs locally. Change these in kai.config.yaml.",
+      "Everything not listed here runs locally. Turning one on is recorded in the log with the time and what it was before.",
+    "settings.files": "Files Kai can reach",
+    "settings.allowedRoots": "Folders Kai may read and organise",
+    "settings.allowedRootsNote":
+      "Every file skill is limited to these. Nothing outside them can be read, moved or renamed.",
+    "settings.indexedFolders": "Folders searched for documents",
+    "settings.indexedFoldersNote":
+      "Contents are indexed locally so questions about your paperwork can be answered. Indexing runs in the background.",
+    "folders.none": "None set.",
+    "folders.add": "Add",
+    "folders.remove": "Remove",
+    "folders.lastOne": "At least one folder is required.",
+    "folders.placeholder": "C:\Users\you\Documents",
     "settings.language": "Language",
     "settings.danger": "Delete all local data",
     "settings.dangerNote":
@@ -209,7 +221,19 @@ const STRINGS = {
     "settings.liveData": "Datos en vivo (divisas, clima)",
     "settings.cloudLlm": "Modelo en la nube",
     "settings.egressNote":
-      "Todo lo que no aparece aquí se ejecuta localmente. Cámbialo en kai.config.yaml.",
+      "Todo lo que no aparece aquí se ejecuta localmente. Activar uno queda registrado en el log con la hora y el valor anterior.",
+    "settings.files": "Archivos a los que Kai llega",
+    "settings.allowedRoots": "Carpetas que Kai puede leer y organizar",
+    "settings.allowedRootsNote":
+      "Todas las habilidades de archivos se limitan a estas. Nada fuera de ellas se puede leer, mover ni renombrar.",
+    "settings.indexedFolders": "Carpetas donde buscar documentos",
+    "settings.indexedFoldersNote":
+      "El contenido se indexa localmente para poder responder sobre tus documentos. La indexación corre en segundo plano.",
+    "folders.none": "Ninguna.",
+    "folders.add": "Añadir",
+    "folders.remove": "Quitar",
+    "folders.lastOne": "Hace falta al menos una carpeta.",
+    "folders.placeholder": "C:\Users\tu\Documents",
     "settings.language": "Idioma",
     "settings.danger": "Borrar todos los datos locales",
     "settings.dangerNote":
