@@ -504,7 +504,8 @@ def briefing() -> dict[str, Any]:
 
     return {
         "sections": [
-            {"name": s.name, "lines": s.lines, "error": s.error} for s in build()
+            {"name": s.name, "lines": s.lines, "error": s.error, "configured": s.configured}
+            for s in build()
         ]
     }
 
@@ -678,11 +679,46 @@ def delete_transcript(transcript_id: str) -> dict[str, Any]:
 # -- focus (REQ-23) -------------------------------------------------------
 
 
+class FocusRequest(BaseModel):
+    minutes: int = 25
+
+
 @app.get("/focus")
 def focus_status() -> dict[str, Any]:
+    """Focus state, plus what starting one would cost right now.
+
+    `would_close` is the whole reason this is not just a button. Starting a
+    session terminates the configured distracting apps, and unsaved work in them
+    is gone. The skill decides its severity the same way -- consequential only
+    when something is actually running -- so the UI can name the apps before
+    asking instead of warning about a risk that does not exist today.
+    """
+    from .skills.system.focus import StartFocusSkill
+
+    state = focus.state()
+    would_close = sorted({
+        (process.info.get("name") or "?") for process in StartFocusSkill._to_close()
+    })
+    return {"active": state.active, "minutes_left": state.minutes_left,
+            "closed_apps": list(state.closed_apps), "would_close": would_close}
+
+
+@app.post("/focus/start")
+def start_focus(request: FocusRequest) -> dict[str, Any]:
+    from .skills.base import SkillContext, SkillError
+    from .skills.system.focus import StartFocusSkill
+
+    try:
+        # Through the skill, not around it: it is the only place that knows how
+        # to close the apps, hold reminders and pause indexing together, and a
+        # second implementation would drift from it.
+        result = StartFocusSkill().run({"minutes": request.minutes}, SkillContext())
+    except SkillError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     state = focus.state()
     return {"active": state.active, "minutes_left": state.minutes_left,
-            "closed_apps": list(state.closed_apps)}
+            "closed_apps": list(state.closed_apps), "message": result.message}
 
 
 @app.post("/focus/end")

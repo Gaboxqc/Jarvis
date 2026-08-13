@@ -36,6 +36,14 @@ class Section:
     name: str
     lines: list[str]
     error: str = ""
+    # False when the source has no account set up at all.
+    #
+    # Distinct from "no lines" because on screen those look identical and mean
+    # opposite things: an empty Calendar reads as "you have nothing on" when it
+    # actually means "I have nowhere to look". The spoken briefing still stays
+    # quiet about it -- render() is unchanged -- because being told your mail
+    # isn't configured every single morning is noise.
+    configured: bool = True
 
     def render(self) -> str:
         if self.error:
@@ -57,7 +65,7 @@ def _calendar_section() -> Section:
     try:
         configs = connectors.require("calendar")
     except connectors.NotConfigured:
-        return Section("calendar", [])  # not set up is not a failure
+        return Section("calendar", [], configured=False)  # not set up is not a failure
 
     for config in configs:
         try:
@@ -114,7 +122,7 @@ def _mail_section() -> Section:
     try:
         configs = connectors.require("mail")
     except connectors.NotConfigured:
-        return Section("mail", [])
+        return Section("mail", [], configured=False)
 
     lines: list[str] = []
     problems: list[str] = []

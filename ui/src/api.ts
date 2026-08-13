@@ -204,6 +204,24 @@ export interface Reminder {
   active: boolean;
 }
 
+export interface BriefingSection {
+  name: string;
+  lines: string[];
+  /** Set when that one source failed. The rest of the briefing still arrives. */
+  error: string | null;
+  /** False when there is no account for this source at all — not the same as
+   *  having nothing to report, and the screen must not conflate them. */
+  configured: boolean;
+}
+
+export interface FocusState {
+  active: boolean;
+  minutes_left: number;
+  closed_apps: string[];
+  /** Apps running right now that starting a session would terminate. */
+  would_close?: string[];
+}
+
 export interface Connectors {
   credential_store: { available: boolean; backend: string; detail: string };
   calendar: Account[];
@@ -430,6 +448,18 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ changes }),
     }),
+
+  briefing: () => request<{ sections: BriefingSection[] }>("/briefing", { timeoutMs: 60_000 }),
+
+  focus: () => request<FocusState>("/focus"),
+
+  startFocus: (minutes: number) =>
+    request<FocusState & { message: string }>("/focus/start", {
+      method: "POST",
+      body: JSON.stringify({ minutes }),
+    }),
+
+  endFocus: () => request<{ active: boolean }>("/focus/end", { method: "POST" }),
 
   tasks: (includeDone = true) =>
     request<{ tasks: Task[] }>(`/tasks?include_done=${includeDone}`),

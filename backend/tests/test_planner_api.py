@@ -140,3 +140,84 @@ def test_a_reminder_can_be_cancelled(client):
 
 def test_cancelling_a_missing_reminder_is_404(client):
     assert client.delete("/reminders/nope").status_code == 404
+
+
+# -- the briefing, and what "empty" means ---------------------------------
+
+
+def test_an_unconfigured_source_is_not_the_same_as_an_empty_one(client):
+    """On screen these look identical and mean opposite things.
+
+    An empty Calendar section reads as "you have nothing on" when what it
+    actually means is "there is no calendar to look at". The spoken briefing
+    stays quiet about it either way; the screen must not.
+    """
+    sections = {s["name"]: s for s in client.get("/briefing").json()["sections"]}
+
+    # No connectors in the test workspace, so these have nowhere to look.
+    assert sections["calendar"]["configured"] is False
+    assert sections["mail"]["configured"] is False
+
+    # These are configured by construction and simply have nothing to report.
+    assert sections["reminders"]["configured"] is True
+    assert sections["reminders"]["lines"] == []
+
+
+def test_a_section_with_content_reports_it(client):
+    client.post("/tasks", json={"text": "buy milk"})
+    sections = {s["name"]: s for s in client.get("/briefing").json()["sections"]}
+
+    assert sections["tasks"]["configured"] is True
+    assert any("buy milk" in line for line in sections["tasks"]["lines"])
+
+
+def test_the_spoken_briefing_still_says_nothing_about_unconfigured_sources(workspace):
+    """Being told your mail isn't set up every morning is noise, not information."""
+    from app.skills.planning.briefing import Section
+
+    assert Section("mail", [], configured=False).render() == ""
+
+
+# -- focus (REQ-23) --------------------------------------------------------
+
+
+def test_focus_reports_what_starting_would_close(client):
+    """The warning has to be specific, and only appear when it is true.
+
+    Starting a session terminates the configured distracting apps and unsaved
+    work in them is lost, so the UI names them before asking. A dialog that
+    warned on every click regardless is one people learn to dismiss unread.
+    """
+    body = client.get("/focus").json()
+    assert body["active"] is False
+    assert isinstance(body["would_close"], list)
+
+
+def test_a_focus_session_can_be_started_and_ended(client, monkeypatch):
+    """No real process is closed here — that is the point of the patch.
+
+    _to_close is what reaches for the user's running applications, so a test
+    that did not stub it would terminate whatever happened to be open on the
+    machine running the suite.
+    """
+    from app.skills.system.focus import StartFocusSkill
+
+    monkeypatch.setattr(StartFocusSkill, "_to_close", staticmethod(lambda: []))
+
+    started = client.post("/focus/start", json={"minutes": 25}).json()
+    assert started["active"] is True
+    assert started["minutes_left"] > 0
+
+    assert client.post("/focus/end").json()["active"] is False
+
+
+def test_starting_twice_is_refused(client, monkeypatch):
+    from app.skills.system.focus import StartFocusSkill
+
+    monkeypatch.setattr(StartFocusSkill, "_to_close", staticmethod(lambda: []))
+    client.post("/focus/start", json={"minutes": 25})
+
+    response = client.post("/focus/start", json={"minutes": 25})
+    assert response.status_code == 400
+    assert "already running" in response.json()["detail"]
+    client.post("/focus/end")
