@@ -10,15 +10,17 @@ What makes it safe is that connector fields split cleanly:
     account details   label, provider, host, port, username, smtp_host, ...
     secrets           the password, and an `ics` calendar URL
 
-The password never appears here. It is typed at an OS prompt by `/connect` and
-goes into the Windows Credential Manager, exactly as before — this only writes
-the details needed to know *which* account to ask about.
+No secret appears here. This writes the details needed to know *which* account
+to ask about; the secret is stored separately, through
+PUT /connectors/{kind}/{label}/credential, which puts it straight into the OS
+credential store.
 
-An `ics` calendar URL is refused outright. Google calls it a "secret address in
-iCal format" and that is precise: whoever holds the URL can read the whole
-calendar without logging in. It is a bearer credential wearing a URL's clothes,
-so it stays hand-edited in a gitignored file rather than travelling through an
-API, a log line and a browser field.
+That separation is what lets an `ics` calendar be added at all. Google calls its
+address a "secret address in iCal format" and that is precise: whoever holds the
+URL reads the whole calendar without logging in. It is a bearer credential
+wearing a URL's clothes, so `url` is not an allowed field for ics and the
+address goes to the credential store like any other password. An ics calendar
+configured the old way, with the URL written into the file, keeps working.
 """
 
 from __future__ import annotations
@@ -47,9 +49,12 @@ _ALLOWED = {
     "imap": {"label", "host", "port", "username", "smtp_host", "smtp_port",
              "from_address", "enabled"},
     "caldav": {"label", "url", "username", "writable", "enabled"},
+    # No `url`. An ics calendar's address is its credential, so it goes to the
+    # OS credential store through PUT .../credential, never into this file.
+    "ics": {"label", "enabled"},
 }
 
-_KIND_PROVIDERS = {"mail": {"imap"}, "calendar": {"caldav"}}
+_KIND_PROVIDERS = {"mail": {"imap"}, "calendar": {"caldav", "ics"}}
 
 # Anything that looks like it carries a secret. Checked by name across every
 # field, so a caller cannot smuggle one through under a spelling we accept.
@@ -66,13 +71,6 @@ def add_account(kind: str, provider: str, fields: dict[str, Any]) -> dict[str, A
     if kind not in _KIND_PROVIDERS:
         raise SetupError("Accounts are either 'mail' or 'calendar'.")
 
-    if kind == "calendar" and provider == "ics":
-        raise SetupError(
-            "An iCal URL can't be added this way. Google calls it a \"secret address\" "
-            "because anyone holding it can read your whole calendar without logging "
-            "in — it's a password in the shape of a URL. Paste it into "
-            f"{config_path()} yourself, under connectors.calendar."
-        )
     if provider not in _KIND_PROVIDERS[kind]:
         allowed = " or ".join(sorted(_KIND_PROVIDERS[kind]))
         raise SetupError(f"A {kind} account here has to be {allowed}.")
@@ -80,9 +78,10 @@ def add_account(kind: str, provider: str, fields: dict[str, Any]) -> dict[str, A
     for name in fields:
         if _SECRET_NAMES.search(name):
             raise SetupError(
-                "Passwords are never written to the config file. Add the account "
-                "first, then run /connect and type it at the prompt — it goes "
-                "straight into the Windows Credential Manager."
+                "Secrets are never written to the config file. Add the account "
+                "first, then set its password separately — it goes straight into "
+                "the Windows Credential Manager, and the config keeps only a "
+                "reference."
             )
 
     unknown = set(fields) - _ALLOWED[provider]
@@ -118,10 +117,13 @@ def add_account(kind: str, provider: str, fields: dict[str, Any]) -> dict[str, A
         "label": label,
         "provider": provider,
         "config_file": str(config_path()),
-        # The account is inert until it has a password, and nothing else in the
-        # system will say so, so the answer carries the next step.
-        "next_step": f"/connect {kind} {label}",
-        "needs_password": True,
+        # The account is inert until its secret is stored, and nothing else in
+        # the system will say so.
+        "needs_secret": True,
+        # What the secret actually is differs by provider, and getting this
+        # wrong wastes the user's time hunting for a password that was never
+        # the answer.
+        "secret_kind": "url" if provider == "ics" else "password",
     }
 
 
@@ -168,7 +170,11 @@ def _validate(provider: str, fields: dict[str, Any]) -> dict[str, Any]:
 
     entry: dict[str, Any] = {"label": label}
 
-    if provider == "imap":
+    if provider == "ics":
+        # Nothing else to write. The address arrives separately as a credential,
+        # so the config entry is just "there is a calendar called this".
+        pass
+    elif provider == "imap":
         host = str(fields.get("host", "")).strip()
         username = str(fields.get("username", "")).strip()
         if not host:

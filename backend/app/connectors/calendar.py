@@ -84,9 +84,14 @@ def _as_datetime(value: Any) -> tuple[datetime, bool]:
 
 
 def _load_ics_text(config: ConnectorConfig) -> str:
-    target = config.url.strip()
+    # May come from the credential store rather than the config file: the URL is
+    # a bearer credential, so calendars added through the UI keep it out of
+    # kai.config.yaml entirely.
+    target = config.resolved_url.strip()
     if not target:
-        raise ConnectorError(f"Calendar '{config.label}' has no url or file path.")
+        raise ConnectorError(
+            f"Calendar '{config.label}' has no address yet. Add it in Settings."
+        )
 
     if target.startswith(("http://", "https://", "webcal://")):
         import httpx
