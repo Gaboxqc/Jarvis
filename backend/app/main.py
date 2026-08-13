@@ -328,6 +328,60 @@ def list_reminders() -> dict[str, Any]:
     return {"reminders": [i.to_dict() for i in sched_store.active_items()]}
 
 
+class TaskRequest(BaseModel):
+    text: str
+    kind: str = "task"
+    due: str | None = None
+
+
+@app.get("/tasks")
+def list_tasks(include_done: bool = True) -> dict[str, Any]:
+    from .skills.planning import tasks as task_store
+
+    return {"tasks": task_store.list_tasks(include_done)}
+
+
+@app.post("/tasks")
+def add_task(request: TaskRequest) -> dict[str, Any]:
+    from .skills.base import SkillError
+    from .skills.planning import tasks as task_store
+
+    try:
+        return task_store.create_task(request.text, request.kind, request.due)
+    except SkillError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.patch("/tasks/{task_id}")
+def complete_task(task_id: str, done: bool = True) -> dict[str, Any]:
+    from .skills.base import SkillError
+    from .skills.planning import tasks as task_store
+
+    try:
+        return task_store.set_done(task_id, done)
+    except SkillError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.delete("/tasks/{task_id}")
+def remove_task(task_id: str) -> dict[str, Any]:
+    from .skills.base import SkillError
+    from .skills.planning import tasks as task_store
+
+    try:
+        return task_store.delete_task(task_id)
+    except SkillError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.delete("/reminders/{reminder_id}")
+def cancel_reminder(reminder_id: str) -> dict[str, Any]:
+    item = sched_store.cancel(reminder_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="That reminder isn't set any more.")
+    return {"cancelled": item.id, "label": item.label}
+
+
 @app.post("/reminders/tick")
 def force_tick() -> dict[str, Any]:
     """Deliver anything due right now. Used by tests and by the UI on wake."""

@@ -186,6 +186,24 @@ export interface Account {
   credential_stored: boolean;
 }
 
+export interface Task {
+  id: string;
+  text: string;
+  kind: string;
+  tags: string[];
+  due: string | null;
+  done: boolean;
+}
+
+export interface Reminder {
+  id: string;
+  kind: string;
+  label: string;
+  next_fire_at: string | null;
+  recurring: boolean;
+  active: boolean;
+}
+
 export interface Connectors {
   credential_store: { available: boolean; backend: string; detail: string };
   calendar: Account[];
@@ -412,6 +430,23 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ changes }),
     }),
+
+  tasks: (includeDone = true) =>
+    request<{ tasks: Task[] }>(`/tasks?include_done=${includeDone}`),
+
+  addTask: (text: string) =>
+    request<Task>("/tasks", { method: "POST", body: JSON.stringify({ text }) }),
+
+  setTaskDone: (id: string, done: boolean) =>
+    request<Task>(`/tasks/${encodeURIComponent(id)}?done=${done}`, { method: "PATCH" }),
+
+  deleteTask: (id: string) =>
+    request<{ id: string }>(`/tasks/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  reminders: () => request<{ reminders: Reminder[] }>("/reminders"),
+
+  cancelReminder: (id: string) =>
+    request<{ cancelled: string }>(`/reminders/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   /** Drain queued notifications. Destructive: each is handed out once. */
   notifications: () =>

@@ -41,6 +41,79 @@ def _mirror() -> None:
         pass
 
 
+# -- direct access, for the API ------------------------------------------
+#
+# The skills below are how the *model* touches the task list, and they go
+# through the Action Gate. These are how the *user* touches it, by clicking
+# something they are looking at.
+#
+# Not putting the UI through the gate is deliberate. The gate exists so the
+# assistant cannot act without the user knowing; a person pressing "Done" on a
+# task already knows. Routing that through a confirmation would ask them to
+# approve the click they just made, which is the prompt-fatigue REQ-24 warns
+# about. Every one of these is a click on a visible row, and the destructive one
+# still asks.
+#
+# They live here rather than in a store module so there is one copy of the SQL
+# and the Markdown mirror cannot be forgotten by a second writer.
+
+
+def list_tasks(include_done: bool = True) -> list[dict[str, Any]]:
+    sql = "SELECT * FROM tasks"
+    if not include_done:
+        sql += " WHERE done = 0"
+    sql += " ORDER BY done ASC, created_at DESC"
+    return [
+        {
+            "id": row["id"],
+            "text": row["text"],
+            "kind": row["kind"],
+            "tags": db.loads(row["tags"], []) or [],
+            "due": row["due"],
+            "done": bool(row["done"]),
+            "created_at": row["created_at"],
+        }
+        for row in db.query(sql)
+    ]
+
+
+def create_task(text: str, kind: str = "task", due: str | None = None) -> dict[str, Any]:
+    text = (text or "").strip()
+    if not text:
+        raise SkillError("A task needs some text.")
+    cleaned, tags = _extract_tags(text)
+    task_id = str(uuid.uuid4())
+    db.execute(
+        "INSERT INTO tasks(id, text, kind, tags, due, done, created_at) "
+        "VALUES(?, ?, ?, ?, ?, 0, ?)",
+        (task_id, cleaned, kind if kind in {"task", "note"} else "task",
+         db.dumps(tags), due, db.now()),
+    )
+    _mirror()
+    return {"id": task_id, "text": cleaned, "tags": tags, "due": due, "done": False}
+
+
+def set_done(task_id: str, done: bool) -> dict[str, Any]:
+    row = db.query_one("SELECT id, text FROM tasks WHERE id = ?", (task_id,))
+    if row is None:
+        raise SkillError("That task isn't on the list any more.")
+    if done:
+        db.execute("UPDATE tasks SET done = 1, completed_at = ? WHERE id = ?", (db.now(), task_id))
+    else:
+        db.execute("UPDATE tasks SET done = 0, completed_at = NULL WHERE id = ?", (task_id,))
+    _mirror()
+    return {"id": task_id, "text": row["text"], "done": done}
+
+
+def delete_task(task_id: str) -> dict[str, Any]:
+    row = db.query_one("SELECT id, text FROM tasks WHERE id = ?", (task_id,))
+    if row is None:
+        raise SkillError("That task isn't on the list any more.")
+    db.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+    _mirror()
+    return {"id": task_id, "text": row["text"]}
+
+
 def _extract_tags(text: str) -> tuple[str, list[str]]:
     tags = re.findall(r"#(\w+)", text)
     cleaned = re.sub(r"\s*#\w+", "", text).strip()
