@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -134,6 +135,73 @@ def chat(
     message = body.get("message") or {}
     text = (message.get("content") or "").strip()
     return LLMReply(text=text, raw=body, tool_calls=_read_tool_calls(message))
+
+
+def stream(
+    messages: list[dict[str, str]],
+    *,
+    temperature: float | None = None,
+    settings: BrainSettings | None = None,
+) -> Iterator[str]:
+    """Yield the reply in pieces as the model produces them.
+
+    Only prose is streamed. Routing is not: it returns JSON that has to be
+    parsed and validated as a whole before anything acts on it, and there is
+    nothing to show a user in a half-written tool call.
+
+    Errors are raised as LLMUnavailable exactly as in chat(), including partway
+    through a stream. A caller that has already emitted some text has to decide
+    what to do with it; the orchestrator keeps what arrived and appends the
+    failure, because silently truncating a reply looks like the model finished.
+    """
+    settings = settings or load_config().brain
+    payload: dict[str, Any] = {
+        "model": settings.model,
+        "messages": messages,
+        "stream": True,
+        "options": {
+            "temperature": settings.temperature if temperature is None else temperature,
+            "num_ctx": settings.context_tokens,
+        },
+    }
+    _warn_if_oversized(messages, settings)
+
+    url = f"{settings.ollama_host.rstrip('/')}/api/chat"
+    try:
+        with httpx.stream("POST", url, json=payload, timeout=settings.timeout_seconds) as response:
+            response.raise_for_status()
+            for line in response.iter_lines():
+                if not line.strip():
+                    continue
+                try:
+                    body = json.loads(line)
+                except json.JSONDecodeError:
+                    # A malformed frame mid-stream is not worth failing the whole
+                    # reply over; the next one is usually fine.
+                    log.debug("unparseable stream frame: %r", line[:120])
+                    continue
+                piece = ((body.get("message") or {}).get("content") or "")
+                if piece:
+                    yield piece
+                if body.get("done"):
+                    return
+    except httpx.ConnectError as exc:
+        raise LLMUnavailable(
+            f"I can't reach the language model at {settings.ollama_host}. "
+            "Is Ollama running? (`ollama serve`)"
+        ) from exc
+    except httpx.TimeoutException as exc:
+        raise LLMUnavailable(
+            f"The model took longer than {settings.timeout_seconds}s and I gave up on it."
+        ) from exc
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            raise LLMUnavailable(
+                f"The model '{settings.model}' isn't installed. Run: ollama pull {settings.model}"
+            ) from exc
+        raise LLMUnavailable("The model returned an error while streaming.") from exc
+    except httpx.HTTPError as exc:
+        raise LLMUnavailable(f"The model call failed: {exc}") from exc
 
 
 def _read_tool_calls(message: dict[str, Any]) -> list[dict[str, Any]]:

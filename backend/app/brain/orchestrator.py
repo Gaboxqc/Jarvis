@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -128,9 +129,47 @@ def handle_turn(
     *,
     pending_action_id: str | None = None,
 ) -> TurnResult:
+    """Run a turn and return the finished result.
+
+    Defined in terms of the streaming path so the two cannot drift. There is
+    only one turn loop; this one throws the intermediate events away.
+    """
+    result = TurnResult(reply="")
+    for event in run_turn(text, session_id, pending_action_id=pending_action_id, stream=False):
+        if event["type"] == "done":
+            result = event["result"]
+    return result
+
+
+def run_turn(
+    text: str,
+    session_id: str = "default",
+    *,
+    pending_action_id: str | None = None,
+    stream: bool = True,
+) -> Iterator[dict[str, Any]]:
+    """The turn loop, as a sequence of events.
+
+    Yields, in order:
+
+        {"type": "stage",  "stage": "routing" | "working" | "writing"}
+        {"type": "delta",  "text": "..."}            (only when stream=True)
+        {"type": "done",   "result": TurnResult}
+
+    The stages exist because the slow parts of a turn are the parts that cannot
+    stream. Routing has to be parsed and validated whole before anything runs,
+    and a skill either finishes or does not. Without stages the interface would
+    sit blank through all of that and then produce text in a rush, which reads
+    as a hang followed by a burst.
+
+    Nothing streams before the Action Gate has decided. A confirmation prompt is
+    emitted whole, as a finished result: streaming it would make a question that
+    is waiting for approval look like an answer already being given.
+    """
     text = (text or "").strip()
     if not text:
-        return TurnResult(reply="")
+        yield {"type": "done", "result": TurnResult(reply="")}
+        return
 
     config = load_config()
     ctx = SkillContext(session_id=session_id, config=config, user_text=text)
@@ -145,15 +184,25 @@ def handle_turn(
     # A "yes" with no pending id is just conversation.
     if pending_action_id:
         if normalized in _AFFIRMATIVE:
-            return _finish(session_id, _run_confirmation(pending_action_id, ctx))
+            yield {"type": "done", "result": _finish(
+                session_id, _run_confirmation(pending_action_id, ctx))}
+            return
         if normalized in _NEGATIVE:
             outcome = gate.decline(pending_action_id)
-            return _finish(session_id, TurnResult(reply=f"Cancelled. I didn't {_lower_first(outcome.preview)}"))
+            yield {"type": "done", "result": _finish(
+                session_id,
+                TurnResult(reply=f"Cancelled. I didn't {_lower_first(outcome.preview)}"),
+            )}
+            return
 
     # 2. Undo.
     if _UNDO.match(text):
         result = undo.undo_last()
-        return _finish(session_id, TurnResult(reply=result.message, error=None if result.ok else result.message))
+        yield {"type": "done", "result": _finish(
+            session_id,
+            TurnResult(reply=result.message, error=None if result.ok else result.message),
+        )}
+        return
 
     # 3. Everything else goes through the model.
     facts = long_term.relevant(text)
@@ -164,35 +213,44 @@ def handle_turn(
     # a whole model call to be told so — half the latency of the turn, spent
     # establishing that "thanks" is not a request.
     if normalized in _PLEASANTRIES:
-        try:
-            answer = llm.chat([{"role": "system", "content": system}, *history])
-        except llm.LLMUnavailable as exc:
-            return _finish(session_id, TurnResult(reply=str(exc), error="llm_unavailable"))
-        return _finish(session_id, TurnResult(reply=answer.text))
+        yield {"type": "stage", "stage": "writing"}
+        yield from _emit_reply(
+            session_id, [{"role": "system", "content": system}, *history],
+            stream=stream, guard=None,
+        )
+        return
 
+    yield {"type": "stage", "stage": "routing"}
     try:
         route = _route(system, history, text)
     except llm.LLMUnavailable as exc:
         # REQ-27: a dead model is reported plainly, and everything stored locally
         # is still reachable through the API and CLI commands.
-        return _finish(session_id, TurnResult(reply=str(exc), error="llm_unavailable"))
+        yield {"type": "done", "result": _finish(
+            session_id, TurnResult(reply=str(exc), error="llm_unavailable"))}
+        return
 
     calls = _extract_calls(route)
     if not calls:
         direct = (route.get("reply") or "").strip() if isinstance(route, dict) else ""
         if direct:
-            return _finish(
-                session_id, TurnResult(reply=_guard_ungrounded_reply(text, direct, []))
-            )
-        try:
-            answer = llm.chat([{"role": "system", "content": system}, *history])
-        except llm.LLMUnavailable as exc:
-            return _finish(session_id, TurnResult(reply=str(exc), error="llm_unavailable"))
-        return _finish(
-            session_id, TurnResult(reply=_guard_ungrounded_reply(text, answer.text, []))
+            # The router already wrote an answer. Emitting it whole rather than
+            # regenerating it keeps the turn to a single model call.
+            reply = _guard_ungrounded_reply(text, direct, [])
+            if stream:
+                yield {"type": "delta", "text": reply}
+            yield {"type": "done", "result": _finish(session_id, TurnResult(reply=reply))}
+            return
+
+        yield {"type": "stage", "stage": "writing"}
+        yield from _emit_reply(
+            session_id, [{"role": "system", "content": system}, *history],
+            stream=stream, guard=text,
         )
+        return
 
     # 4. Execute, stopping at the first action that needs approval.
+    yield {"type": "stage", "stage": "working"}
     batch_id = gate.new_batch_id()
     results: list[dict[str, Any]] = []
     for call in calls[:MAX_SKILLS_PER_TURN]:
@@ -203,23 +261,48 @@ def handle_turn(
             # Nothing after this runs. A later step might depend on this one, and
             # queuing side effects behind an unanswered question is how a "no"
             # ends up having done half the work anyway.
+            #
+            # Emitted whole, never streamed: a question awaiting approval must not
+            # arrive looking like an answer already being given.
             pending = PendingAction(
                 action_id=outcome.action_id or "",
                 skill=outcome.skill_name,
                 preview=outcome.preview,
                 reversible=outcome.reversible,
             )
-            return _finish(
+            yield {"type": "done", "result": _finish(
                 session_id,
                 TurnResult(
                     reply=prompts.confirmation_prompt(outcome.preview, outcome.reversible),
                     pending=pending,
                     skill_calls=results,
                 ),
-            )
+            )}
+            return
 
-    reply = _guard_ungrounded_reply(text, _synthesize(system, history, results), results)
-    return _finish(session_id, TurnResult(reply=reply, skill_calls=results))
+    # 5. Say what happened.
+    yield {"type": "stage", "stage": "writing"}
+    written = ""
+    try:
+        for kind, payload in _generate(
+            _synthesis_messages(system, history, results), stream=stream
+        ):
+            if kind == "delta":
+                yield {"type": "delta", "text": payload}
+            else:
+                written = payload
+    except llm.LLMUnavailable:
+        # The work already happened; report it verbatim rather than losing it
+        # because the phrasing pass could not run (REQ-27).
+        written = ""
+
+    reply = _append_receipts(written or _fallback_summary(results), results)
+    reply = _guard_ungrounded_reply(text, reply, results)
+
+    # Receipts and the guard can both change text already shown, so the final
+    # result carries the authoritative version for clients to settle on.
+    yield {"type": "done", "result": _finish(
+        session_id, TurnResult(reply=reply, skill_calls=results))}
 
 
 def confirm_pending(action_id: str, session_id: str = "default") -> TurnResult:
@@ -234,6 +317,57 @@ def decline_pending(action_id: str, session_id: str = "default") -> TurnResult:
 
 
 # -- internals -------------------------------------------------------------
+
+
+def _generate(
+    messages: list[dict[str, str]], *, stream: bool
+) -> Iterator[tuple[str, str]]:
+    """Produce a reply, in pieces or whole.
+
+    Yields ("delta", piece) zero or more times, then ("text", whole) exactly
+    once. The non-streaming branch still goes through llm.chat rather than
+    draining llm.stream, so a single request is a single request either way --
+    and so the hundreds of tests that stub llm.chat keep testing the path they
+    were written for.
+    """
+    if not stream:
+        yield ("text", llm.chat(messages).text)
+        return
+
+    parts: list[str] = []
+    for piece in llm.stream(messages):
+        parts.append(piece)
+        yield ("delta", piece)
+    yield ("text", "".join(parts))
+
+
+def _emit_reply(
+    session_id: str,
+    messages: list[dict[str, str]],
+    *,
+    stream: bool,
+    guard: str | None,
+) -> Iterator[dict[str, Any]]:
+    """A turn that answers in prose, with no skills involved.
+
+    `guard` is the user's text when the reply needs checking for invented
+    answers, and None when it cannot need it -- a greeting has no external data
+    to get wrong.
+    """
+    written = ""
+    try:
+        for kind, payload in _generate(messages, stream=stream):
+            if kind == "delta":
+                yield {"type": "delta", "text": payload}
+            else:
+                written = payload
+    except llm.LLMUnavailable as exc:
+        yield {"type": "done", "result": _finish(
+            session_id, TurnResult(reply=str(exc), error="llm_unavailable"))}
+        return
+
+    reply = _guard_ungrounded_reply(guard, written, []) if guard is not None else written
+    yield {"type": "done", "result": _finish(session_id, TurnResult(reply=reply))}
 
 
 def _run_confirmation(action_id: str, ctx: SkillContext) -> TurnResult:
@@ -319,6 +453,29 @@ def _extract_calls(route: dict[str, Any] | None) -> list[dict[str, Any]]:
         args = entry.get("args") or entry.get("arguments") or entry.get("parameters") or {}
         calls.append({"name": name, "args": args if isinstance(args, dict) else {}})
     return calls
+
+
+def _synthesis_messages(
+    system: str, history: list[dict[str, str]], results: list[dict[str, Any]]
+) -> list[dict[str, str]]:
+    payload = [
+        {
+            "skill": r["skill"],
+            "status": r["status"],
+            "result": r["message"],
+            "error": r.get("error"),
+        }
+        for r in results
+    ]
+    # The results go in as the final *user* turn, not a trailing system message.
+    # Small models reliably answer the last user message; a system message tacked
+    # on after the history tends to get treated as background and the model
+    # replays its previous answer instead.
+    return [
+        {"role": "system", "content": system},
+        *history[-4:],
+        {"role": "user", "content": prompts.synthesis_prompt(payload)},
+    ]
 
 
 def _synthesize(system: str, history: list[dict[str, str]], results: list[dict[str, Any]]) -> str:
