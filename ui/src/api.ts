@@ -143,6 +143,58 @@ export interface Health {
   privacy: { web_search: boolean; live_data: boolean; cloud_llm: boolean };
 }
 
+export type AccountKind = "mail" | "calendar";
+
+/**
+ * `ics` is deliberately absent.
+ *
+ * A Google iCal URL is what they call a "secret address" — anyone holding it
+ * reads the whole calendar without logging in, so it is a credential, and the
+ * backend refuses it. Leaving it out of the type means the UI cannot offer a
+ * field that would end up carrying one.
+ */
+export type AccountProvider = "imap" | "caldav";
+
+export interface AccountFields {
+  label: string;
+  host?: string;
+  port?: number;
+  username?: string;
+  smtp_host?: string;
+  smtp_port?: number;
+  url?: string;
+  writable?: boolean;
+  // No password. Not omitted for brevity — it must not exist. See addAccount.
+}
+
+/** One configured account. Contains no secret and never will. */
+export interface Account {
+  kind: string;
+  label: string;
+  provider: string;
+  target: string;
+  username: string;
+  writable: boolean;
+  enabled: boolean;
+  credential_stored: boolean;
+}
+
+export interface Connectors {
+  credential_store: { available: boolean; backend: string; detail: string };
+  calendar: Account[];
+  mail: Account[];
+}
+
+export interface AddedAccount {
+  kind: string;
+  label: string;
+  provider: string;
+  config_file: string;
+  /** The command that stores the password, e.g. "/connect mail gmail". */
+  next_step: string;
+  needs_password: boolean;
+}
+
 // -- calls ----------------------------------------------------------------
 
 export const api = {
@@ -254,6 +306,29 @@ export const api = {
 
   state: () => request<PresenceState>("/state"),
   health: () => request<Health>("/health"),
+
+  connectors: () => request<Connectors>("/connectors"),
+
+  /**
+   * Add a mail or calendar account.
+   *
+   * `fields` carries account details only. There is no password parameter and
+   * there must never be one: the backend refuses any field whose name looks
+   * like a secret, and the password is typed at an OS prompt by `/connect`,
+   * which writes it to the Windows Credential Manager. The response says so in
+   * `next_step`.
+   */
+  addAccount: (kind: AccountKind, provider: AccountProvider, fields: AccountFields) =>
+    request<AddedAccount>("/connectors/accounts", {
+      method: "POST",
+      body: JSON.stringify({ kind, provider, fields }),
+    }),
+
+  removeAccount: (kind: AccountKind, label: string) =>
+    request<{ removed: string }>(
+      `/connectors/accounts/${kind}/${encodeURIComponent(label)}`,
+      { method: "DELETE" },
+    ),
 
   memory: () => request<{ facts: MemoryFact[] }>("/memory"),
   forgetFact: (id: string) =>

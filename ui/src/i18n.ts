@@ -101,6 +101,33 @@ const STRINGS = {
     "settings.voiceLocal":
       "Speech recognition and synthesis run on this machine. Audio never leaves it.",
 
+    "accounts.title": "Mail and calendar accounts",
+    "accounts.mail": "Mail",
+    "accounts.calendar": "Calendars",
+    "accounts.noneMail": "No mail account connected.",
+    "accounts.noneCalendar": "No calendar connected.",
+    "accounts.addMail": "Add a mail account",
+    "accounts.addCalendar": "Add a calendar",
+    "accounts.label": "Name it (how you'll refer to it)",
+    "accounts.imapHost": "IMAP server",
+    "accounts.port": "Port",
+    "accounts.username": "Username",
+    "accounts.smtpHost": "SMTP server (to send)",
+    "accounts.smtpPort": "SMTP port",
+    "accounts.caldavUrl": "CalDAV server URL",
+    "accounts.save": "Add account",
+    "accounts.remove": "Remove",
+    "accounts.removeConfirm": "Remove {label}? The saved password stays in Windows Credential Manager.",
+    "accounts.removed": "Removed {label}.",
+    "accounts.added": "Added. Now run {command} in the terminal to set the password.",
+    "accounts.noPassword": "no password yet",
+    "accounts.noStore": "Windows Credential Manager isn't available, so passwords can't be stored.",
+    "accounts.passwordNote":
+      "There's no password box here on purpose. Add the account, then run the command shown and type your password at the prompt — it goes straight into Windows Credential Manager and never through this window.",
+    "accounts.icsNote":
+      "CalDAV only. A Google \"secret address in iCal format\" is a password in the shape of a URL — anyone holding it can read your whole calendar — so paste that into the config file yourself instead.",
+    "accounts.configAt": "Config file:",
+
     "notify.dismiss": "Dismiss",
 
     "prereq.startingTitle": "Starting up…",
@@ -208,6 +235,33 @@ const STRINGS = {
     "settings.voiceNoMic": "No se detectó micrófono",
     "settings.voiceLocal":
       "El reconocimiento y la síntesis de voz se ejecutan en este equipo. El audio nunca sale de él.",
+
+    "accounts.title": "Cuentas de correo y calendario",
+    "accounts.mail": "Correo",
+    "accounts.calendar": "Calendarios",
+    "accounts.noneMail": "No hay ninguna cuenta de correo conectada.",
+    "accounts.noneCalendar": "No hay ningún calendario conectado.",
+    "accounts.addMail": "Añadir cuenta de correo",
+    "accounts.addCalendar": "Añadir calendario",
+    "accounts.label": "Nombre (cómo la llamarás)",
+    "accounts.imapHost": "Servidor IMAP",
+    "accounts.port": "Puerto",
+    "accounts.username": "Usuario",
+    "accounts.smtpHost": "Servidor SMTP (para enviar)",
+    "accounts.smtpPort": "Puerto SMTP",
+    "accounts.caldavUrl": "URL del servidor CalDAV",
+    "accounts.save": "Añadir cuenta",
+    "accounts.remove": "Quitar",
+    "accounts.removeConfirm": "¿Quitar {label}? La contraseña guardada permanece en el Administrador de credenciales.",
+    "accounts.removed": "Se quitó {label}.",
+    "accounts.added": "Añadida. Ahora ejecuta {command} en la terminal para poner la contraseña.",
+    "accounts.noPassword": "sin contraseña",
+    "accounts.noStore": "El Administrador de credenciales no está disponible, no se pueden guardar contraseñas.",
+    "accounts.passwordNote":
+      "Aquí no hay campo de contraseña a propósito. Añade la cuenta y ejecuta el comando que aparece: la contraseña va directa al Administrador de credenciales de Windows y nunca pasa por esta ventana.",
+    "accounts.icsNote":
+      "Solo CalDAV. La \"dirección secreta en formato iCal\" de Google es una contraseña con forma de URL — quien la tenga puede leer todo tu calendario — así que pégala tú mismo en el archivo de configuración.",
+    "accounts.configAt": "Archivo de configuración:",
 
     "notify.dismiss": "Descartar",
 

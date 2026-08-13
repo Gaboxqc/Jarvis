@@ -15,6 +15,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type Health } from "../api";
 import type { Key, Lang } from "../i18n";
 import type { Voice } from "../useVoice";
+import { Accounts } from "./Accounts";
 
 interface Props {
   lang: Lang;
@@ -151,6 +152,8 @@ export function Settings({ lang, setLang, t, voice }: Props) {
         )}
         <p className="small muted">{t("settings.voiceLocal")}</p>
       </section>
+
+      <Accounts t={t} configFile={health?.config_file ?? null} />
 
       <section className="card">
         <h2 className="small muted">{t("settings.language")}</h2>
