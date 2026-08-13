@@ -69,6 +69,38 @@ const STRINGS = {
       "Delete ALL local data? Conversations, memories, reminders, tasks, transcripts and indexes. This cannot be undone.",
     "settings.wiped": "Removed {count} records.",
 
+    "voice.talk": "Hold a conversation out loud",
+    "voice.listening": "Listening — speak now, I'll stop when you pause",
+    "voice.heard": "heard",
+    "voice.speakOn": "Speaking replies aloud",
+    "voice.speakOff": "Replies are silent",
+    "voiceBlocked.offline": "I can't reach the voice service.",
+    "voiceBlocked.models": "The speech models aren't downloaded yet. Open Settings to get them.",
+    "voiceBlocked.mic": "No microphone was found.",
+    "voiceBlocked.off": "Voice is switched off.",
+    "voiceBlocked.inputOff": "Voice input is switched off. Turn it on in Settings.",
+    "voiceBlocked.failed": "Something went wrong while listening.",
+
+    "settings.voice": "Voice",
+    "settings.voiceEnabled": "Talk and listen",
+    "settings.voiceInput": "Microphone input",
+    "settings.voiceOutput": "Speak replies aloud",
+    "settings.voiceWake": "Wake word",
+    "settings.voiceWakeNote":
+      "Leaves the microphone open all the time. Nothing is transcribed before the phrase is heard.",
+    "settings.voiceModels": "Speech models",
+    "settings.voiceDownload": "Download ({mb} MB)",
+    "settings.voiceDownloading": "Downloading… this takes a few minutes",
+    "settings.voiceReady": "Downloaded and ready",
+    "settings.voiceNoMic": "No microphone detected",
+    "settings.voiceLocal":
+      "Speech recognition and synthesis run on this machine. Audio never leaves it.",
+
+    "notify.dismiss": "Dismiss",
+
+    "prereq.startingTitle": "Starting up…",
+    "prereq.startingBody":
+      "Kai is loading its skills. This takes a few seconds on the first launch after installing.",
     "prereq.backendTitle": "Kai's backend isn't running",
     "prereq.backendBody":
       "The assistant service isn't answering on port 8756. If you started Kai from source, run the backend too; if you installed it, try quitting from the tray and reopening.",
@@ -142,6 +174,38 @@ const STRINGS = {
       "¿Borrar TODOS los datos locales? Conversaciones, recuerdos, recordatorios, tareas, transcripciones e índices. No se puede deshacer.",
     "settings.wiped": "Se eliminaron {count} registros.",
 
+    "voice.talk": "Hablar en voz alta",
+    "voice.listening": "Escuchando: habla ahora, me detendré cuando hagas una pausa",
+    "voice.heard": "oído",
+    "voice.speakOn": "Respuestas en voz alta",
+    "voice.speakOff": "Respuestas en silencio",
+    "voiceBlocked.offline": "No puedo contactar con el servicio de voz.",
+    "voiceBlocked.models": "Los modelos de voz no están descargados. Ábrelos en Ajustes.",
+    "voiceBlocked.mic": "No se encontró ningún micrófono.",
+    "voiceBlocked.off": "La voz está desactivada.",
+    "voiceBlocked.inputOff": "La entrada de voz está desactivada. Actívala en Ajustes.",
+    "voiceBlocked.failed": "Algo salió mal al escuchar.",
+
+    "settings.voice": "Voz",
+    "settings.voiceEnabled": "Hablar y escuchar",
+    "settings.voiceInput": "Entrada de micrófono",
+    "settings.voiceOutput": "Leer las respuestas en voz alta",
+    "settings.voiceWake": "Palabra de activación",
+    "settings.voiceWakeNote":
+      "Deja el micrófono abierto todo el tiempo. Nada se transcribe antes de oír la frase.",
+    "settings.voiceModels": "Modelos de voz",
+    "settings.voiceDownload": "Descargar ({mb} MB)",
+    "settings.voiceDownloading": "Descargando… tarda unos minutos",
+    "settings.voiceReady": "Descargados y listos",
+    "settings.voiceNoMic": "No se detectó micrófono",
+    "settings.voiceLocal":
+      "El reconocimiento y la síntesis de voz se ejecutan en este equipo. El audio nunca sale de él.",
+
+    "notify.dismiss": "Descartar",
+
+    "prereq.startingTitle": "Iniciando…",
+    "prereq.startingBody":
+      "Kai está cargando sus habilidades. Tarda unos segundos la primera vez tras instalarlo.",
     "prereq.backendTitle": "El servicio de Kai no está en marcha",
     "prereq.backendBody":
       "El servicio no responde en el puerto 8756. Si iniciaste Kai desde el código, arranca también el backend; si lo instalaste, ciérralo desde la bandeja y ábrelo de nuevo.",

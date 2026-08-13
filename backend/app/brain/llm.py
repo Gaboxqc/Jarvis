@@ -5,16 +5,20 @@ cover any OpenAI-compatible endpoint later.
 
 Structured output is requested via Ollama's `format: json` rather than native
 tool-calling. That is a deliberate compatibility choice: tool-calling support
-varies sharply by model (llama3 does not have it; llama3.1 does), and a router
-that only works on some models is a router that breaks when the user changes a
-line of config. JSON mode is supported by every model Ollama serves.
+varies sharply by model -- the default qwen2.5 advertises it, llama3 does not --
+and a router that only works on some models is a router that breaks when the
+user changes a line of config. JSON mode is supported by every model Ollama
+serves, so it is the floor everything else stands on.
+
+Using native tool-calling where the model offers it, and falling back to this,
+is T12.6 and not yet done.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
@@ -32,9 +36,47 @@ class LLMUnavailable(Exception):
 class LLMReply:
     text: str
     raw: dict[str, Any]
+    # Populated only when the call passed `tools` and the model used them.
+    # Same shape either way -- [{"name": ..., "args": {...}}] -- so callers do
+    # not branch on which mechanism produced the answer.
+    tool_calls: list[dict[str, Any]] = field(default_factory=list)
 
     def as_json(self) -> dict[str, Any] | None:
         return extract_json(self.text)
+
+
+_capabilities: dict[str, frozenset[str]] = {}
+
+
+def supports_tools(settings: BrainSettings | None = None) -> bool:
+    """Whether this model can be given tool definitions natively.
+
+    Asked once per model and cached. A model that cannot do this is not a
+    problem -- routing falls back to the JSON prompt, which every model Ollama
+    serves can follow -- so a failure to answer is treated as "no" rather than
+    raised. Being wrong here costs accuracy, not correctness.
+    """
+    settings = settings or load_config().brain
+    if settings.model not in _capabilities:
+        try:
+            response = httpx.post(
+                f"{settings.ollama_host.rstrip('/')}/api/show",
+                json={"model": settings.model},
+                timeout=10.0,
+            )
+            response.raise_for_status()
+            found = response.json().get("capabilities") or []
+        except (httpx.HTTPError, json.JSONDecodeError, ValueError):
+            log.info("could not read capabilities for %s; assuming no tool support",
+                     settings.model)
+            found = []
+        _capabilities[settings.model] = frozenset(found)
+    return "tools" in _capabilities[settings.model]
+
+
+def reset_capability_cache() -> None:
+    """Test hook, and the escape hatch if a model is swapped under a running app."""
+    _capabilities.clear()
 
 
 def chat(
@@ -43,6 +85,7 @@ def chat(
     json_mode: bool = False,
     temperature: float | None = None,
     settings: BrainSettings | None = None,
+    tools: list[dict[str, Any]] | None = None,
 ) -> LLMReply:
     settings = settings or load_config().brain
     payload: dict[str, Any] = {
@@ -51,10 +94,18 @@ def chat(
         "stream": False,
         "options": {
             "temperature": settings.temperature if temperature is None else temperature,
+            "num_ctx": settings.context_tokens,
         },
     }
-    if json_mode:
+    if tools:
+        payload["tools"] = tools
+    elif json_mode:
+        # Never both. Constraining output to JSON while also asking for tool
+        # calls makes the model emit a JSON *description* of a call instead of
+        # calling anything, and the tool_calls list comes back empty.
         payload["format"] = "json"
+
+    _warn_if_oversized(messages, settings)
 
     url = f"{settings.ollama_host.rstrip('/')}/api/chat"
     try:
@@ -80,8 +131,65 @@ def chat(
     except (httpx.HTTPError, json.JSONDecodeError) as exc:
         raise LLMUnavailable(f"The model call failed: {exc}") from exc
 
-    text = ((body.get("message") or {}).get("content") or "").strip()
-    return LLMReply(text=text, raw=body)
+    message = body.get("message") or {}
+    text = (message.get("content") or "").strip()
+    return LLMReply(text=text, raw=body, tool_calls=_read_tool_calls(message))
+
+
+def _read_tool_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
+    """Normalise Ollama's tool_calls into [{"name", "args"}].
+
+    Arguments come back as an object from Ollama, but some models emit them as
+    a JSON string instead, so both are handled. Anything unparseable is dropped
+    rather than guessed at -- the caller treats an empty list as "the model did
+    not route", which degrades to a conversational answer.
+    """
+    calls = []
+    for entry in message.get("tool_calls") or []:
+        function = (entry or {}).get("function") or {}
+        name = function.get("name")
+        if not isinstance(name, str) or not name:
+            continue
+        raw_args = function.get("arguments")
+        if isinstance(raw_args, str):
+            try:
+                raw_args = json.loads(raw_args)
+            except json.JSONDecodeError:
+                raw_args = {}
+        calls.append({"name": name, "args": raw_args if isinstance(raw_args, dict) else {}})
+    return calls
+
+
+def estimate_tokens(messages: list[dict[str, str]]) -> int:
+    """Rough token count for a message list.
+
+    Deliberately approximate — this exists to catch a prompt that is twice the
+    context window, not to budget the last hundred tokens. Four characters per
+    token is the usual rule of thumb and is close enough for that job without
+    dragging a tokenizer into the runtime.
+    """
+    return sum(len(m.get("content") or "") for m in messages) // 4
+
+
+def _warn_if_oversized(messages: list[dict[str, str]], settings: BrainSettings) -> None:
+    """Say something when the prompt cannot fit.
+
+    Ollama's response to an over-long prompt is to drop the overflow and answer
+    anyway, so an oversized prompt looks exactly like a working one — it just
+    produces worse answers forever. This is the only warning anyone gets.
+    """
+    estimate = estimate_tokens(messages)
+    # Leave room for the reply; a prompt that fills the window leaves nowhere
+    # to generate into.
+    budget = int(settings.context_tokens * 0.75)
+    if estimate > budget:
+        log.warning(
+            "prompt is ~%d tokens against a %d-token context: Ollama will silently "
+            "truncate it and the answer will be based on part of the input. "
+            "Raise brain.context_tokens or shorten the prompt.",
+            estimate,
+            settings.context_tokens,
+        )
 
 
 def _error_detail(response: httpx.Response) -> str:

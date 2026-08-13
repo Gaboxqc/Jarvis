@@ -167,8 +167,14 @@ one folder-organize run undoes as one operation, not 47.
 Requires [Ollama](https://ollama.com) with a model pulled:
 
 ```bash
-ollama pull llama3
+ollama pull qwen2.5
 ```
+
+Any Ollama model works, but the choice matters more than it looks. Kai picks
+skills by asking the model which one to use, and on phrasings its prompt was
+never tuned against, qwen2.5 gets that right 88% of the time against llama3's
+62% — at the same speed. `python backend/tools/routing_sweep.py --compare
+llama3,qwen2.5 --holdout` reproduces the measurement.
 
 Set up and start the terminal client:
 

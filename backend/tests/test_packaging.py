@@ -187,3 +187,160 @@ def test_the_server_refuses_to_listen_off_loopback(host):
 
     assert result.returncode == 2
     assert "loopback-only" in result.stderr
+
+
+# -- config discovery in an installed build (REQ-5, REQ-29) ---------------
+
+
+def test_an_installed_build_seeds_a_config_it_can_actually_use(tmp_path, monkeypatch):
+    """The packaged app has no source tree.
+
+    Resolving the config relative to __file__ landed inside PyInstaller's
+    archive, so the installed build found none and ran on defaults: no file
+    roots, no connectors, no indexed folders. It worked and could not be
+    configured, which is worse than refusing to start.
+    """
+    from app import settings
+
+    data = tmp_path / "data"
+    monkeypatch.setenv("KAI_DATA_DIR", str(data))
+    monkeypatch.delenv("KAI_CONFIG", raising=False)
+    # Pretend there is no source checkout, as in an installed build.
+    monkeypatch.setattr(settings, "project_root", lambda: tmp_path / "nowhere")
+
+    example = tmp_path / "example.yaml"
+    example.write_text("persona:\n  name: Kai\n", encoding="utf-8")
+    monkeypatch.setattr(settings, "_bundled_example", lambda: example)
+
+    resolved = settings.config_path()
+
+    assert resolved == data / "kai.config.yaml"
+    assert resolved.exists(), "the config was not seeded"
+    assert "Kai" in resolved.read_text(encoding="utf-8")
+
+
+def test_a_source_checkout_still_wins(tmp_path, monkeypatch):
+    from app import settings
+
+    monkeypatch.delenv("KAI_CONFIG", raising=False)
+    root = tmp_path / "src"
+    root.mkdir()
+    (root / "kai.config.yaml").write_text("persona:\n  name: Dev\n", encoding="utf-8")
+    monkeypatch.setattr(settings, "project_root", lambda: root)
+
+    assert settings.config_path() == root / "kai.config.yaml"
+
+
+def test_only_one_installer_format_is_built():
+    """Two installers for one application is a choice the user shouldn't face."""
+    import json
+
+    config = json.loads(
+        (PROJECT / "ui" / "src-tauri" / "tauri.conf.json").read_text(encoding="utf-8")
+    )
+
+    assert config["bundle"]["targets"] == ["nsis"]
+
+
+# -- the origin the packaged app actually uses (REQ-26, REQ-27) -----------
+
+
+@pytest.mark.parametrize(
+    "origin,allowed",
+    [
+        # Windows WebView2 serves the packaged app from here. Omitting it meant
+        # the installed app was CORS-blocked from its own backend on every
+        # request and reported "backend unreachable" against a healthy backend.
+        ("http://tauri.localhost", True),
+        ("https://tauri.localhost", True),
+        ("tauri://localhost", True),          # macOS and Linux
+        ("http://localhost:5173", True),      # dev server
+        ("http://127.0.0.1:8756", True),
+        # Still refused: this API reaches the user's files, mail and calendar.
+        ("https://evil.example.com", False),
+        ("http://tauri.localhost.evil.com", False),
+        ("http://192.168.1.10:5173", False),
+    ],
+)
+def test_cors_allows_only_local_front_ends(workspace, origin, allowed):
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    with TestClient(app) as client:
+        response = client.get("/health", headers={"Origin": origin})
+
+    header = response.headers.get("access-control-allow-origin")
+    assert (header == origin) is allowed, f"{origin} -> {header!r}"
+
+
+def test_the_install_directory_is_not_the_data_directory():
+    r"""NSIS per-user installs to %LOCALAPPDATA%\<productName>.
+
+    With productName "Kai" that was exactly data_dir(), so the app was
+    installed on top of the user's database and config -- and an uninstall
+    would take their data with it.
+    """
+    import json
+
+    from app.settings import data_dir
+
+    config = json.loads(
+        (PROJECT / "ui" / "src-tauri" / "tauri.conf.json").read_text(encoding="utf-8")
+    )
+
+    assert config["productName"] != data_dir().name, (
+        "the installer would unpack into the data directory"
+    )
+
+
+# -- surviving a damaged database (REQ-27) --------------------------------
+
+
+def test_a_corrupt_database_is_quarantined_and_replaced(tmp_path, monkeypatch):
+    """A corrupt file otherwise fails every open, forever.
+
+    The scheduler thread then raises every few seconds, anything touching
+    storage returns 500, and the app is wedged with no way out from inside it.
+    Seen for real after a force-kill during a write.
+    """
+    import sqlite3
+
+    from app import db
+
+    broken = tmp_path / "kai.db"
+    broken.write_bytes(b"SQLite format 3\x00" + b"\xde\xad\xbe\xef" * 4096)
+
+    db.close_connection()
+    db.set_db_path(broken)
+    try:
+        conn = db.connect()  # must not raise
+        assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        assert db.query("SELECT COUNT(*) c FROM memory_facts")[0]["c"] == 0
+
+        quarantined = list(tmp_path.glob("corrupt-*/kai.db"))
+        assert quarantined, "the damaged file was destroyed instead of kept"
+        assert quarantined[0].read_bytes()[:16] == b"SQLite format 3\x00"
+    finally:
+        db.close_connection()
+        db.set_db_path(None)
+
+
+def test_a_healthy_database_is_left_alone(tmp_path):
+    from app import db
+
+    good = tmp_path / "kai.db"
+    db.close_connection()
+    db.set_db_path(good)
+    try:
+        db.connect()
+        db.execute("INSERT INTO memory_facts(id, text, category, created_at) "
+                   "VALUES('x', 'a fact', 'fact', '2026-01-01T00:00:00+00:00')")
+        db.close_connection()
+
+        db.connect()
+        assert db.query("SELECT COUNT(*) c FROM memory_facts")[0]["c"] == 1
+        assert not list(tmp_path.glob("corrupt-*"))
+    finally:
+        db.close_connection()
+        db.set_db_path(None)

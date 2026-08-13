@@ -160,10 +160,18 @@ class TimeSkill(Skill):
                 from zoneinfo import ZoneInfo
 
                 zoned = datetime.now(ZoneInfo(zone_name))
-            except Exception as exc:  # noqa: BLE001
-                raise SkillError(f"I don't recognise the time zone '{zone_name}'.") from exc
-            parts.append(f"{zone_name}: {zoned.strftime('%Y-%m-%d %H:%M %Z')}")
-            data["zoned"] = zoned.isoformat()
+            except Exception:  # noqa: BLE001
+                # Not an error. The router fills this in unasked -- "what time is
+                # it?" arrives carrying the machine's Windows zone name, which is
+                # not IANA and never resolves -- so raising here would fail the
+                # simplest question the assistant can be asked, over an argument
+                # the user never supplied. Local time is what was wanted; say the
+                # zone was not recognised and answer anyway.
+                parts.append(f"(I don't recognise the time zone '{zone_name}'.)")
+                data["unknown_zone"] = zone_name
+            else:
+                parts.append(f"{zone_name}: {zoned.strftime('%Y-%m-%d %H:%M %Z')}")
+                data["zoned"] = zoned.isoformat()
 
         target_raw = str(args.get("until_date", "") or "").strip()
         if target_raw:

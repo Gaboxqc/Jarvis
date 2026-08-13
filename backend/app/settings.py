@@ -6,7 +6,10 @@ mtime changes, so edits apply on the next turn without a restart (REQ-5).
 
 from __future__ import annotations
 
+import logging
 import os
+import re
+import sys
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -16,6 +19,8 @@ import yaml
 
 DEFAULT_CONFIG_NAME = "kai.config.yaml"
 EXAMPLE_CONFIG_NAME = "kai.config.example.yaml"
+
+log = logging.getLogger(__name__)
 
 
 def project_root() -> Path:
@@ -37,24 +42,57 @@ def data_dir() -> Path:
     return path
 
 
+def _bundled_example() -> Path | None:
+    """The example config, wherever this build keeps it."""
+    candidates = [project_root() / EXAMPLE_CONFIG_NAME]
+    # PyInstaller unpacks data files under _MEIPASS, which is nowhere near the
+    # source tree the other candidate assumes.
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        candidates.insert(0, Path(meipass) / EXAMPLE_CONFIG_NAME)
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def config_path() -> Path:
     """The config file in use.
 
-    `kai.config.yaml` is deliberately untracked, because connector settings can
-    themselves be credentials — a calendar's "secret address in iCal format" is
-    a bearer token in URL form. A fresh clone therefore has only the example,
-    which is used until the real file exists so the assistant still starts.
+    Three cases, in order:
+
+    1. `KAI_CONFIG` — explicit, used by tests.
+    2. A `kai.config.yaml` beside the source tree — the developer case.
+    3. `<data dir>/kai.config.yaml` — the installed case, seeded from the
+       bundled example the first time.
+
+    Case 3 exists because an installed build has no source tree. Resolving the
+    config relative to `__file__` lands inside PyInstaller's archive, so the
+    packaged app found no config at all and silently ran on defaults: no
+    allowed file roots, no connectors, no indexed folders. Everything still
+    *worked*, it just could not be configured, which is a worse failure than
+    refusing to start.
     """
     override = os.environ.get("KAI_CONFIG")
     if override:
         return Path(override)
 
-    real = project_root() / DEFAULT_CONFIG_NAME
-    if real.exists():
-        return real
+    from_source = project_root() / DEFAULT_CONFIG_NAME
+    if from_source.exists():
+        return from_source
 
-    example = project_root() / EXAMPLE_CONFIG_NAME
-    return example if example.exists() else real
+    installed = data_dir() / DEFAULT_CONFIG_NAME
+    if not installed.exists():
+        example = _bundled_example()
+        if example is not None:
+            try:
+                installed.write_text(example.read_text(encoding="utf-8"), encoding="utf-8")
+                log.info("seeded %s from the bundled example", installed)
+            except OSError:
+                # Read-only or full disk: fall back to reading the example
+                # directly rather than failing to start.
+                return example
+    return installed
 
 
 @dataclass(frozen=True)
@@ -70,10 +108,38 @@ class Persona:
 @dataclass(frozen=True)
 class BrainSettings:
     provider: str = "ollama"
-    model: str = "llama3"
-    ollama_host: str = "http://localhost:11434"
+    # qwen2.5 rather than llama3. Measured on the routing sweep's held-out set
+    # -- phrasings the prompt was never tuned against, which is the only number
+    # that reflects real use:
+    #
+    #     llama3    15/24  (62%)
+    #     qwen2.5   21/24  (88%)
+    #
+    # Warm, they cost the same: 1.04s versus 1.05s per call, both ~50 tok/s.
+    # qwen2.5 also carries a 32k context against llama3's 8k, and unlike llama3
+    # it advertises native tool-calling, which is the next thing to use.
+    model: str = "qwen2.5"
+    # 127.0.0.1, never "localhost". On Windows localhost resolves to ::1 first,
+    # Ollama listens on IPv4 only, and every request therefore spends ~2s
+    # failing over from IPv6 before it is even sent. At two model calls per
+    # turn that was four seconds of dead time on every message.
+    ollama_host: str = "http://127.0.0.1:11434"
     temperature: float = 0.4
     timeout_seconds: int = 120
+    # Ollama defaults to a 4,096-token context regardless of what the model
+    # supports, and silently drops whatever does not fit rather than failing.
+    # The router prompt exceeded it, so the model was choosing skills from a
+    # truncated tool list and nothing anywhere said so. Set it explicitly.
+    context_tokens: int = 8192
+    # Route via the model's own tool-calling instead of the JSON prompt, where
+    # the model supports it. Off by default because it is unmeasured: the
+    # machine it was written on lost its GPU partway through, and the only
+    # figures collected came from CPU inference, where 48 tool schemas took
+    # 165s for a single call. That is a fact about a CPU, not about
+    # tool-calling, and switching the default on the strength of it would be
+    # guessing. Turn on, run tools/routing_sweep.py --native --holdout, and
+    # compare against 21/24 before making it the default.
+    native_tools: bool = False
 
 
 @dataclass(frozen=True)
@@ -155,6 +221,22 @@ def _expand(p: str) -> Path:
     return Path(os.path.expandvars(os.path.expanduser(p))).resolve()
 
 
+def _prefer_ipv4(host: str) -> str:
+    """Rewrite a loopback "localhost" to 127.0.0.1.
+
+    Windows resolves localhost to ::1 before 127.0.0.1, and Ollama binds IPv4
+    only, so each call stalls ~2s on a connection that was never going to
+    succeed. Every config written before this was found says localhost, so
+    correcting the default is not enough -- the existing file has to be fixed
+    as it is read, or the machines already installed keep the four-second tax.
+
+    Only the loopback name is touched. A real hostname is left alone: it may
+    legitimately be IPv6, and silently redirecting it would point the assistant
+    at the wrong machine.
+    """
+    return re.sub(r"(?<=//)localhost(?=[:/]|$)", "127.0.0.1", host or "", count=1)
+
+
 def _build(raw: dict[str, Any], source: Path | None) -> Config:
     persona_raw = raw.get("persona") or {}
     voice_raw = raw.get("voice") or {}
@@ -203,10 +285,12 @@ def _build(raw: dict[str, Any], source: Path | None) -> Config:
         ),
         brain=BrainSettings(
             provider=brain_raw.get("provider", "ollama"),
-            model=brain_raw.get("model", "llama3"),
-            ollama_host=brain_raw.get("ollama_host", "http://localhost:11434"),
+            model=brain_raw.get("model", BrainSettings.model),
+            ollama_host=_prefer_ipv4(brain_raw.get("ollama_host", BrainSettings.ollama_host)),
             temperature=float(brain_raw.get("temperature", 0.4)),
             timeout_seconds=int(brain_raw.get("timeout_seconds", 120)),
+            context_tokens=int(brain_raw.get("context_tokens", BrainSettings.context_tokens)),
+            native_tools=bool(brain_raw.get("native_tools", BrainSettings.native_tools)),
         ),
         privacy=PrivacySettings(
             allow_web_search=bool(privacy_raw.get("allow_web_search", True)),

@@ -19,12 +19,21 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(
+  path: string,
+  init?: RequestInit & { timeoutMs?: number },
+): Promise<T> {
   let response: Response;
+  const { timeoutMs, ...rest } = init ?? {};
+  // Capturing an utterance blocks until the speaker stops, then transcribes.
+  // The default fetch has no timeout at all, so a wedged microphone would hang
+  // the button forever with no way back.
+  const abort = timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined;
   try {
     response = await fetch(`${BASE}${path}`, {
       headers: { "Content-Type": "application/json" },
-      ...init,
+      signal: abort,
+      ...rest,
     });
   } catch {
     // A dead backend is the common case while developing, and the message the
@@ -90,6 +99,40 @@ export interface ActionRecord {
   error: string | null;
 }
 
+export interface VoiceStatus {
+  enabled: boolean;
+  input_enabled: boolean;
+  output_enabled: boolean;
+  microphone: boolean;
+  models_ready: boolean;
+  download_mb: number;
+  stt: { model: string; installed: boolean; loaded: boolean };
+  tts: { voice: string; installed: boolean; muted: boolean; available: string[] };
+  wake: { phrase: string; enabled: boolean; installed: boolean; available: boolean };
+}
+
+export interface VoiceTurn {
+  heard: string;
+  confidence: number;
+  reply: string;
+  spoke: boolean;
+  needs_confirmation: boolean;
+  error: string | null;
+}
+
+export interface Notification {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  at: string;
+}
+
+export interface Settings {
+  current: { voice: Record<string, unknown>; persona: Record<string, unknown> };
+  writable: Record<string, string[]>;
+}
+
 export interface Health {
   ok: boolean;
   brain: { ok: boolean; model?: string; error?: string | null };
@@ -148,4 +191,44 @@ export const api = {
   wipe: () => request<{ removed: Record<string, number> }>("/privacy/wipe", {
     method: "POST",
   }),
+
+  // -- voice --------------------------------------------------------------
+
+  voiceStatus: () => request<VoiceStatus>("/voice/status"),
+
+  voiceModels: () =>
+    request<{ models: { name: string; kind: string; present: boolean; approx_mb: number }[];
+              missing_mb: number; location: string }>("/voice/models"),
+
+  downloadVoiceModels: (includeWake = false) =>
+    request<{ downloaded: string[]; failed: { model: string; error: string }[]; ready: boolean }>(
+      `/voice/models?include_wake=${includeWake}`,
+      // Hundreds of megabytes over a slow connection; nothing shorter is safe.
+      { method: "POST", timeoutMs: 30 * 60_000 },
+    ),
+
+  /** Capture one utterance and run it as a turn. Blocks while listening. */
+  listen: () =>
+    request<VoiceTurn>("/voice/listen", { method: "POST", timeoutMs: 120_000 }),
+
+  speak: (text: string) =>
+    request<{ seconds: number }>("/voice/speak", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+      timeoutMs: 120_000,
+    }),
+
+  // -- settings and notifications ------------------------------------------
+
+  settings: () => request<Settings>("/settings"),
+
+  saveSettings: (changes: Record<string, Record<string, unknown>>) =>
+    request<{ changed: Record<string, unknown> }>("/settings", {
+      method: "PATCH",
+      body: JSON.stringify({ changes }),
+    }),
+
+  /** Drain queued notifications. Destructive: each is handed out once. */
+  notifications: () =>
+    request<{ notifications: Notification[] }>("/notifications"),
 };

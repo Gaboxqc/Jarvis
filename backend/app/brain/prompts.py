@@ -54,6 +54,119 @@ def system_prompt(config: Config, facts: list[MemoryFact]) -> str:
     return "\n".join(lines)
 
 
+def tool_lines(catalog: list[dict[str, Any]]) -> str:
+    """The tool list, one line per tool.
+
+    This used to be `json.dumps(catalog, indent=2)`, and that was a bug rather
+    than a style choice. Indented JSON for 48 skills is 5,627 tokens; llama3 runs
+    with a 4,096-token context, so Ollama silently truncated the prompt and the
+    router chose from a catalog with its middle cut out. Nothing errored — the
+    routing was just wrong in ways we kept trying to fix by adding examples,
+    which made the prompt longer, which truncated more.
+
+    One line per tool carries the same information the router actually uses at a
+    fifth of the size. What gets dropped is the *parameter* prose -- 7.7KB of
+    "description" strings the router never reads, since it has already decided
+    which tool to call by the time arguments matter -- along with the JSON
+    structure itself, which was most of the bulk: braces, indentation and the
+    words "type", "description" and "required" repeated 200 times.
+
+    Descriptions are kept whole. An earlier version of this kept only the first
+    sentence, which was a mistake worth recording: the second sentence of a
+    description is where the disambiguation lives. mail.read's said "Use for
+    'what did Ana say about the invoice'", and dropping it sent that exact
+    question to documents.search. The routing hints are the cheap part -- all 48
+    descriptions together are 6.4KB -- and they are the part that decides which
+    tool gets picked.
+
+    Enums are kept because the model cannot guess a value it was never shown.
+    """
+    lines = []
+    for entry in catalog:
+        args = []
+        for name, spec in (entry.get("parameters") or {}).items():
+            token = name if spec.get("required") else f"{name}?"
+            if spec.get("enum"):
+                token += "=" + "|".join(str(v) for v in spec["enum"])
+            args.append(token)
+        # Collapse internal newlines: descriptions are wrapped in source, and a
+        # line break here would break the one-tool-per-line contract.
+        summary = " ".join((entry.get("description") or "").split())
+        lines.append(f"{entry['name']}({', '.join(args)}) - {summary.rstrip('.')}.")
+    return "\n".join(lines)
+
+
+def tool_schemas(catalog: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The catalog as native tool definitions, for models that accept them.
+
+    The compact line format exists because the catalog had to fit in a prompt.
+    These do not go in the prompt: Ollama hands them to the model's own tool
+    template, so the full parameter descriptions are worth keeping here even
+    though tool_lines drops them.
+    """
+    schemas = []
+    for entry in catalog:
+        properties = {}
+        required = []
+        for name, spec in (entry.get("parameters") or {}).items():
+            prop = {"type": spec.get("type", "string")}
+            if spec.get("description"):
+                prop["description"] = spec["description"]
+            if spec.get("enum"):
+                prop["enum"] = list(spec["enum"])
+            properties[name] = prop
+            if spec.get("required"):
+                required.append(name)
+
+        schemas.append({
+            "type": "function",
+            "function": {
+                "name": entry["name"],
+                "description": " ".join((entry.get("description") or "").split()),
+                "parameters": {
+                    "type": "object",
+                    "properties": properties,
+                    "required": required,
+                },
+            },
+        })
+    return schemas
+
+
+def native_router_prompt() -> str:
+    """The system message for native tool-calling.
+
+    Much shorter than router_prompt: the tool list and its argument shapes reach
+    the model through the tools field, so all that is left is the judgement --
+    when to reach for a tool at all, and which of the four search tools answers
+    which kind of question.
+    """
+    return "\n".join([
+        "Decide whether the user's message needs one of your tools, and call it if so.",
+        "",
+        "- Use a tool whenever it would be more accurate than answering from memory: "
+        "arithmetic, unit and currency conversion, the current time, anything about "
+        "the user's own files, mail, calendar, reminders, tasks or stored memories.",
+        "- You cannot see the user's calendar, mail, files, tasks, screen or clipboard "
+        "without calling a tool. If they ask about any of those and you do not call "
+        "one, you will have made the answer up.",
+        "- Pass the user's own wording through for time phrases; do not resolve dates.",
+        "- Four tools search four different places. Pick by where the answer lives, "
+        "not by what the subject is:",
+        "    documents.search - what a document SAYS (a figure, a date, a clause)",
+        "    system.find_files - WHERE a file is, or what it is called",
+        "    mail.read        - anything in an email",
+        "    capture.recall   - anything said in a recorded meeting",
+        "- Someone telling you they have done or finished something is updating a "
+        "task, not giving you a fact to remember.",
+        "- If the user tells you to remember, note or forget something about them, "
+        "that is memory.remember or memory.forget. Agreeing in conversation stores "
+        "nothing.",
+        "- Undoing is not a tool. Answer normally.",
+        "- If no tool is needed, just reply.",
+    ])
+
+
 def router_prompt(catalog: list[dict[str, Any]]) -> str:
     """Instructions for the routing pass. Returns JSON, always."""
     return "\n".join(
@@ -62,10 +175,14 @@ def router_prompt(catalog: list[dict[str, Any]]) -> str:
             "needs one or more tools, then reply with JSON and nothing else.",
             "",
             "Available tools:",
-            json.dumps(catalog, indent=2),
+            tool_lines(catalog),
             "",
             "Reply with exactly this shape:",
-            '{"skills": [{"name": "<tool name>", "args": {...}}], "reply": null}',
+            # A real tool name, not a "<tool name>" placeholder. The model copied
+            # the placeholder through verbatim -- the sweep caught a call to a
+            # tool literally named "<tool name>" -- because a angle-bracketed
+            # slot looks like something to echo, not something to fill in.
+            '{"skills": [{"name": "utils.time", "args": {}}], "reply": null}',
             "",
             "Rules:",
             '- If no tool is needed, use {"skills": [], "reply": null} and the next stage will answer.',
@@ -82,10 +199,21 @@ def router_prompt(catalog: list[dict[str, Any]]) -> str:
             "that is always memory.remember or memory.forget. Agreeing in conversation "
             "does not store anything, so failing to route it means silently not doing "
             "what they asked.",
-            "- Anything the user asks about the content of their own paperwork -- a "
-            "contract, lease, warranty, invoice, report, notes -- is documents.search. "
-            "memory.list is only for facts they explicitly asked you to remember, and is "
-            "never how you look something up in a file.",
+            # documents.search used to swallow five of every nine misroutes: mail
+            # searches, file searches and recording searches all landed there,
+            # because the rule that lived here listed "invoice" and "report" and
+            # the model matched on the noun instead of on where the answer lives.
+            # Sorting by *source* rather than by subject fixed it.
+            "- Four different tools search four different places. Pick by where the "
+            "answer lives, not by what the subject is:",
+            "    documents.search - what a document SAYS (a figure, a date, a clause)",
+            "    system.find_files - WHERE a file is, or what it is called",
+            "    mail.read        - anything in an email",
+            "    capture.recall   - anything said in a recorded meeting",
+            "  'What did the lease say about pets' is documents.search. 'Where did I "
+            "put the lease' is system.find_files. Same document, different question.",
+            "- memory.list is only for facts the user explicitly asked you to remember, "
+            "and is never how you look something up in a file.",
             "- A question whose answer is written down somewhere is a lookup, not a "
             "calculation. Only use utils.calculate when there is actual arithmetic to do.",
             "- You cannot see the user's calendar, mail, files or tasks without calling a "
@@ -94,7 +222,15 @@ def router_prompt(catalog: list[dict[str, Any]]) -> str:
             "- You also cannot see their screen or clipboard. If they say 'this', 'what I "
             "copied' or 'what I'm looking at' without giving you the text, call "
             "screen.clipboard (fast) or screen.read (slow, only when it could not have "
-            "been copied).",
+            "been copied). 'What I copied' and 'this text' are screen.clipboard; "
+            "'what I'm looking at', 'what's on my screen' and 'this window' are "
+            "screen.read, because a window cannot be copied.",
+            # "I've finished the passport task" was routing to memory.remember,
+            # which would have stored the sentence as a standing fact about the
+            # user instead of ticking anything off.
+            "- Someone telling you they have done, finished or completed something is "
+            "updating a task, not giving you a fact to remember. memory.remember is "
+            "only for things that stay true.",
             "",
             # Small models follow demonstrations far more reliably than rules. These
             # four cover the decision boundary that matters: act, compute, recall,
@@ -147,6 +283,61 @@ def router_prompt(catalog: list[dict[str, Any]]) -> str:
             "",
             'user: what do you know about me?',
             '{"skills": [{"name": "memory.list", "args": {}}], "reply": null}',
+            "",
+            # Without this the model helpfully supplies the machine's Windows
+            # zone name, which is not IANA and resolves to nothing.
+            'user: what time is it?',
+            '{"skills": [{"name": "utils.time", "args": {}}], "reply": null}',
+            "",
+            'user: what time is it in Tokyo?',
+            '{"skills": [{"name": "utils.time", "args": {"timezone_name": "Asia/Tokyo"}}], '
+            '"reply": null}',
+            "",
+            # Everything below was added because the routing sweep caught it
+            # going somewhere else. Each pair is a boundary the model gets wrong
+            # from the descriptions alone.
+            "",
+            'user: where did I save the invoice',
+            '{"skills": [{"name": "system.find_files", "args": {"query": "invoice"}}], '
+            '"reply": null}',
+            "",
+            'user: find my tax return pdf',
+            '{"skills": [{"name": "system.find_files", "args": {"query": "tax return", '
+            '"extension": "pdf"}}], "reply": null}',
+            "",
+            'user: find the email from the landlord',
+            '{"skills": [{"name": "mail.read", "args": {"query": "landlord"}}], "reply": null}',
+            "",
+            'user: find the part of the recording about deadlines',
+            '{"skills": [{"name": "capture.recall", "args": {"query": "deadlines"}}], '
+            '"reply": null}',
+            "",
+            # "What have you remembered" is a read. Routing it to the write was
+            # storing the question itself as a fact about the user.
+            'user: what have you remembered so far',
+            '{"skills": [{"name": "memory.list", "args": {}}], "reply": null}',
+            "",
+            # Removal verbs -- drop, remove, get rid of -- routed nowhere at all.
+            'user: drop the reminder about the bins',
+            '{"skills": [{"name": "planning.cancel_reminder", "args": {"which": "bins"}}], '
+            '"reply": null}',
+            "",
+            'user: remove buying milk from my list entirely',
+            '{"skills": [{"name": "planning.delete_task", "args": {"which": "buy milk"}}], '
+            '"reply": null}',
+            "",
+            'user: remove that transcript',
+            '{"skills": [{"name": "capture.delete", "args": {"query": "last"}}], "reply": null}',
+            "",
+            'user: what did I agree to do in that meeting',
+            '{"skills": [{"name": "capture.save_actions", "args": {}}], "reply": null}',
+            "",
+            'user: close Chrome',
+            '{"skills": [{"name": "system.close_app", "args": {"app": "Chrome"}}], "reply": null}',
+            "",
+            'user: give me a nudge about the bins tomorrow morning',
+            '{"skills": [{"name": "planning.add_reminder", "args": {"what": "the bins", '
+            '"when": "tomorrow morning"}}], "reply": null}',
             "",
             'user: thanks, that helps',
             '{"skills": [], "reply": null}',

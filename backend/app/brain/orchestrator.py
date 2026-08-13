@@ -40,6 +40,26 @@ _UNDO = re.compile(
     re.IGNORECASE,
 )
 
+# Turns that cannot possibly need a tool, so they do not pay for a routing call.
+#
+# Deliberately a fixed set of whole phrases rather than a pattern: the cost of
+# being wrong is asymmetric. Skipping the router on something that did need a
+# tool produces a confident answer with nothing behind it, which is the exact
+# failure _guard_ungrounded_reply exists to catch. Skipping it on "thanks" saves
+# half the turn. So the set only contains phrases that are complete in
+# themselves and carry no request — anything longer still routes.
+_PLEASANTRIES = {
+    "hi", "hello", "hey", "yo", "good morning", "good afternoon", "good evening",
+    "thanks", "thank you", "thanks a lot", "thank you very much", "ta", "cheers",
+    "ok", "okay", "cool", "nice", "great", "perfect", "got it", "understood",
+    "never mind", "nevermind", "no worries", "sorry",
+    "bye", "goodbye", "good night", "see you", "later",
+    # Spanish — the UI ships in both languages (REQ-28).
+    "hola", "buenos días", "buenos dias", "buenas tardes", "buenas noches",
+    "gracias", "muchas gracias", "vale", "genial", "perfecto", "entendido",
+    "adiós", "adios", "hasta luego", "buenas",
+}
+
 # Sources the model cannot possibly know about without calling a tool. Memory
 # facts are deliberately absent: those are injected into the system prompt, so
 # answering from them without a tool call is legitimate.
@@ -140,6 +160,16 @@ def handle_turn(
     system = prompts.system_prompt(config, facts)
     history = [turn.as_message() for turn in short_term.window(session_id)]
 
+    # 3a. A greeting needs an answer, but it never needs a tool. Routing it costs
+    # a whole model call to be told so — half the latency of the turn, spent
+    # establishing that "thanks" is not a request.
+    if normalized in _PLEASANTRIES:
+        try:
+            answer = llm.chat([{"role": "system", "content": system}, *history])
+        except llm.LLMUnavailable as exc:
+            return _finish(session_id, TurnResult(reply=str(exc), error="llm_unavailable"))
+        return _finish(session_id, TurnResult(reply=answer.text))
+
     try:
         route = _route(system, history, text)
     except llm.LLMUnavailable as exc:
@@ -219,9 +249,34 @@ def _run_confirmation(action_id: str, ctx: SkillContext) -> TurnResult:
 
 
 def _route(system: str, history: list[dict[str, str]], text: str) -> dict[str, Any] | None:
+    """Decide which skills, if any, this turn needs.
+
+    Two mechanisms, same return shape. Where the model advertises tool-calling
+    the tools go in the request's own tools field, which is both more accurate
+    and less prompt to carry. Where it does not -- llama3, and most of what
+    Ollama serves -- the tools are described in the prompt and the answer comes
+    back as JSON. The JSON path is the floor, not a legacy branch: it is what
+    keeps the assistant working when someone changes one line of config.
+    """
     available = catalog()
     if not available:
         return None
+
+    if load_config().brain.native_tools and llm.supports_tools():
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "system", "content": prompts.native_router_prompt()},
+            *history[-6:],
+            {"role": "user", "content": text},
+        ]
+        reply = llm.chat(
+            messages, temperature=0.0, tools=prompts.tool_schemas(available)
+        )
+        # A reply with no tool calls is a legitimate answer, not a failure: the
+        # model decided nothing needed running. Carrying its text through means
+        # the caller can use it instead of paying for a second call.
+        return {"skills": reply.tool_calls, "reply": reply.text or None}
+
     messages = [
         {"role": "system", "content": system},
         {"role": "system", "content": prompts.router_prompt(available)},
