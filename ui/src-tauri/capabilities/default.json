@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/windows-schema.json",
+  "identifier": "default",
+  "description": "What the main window is allowed to ask the shell to do. Deliberately short: the assistant's capabilities live behind the Action Gate in the backend, and anything granted here would sit outside it.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "notification:default"
+  ]
+}

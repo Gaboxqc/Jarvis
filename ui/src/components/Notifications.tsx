@@ -12,6 +12,7 @@
 
 import { useEffect, useState } from "react";
 import { api, type Notification } from "../api";
+import { notifyDesktop } from "../desktopNotify";
 import type { Key } from "../i18n";
 
 const POLL_MS = 5000;
@@ -27,6 +28,18 @@ export function Notifications({ t }: { t: (key: Key) => string }) {
         const { notifications } = await api.notifications();
         if (alive && notifications.length) {
           setItems((prior) => [...prior, ...notifications]);
+
+          // Raise the OS notification too, unless the window is right here in
+          // front of the user — in which case the toast has already done the
+          // job and a system banner on top of it is just noise.
+          //
+          // The queue is drained destructively, so this is the only chance to
+          // do it: there is no second read of the same reminder.
+          if (!document.hasFocus()) {
+            for (const item of notifications) {
+              void notifyDesktop(item.title, item.body);
+            }
+          }
         }
       } catch {
         // Backend down: the prerequisite banner already says so.

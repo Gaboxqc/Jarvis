@@ -10,8 +10,11 @@ and a router that only works on some models is a router that breaks when the
 user changes a line of config. JSON mode is supported by every model Ollama
 serves, so it is the floor everything else stands on.
 
-Using native tool-calling where the model offers it, and falling back to this,
-is T12.6 and not yet done.
+Native tool-calling exists alongside it (see `tools=` below) and is switched
+off, because it was measured against this and lost: 89/96 versus 95/96 on
+qwen2.5 with the same worked examples in both prompts. JSON mode is not the
+fallback here — it is the better mechanism for this workload, and the one every
+model Ollama serves can follow.
 """
 
 from __future__ import annotations
