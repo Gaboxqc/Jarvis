@@ -164,6 +164,26 @@ def native_router_prompt() -> str:
         "nothing.",
         "- Undoing is not a tool. Answer normally.",
         "- If no tool is needed, just reply.",
+        "",
+        # The JSON router carries worked examples and beats this path without
+        # them, so the same demonstrations are repeated here. They are prose
+        # rather than tool-call messages because the point is the *decision*,
+        # and a small model reads "call X" as readily as a structured example.
+        "Worked examples, as reminders of the boundaries above:",
+        "  'where did I save the invoice'          -> system.find_files",
+        "  'how much was the security deposit'     -> documents.search",
+        "  'find the email from the landlord'      -> mail.read",
+        "  'check what my boss said about Friday'  -> mail.read",
+        "  'what came up about hiring on the call' -> capture.recall",
+        "  'what am I looking at' / 'this window'  -> screen.read",
+        "  'what did I copy'                       -> screen.clipboard",
+        "  'what have you remembered'              -> memory.list",
+        "  'remember I prefer short answers'       -> memory.remember",
+        "  'drop the reminder about the bins'      -> planning.cancel_reminder",
+        "  'I've finished the passport task'       -> planning.complete_task",
+        "  'open Spotify' / 'fire up the calculator' -> system.launch_app",
+        "  'close Chrome'                          -> system.close_app",
+        "  'thanks, that helps'                    -> no tool",
     ])
 
 

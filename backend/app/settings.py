@@ -132,13 +132,25 @@ class BrainSettings:
     # truncated tool list and nothing anywhere said so. Set it explicitly.
     context_tokens: int = 8192
     # Route via the model's own tool-calling instead of the JSON prompt, where
-    # the model supports it. Off by default because it is unmeasured: the
-    # machine it was written on lost its GPU partway through, and the only
-    # figures collected came from CPU inference, where 48 tool schemas took
-    # 165s for a single call. That is a fact about a CPU, not about
-    # tool-calling, and switching the default on the strength of it would be
-    # guessing. Turn on, run tools/routing_sweep.py --native --holdout, and
-    # compare against 21/24 before making it the default.
+    # the model supports it.
+    #
+    # Off because it was measured and lost. On qwen2.5, same cases, same
+    # worked examples in both prompts:
+    #
+    #                    tuned      held out
+    #     JSON prompt    95/96      21/24
+    #     native tools   89/96      20/24
+    #
+    # This was expected to win, which is why the mechanism exists at all. It
+    # does not. Native is marginally faster -- 110s against 116s over 96 cases --
+    # and gives that back in accuracy several times over. Its failures are
+    # mostly refusals to route rather than wrong routes, which is the safer
+    # shape of being wrong, but "safely unhelpful" is still unhelpful.
+    #
+    # Kept because it costs nothing switched off and the answer is
+    # model-specific: a larger model, or one tuned harder for tool use, could
+    # invert this. Re-run tools/routing_sweep.py --native --holdout before
+    # believing it has.
     native_tools: bool = False
 
 
