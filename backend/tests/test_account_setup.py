@@ -7,8 +7,8 @@ write them is only defensible while it stays narrow.
 
 Two lines must hold:
 
-  no password ever reaches the config file
-  no `ics` calendar URL is accepted, because that URL *is* the credential
+  no secret ever reaches the config file -- not a password, and not an ics
+  calendar URL, which is a bearer credential wearing a URL's clothes
 
 The rest is ordinary validation, plus the same comment-preservation guarantee
 the settings writer has: the config's comments are its only documentation.
@@ -63,21 +63,66 @@ def test_a_password_is_never_written_to_the_config(config_with_connectors, field
     assert "hunter2" not in config_with_connectors.read_text(encoding="utf-8")
 
 
-def test_an_ical_secret_address_is_refused(config_with_connectors):
+def test_an_ical_address_never_lands_in_the_config_file(config_with_connectors):
     """Google's "secret address" is a bearer credential in a URL's clothes.
 
-    Anyone holding it reads the whole calendar without logging in, so it stays
-    hand-edited in a gitignored file rather than travelling through an API, a
-    log line and a browser field.
+    Anyone holding it reads the whole calendar without logging in. It used to be
+    refused outright and left to hand-editing; it is now addable from the UI,
+    which is strictly better *provided* the address goes to the OS credential
+    store instead of the config file. `url` is not an allowed field for ics, so
+    there is no way to write one here even by asking.
     """
-    with pytest.raises(setup.SetupError, match="secret address"):
+    with pytest.raises(setup.SetupError, match="Not something a ics account has"):
         setup.add_account("calendar", "ics", {
             "label": "personal",
             "url": "https://calendar.google.com/calendar/ical/abc123secret/basic.ics",
         })
-
-    assert accounts(config_with_connectors, "calendar") == []
     assert "abc123secret" not in config_with_connectors.read_text(encoding="utf-8")
+
+
+def test_an_ics_calendar_is_added_with_no_address_in_the_file(config_with_connectors):
+    setup.add_account("calendar", "ics", {"label": "personal"})
+
+    entry = accounts(config_with_connectors, "calendar")[0]
+    assert entry == {"provider": "ics", "label": "personal"}
+    # Nothing resembling an address: the config entry only says the calendar
+    # exists. The address arrives separately as a credential.
+    assert "url" not in entry
+
+
+def test_the_ics_address_is_read_from_the_credential_store(config_with_connectors, monkeypatch):
+    from app.connectors import base, credentials
+
+    setup.add_account("calendar", "ics", {"label": "personal"})
+    secret = "https://calendar.google.com/calendar/ical/abc123secret/basic.ics"
+    monkeypatch.setattr(credentials, "fetch", lambda ref: secret)
+
+    account = base.find("calendar", "personal")
+    assert account.resolved_url == secret
+    assert account.needs_credential is True
+
+
+def test_a_hand_edited_ics_url_still_works(workspace, config_file):
+    """Existing calendars were configured with the URL in the file.
+
+    Moving where the address lives must not silently break a calendar that was
+    set up before the move.
+    """
+    from app.connectors import base
+    from app.settings import reset_config_cache
+
+    config_file.write_text(
+        "connectors:\n"
+        "  calendar:\n"
+        "    - label: old\n"
+        "      provider: ics\n"
+        "      url: https://example.com/legacy.ics\n"
+        "  mail: []\n",
+        encoding="utf-8",
+    )
+    reset_config_cache()
+
+    assert base.find("calendar", "old").resolved_url == "https://example.com/legacy.ics"
 
 
 def test_an_unknown_field_is_refused_rather_than_dropped(config_with_connectors):
@@ -114,9 +159,9 @@ def test_a_mail_account_is_added(config_with_connectors):
     assert entry["host"] == "imap.gmail.com"
     assert "password" not in entry
 
-    # The account is inert until it has a password and nothing else says so.
-    assert result["needs_password"] is True
-    assert result["next_step"] == "/connect mail gmail"
+    # The account is inert until its secret is stored, and nothing else says so.
+    assert result["needs_secret"] is True
+    assert result["secret_kind"] == "password"
 
 
 def test_a_caldav_calendar_is_added(config_with_connectors):
@@ -239,3 +284,94 @@ def test_the_generic_settings_writer_still_refuses_connectors(config_with_connec
 
     with pytest.raises(preferences.NotWritable):
         preferences.update({"connectors": {"mail": [{"label": "sneaky"}]}})
+
+
+# -- setting the password from the app (REQ-26) ----------------------------
+#
+# This moved out of the terminal because an assistant whose accounts can only be
+# set up by typing commands is not configurable by the people it is for. The
+# secret now crosses one loopback hop, so these pin what holds around it.
+
+
+@pytest.fixture
+def client(config_with_connectors):
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    setup.add_account("mail", "imap", {
+        "label": "gmail", "host": "imap.gmail.com", "username": "me@gmail.com",
+    })
+    with TestClient(app) as c:
+        yield c
+
+
+def test_a_password_can_be_stored_from_the_app(client, monkeypatch):
+    from app.connectors import credentials
+
+    saved = {}
+    monkeypatch.setattr(credentials, "store", lambda ref, secret: saved.update({ref: secret}))
+
+    response = client.put("/connectors/mail/gmail/credential", json={"secret": "hunter2"})
+
+    assert response.status_code == 200
+    assert saved == {"mail:gmail": "hunter2"}
+
+
+def test_the_password_is_never_echoed_back(client, monkeypatch):
+    """The response says a reference, never the value."""
+    from app.connectors import credentials
+
+    monkeypatch.setattr(credentials, "store", lambda ref, secret: None)
+    body = client.put("/connectors/mail/gmail/credential", json={"secret": "hunter2"}).json()
+
+    assert "hunter2" not in json_dumps(body)
+    assert body["credential_ref"] == "mail:gmail"
+
+
+def test_the_password_is_never_logged(client, monkeypatch, caplog):
+    from app.connectors import credentials
+
+    monkeypatch.setattr(credentials, "store", lambda ref, secret: None)
+    with caplog.at_level("DEBUG"):
+        client.put("/connectors/mail/gmail/credential", json={"secret": "hunter2"})
+
+    assert "hunter2" not in caplog.text
+
+
+def test_the_password_never_reaches_the_config_file(client, config_with_connectors, monkeypatch):
+    from app.connectors import credentials
+
+    monkeypatch.setattr(credentials, "store", lambda ref, secret: None)
+    client.put("/connectors/mail/gmail/credential", json={"secret": "hunter2"})
+
+    assert "hunter2" not in config_with_connectors.read_text(encoding="utf-8")
+
+
+def test_no_endpoint_hands_a_secret_back(client, monkeypatch):
+    """The whole surface, not just the one that stored it."""
+    from app.connectors import credentials
+
+    monkeypatch.setattr(credentials, "store", lambda ref, secret: None)
+    monkeypatch.setattr(credentials, "fetch", lambda ref: "hunter2")
+    client.put("/connectors/mail/gmail/credential", json={"secret": "hunter2"})
+
+    for path in ("/connectors", "/health", "/settings", "/state"):
+        response = client.get(path)
+        if response.status_code == 200:
+            assert "hunter2" not in json_dumps(response.json()), path
+
+
+def test_an_empty_password_is_refused(client):
+    assert client.put("/connectors/mail/gmail/credential", json={"secret": "   "}).status_code == 400
+
+
+def test_setting_a_password_for_an_unknown_account_is_404(client):
+    response = client.put("/connectors/mail/nothing/credential", json={"secret": "x"})
+    assert response.status_code == 404
+
+
+def json_dumps(value) -> str:
+    import json
+
+    return json.dumps(value, default=str)

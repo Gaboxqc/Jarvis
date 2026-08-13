@@ -59,7 +59,29 @@ class ConnectorConfig:
 
     @property
     def needs_credential(self) -> bool:
-        return self.provider in {"caldav", "imap"}
+        # `ics` is in here because a Google "secret address in iCal format" is a
+        # bearer credential: whoever holds the URL reads the whole calendar
+        # without logging in. Storing it in the OS credential store rather than
+        # in kai.config.yaml keeps the config file safe to open in front of
+        # someone or paste into a bug report, which is the promise this module
+        # is built on.
+        #
+        # An ics account configured the old way, with the URL written into the
+        # file, keeps working -- see `resolved_url`.
+        return self.provider in {"caldav", "imap", "ics"}
+
+    @property
+    def resolved_url(self) -> str:
+        """The URL to fetch, wherever it happens to live.
+
+        Config first, so existing hand-edited calendars are untouched; the
+        credential store otherwise, which is where the UI puts it.
+        """
+        if self.url:
+            return self.url
+        if self.provider == "ics":
+            return credentials.fetch(self.credential_ref) or ""
+        return ""
 
     @property
     def has_credential(self) -> bool:
@@ -142,6 +164,30 @@ def find(kind: str, label: str = "") -> ConnectorConfig:
             return entry
     names = ", ".join(e.label for e in entries)
     raise ConnectorError(f"There's no {kind} account called '{label}'. I have: {names}.")
+
+
+def check(kind: str, label: str = "") -> dict[str, Any]:
+    """Try an account and report whether it works, changing nothing.
+
+    Setup feedback. Without it a wrong password surfaces days later, as an
+    error about something the user was not doing at the time.
+    """
+    config = find(kind, label)
+    if kind == "mail":
+        from . import mail
+
+        return mail.check(config)
+
+    from datetime import timedelta
+
+    from . import calendar as calendar_connector
+
+    since, until = calendar_connector.day_bounds()
+    try:
+        events = calendar_connector.events_between(config, since, until + timedelta(days=14))
+        return {"ok": True, "label": config.label, "events": len(events)}
+    except ConnectorError as exc:
+        return {"ok": False, "label": config.label, "error": str(exc)}
 
 
 def status() -> dict[str, Any]:

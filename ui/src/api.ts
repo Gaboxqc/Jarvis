@@ -146,14 +146,13 @@ export interface Health {
 export type AccountKind = "mail" | "calendar";
 
 /**
- * `ics` is deliberately absent.
+ * `ics` calendars carry no URL in `AccountFields`, deliberately.
  *
  * A Google iCal URL is what they call a "secret address" — anyone holding it
- * reads the whole calendar without logging in, so it is a credential, and the
- * backend refuses it. Leaving it out of the type means the UI cannot offer a
- * field that would end up carrying one.
+ * reads the whole calendar without logging in — so it is a credential and goes
+ * through `setCredential`, into the OS store, never into the config file.
  */
-export type AccountProvider = "imap" | "caldav";
+export type AccountProvider = "imap" | "caldav" | "ics";
 
 export interface AccountFields {
   label: string;
@@ -190,9 +189,9 @@ export interface AddedAccount {
   label: string;
   provider: string;
   config_file: string;
-  /** The command that stores the password, e.g. "/connect mail gmail". */
-  next_step: string;
-  needs_password: boolean;
+  needs_secret: boolean;
+  /** "password" for mail and CalDAV; "url" for an iCal calendar. */
+  secret_kind: "password" | "url";
 }
 
 // -- calls ----------------------------------------------------------------
@@ -323,6 +322,27 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ kind, provider, fields }),
     }),
+
+  /**
+   * Store an account's secret.
+   *
+   * It leaves this process once, over loopback, and the backend writes it to
+   * the OS credential store. No endpoint returns it afterwards and it never
+   * reaches kai.config.yaml. Callers should not keep it in state longer than
+   * the submit.
+   */
+  setCredential: (kind: AccountKind, label: string, secret: string) =>
+    request<{ stored: boolean; credential_ref: string }>(
+      `/connectors/${kind}/${encodeURIComponent(label)}/credential`,
+      { method: "PUT", body: JSON.stringify({ secret }) },
+    ),
+
+  /** Try the account and report whether it actually works. */
+  checkAccount: (kind: AccountKind, label: string) =>
+    request<{ ok: boolean; error?: string; unread?: number; events?: number }>(
+      `/connectors/${kind}/${encodeURIComponent(label)}/check`,
+      { method: "POST", timeoutMs: 60_000 },
+    ),
 
   removeAccount: (kind: AccountKind, label: string) =>
     request<{ removed: string }>(

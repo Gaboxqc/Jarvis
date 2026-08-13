@@ -377,6 +377,66 @@ def connector_status() -> dict[str, Any]:
     return connectors.status()
 
 
+class CredentialRequest(BaseModel):
+    # Never logged, never echoed back, never written to the config file. It goes
+    # from this field into the OS credential store and nowhere else.
+    secret: str
+
+
+@app.put("/connectors/{kind}/{label}/credential")
+def set_credential(kind: str, label: str, request: CredentialRequest) -> dict[str, Any]:
+    """Store the password (or an iCal URL) for an account — REQ-26.
+
+    This used to be terminal-only, on the reasoning that a secret typed into a
+    form travels through a request body and a validation layer before it reaches
+    anywhere safe, whereas one typed at a getpass prompt goes straight from the
+    keyboard to the OS store. That reasoning is sound and was still the wrong
+    call: an assistant whose accounts can only be set up by running commands in
+    a terminal is not configurable by the people it is for, and "secure but
+    unused" is not secure.
+
+    So the secret crosses one loopback hop, and everything else is held tight
+    around it. The API binds 127.0.0.1 only and CORS is an allow-list, so no
+    page on the internet can reach this. The value is not logged here or in
+    credentials.store, is never returned by any endpoint, and never touches
+    kai.config.yaml. What lands on disk is a reference.
+    """
+    from .connectors import base as connectors
+    from .connectors import credentials
+
+    try:
+        account = connectors.find(kind, label)
+    except connectors.ConnectorError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    secret = (request.secret or "").strip()
+    if not secret:
+        raise HTTPException(status_code=400, detail="An empty password can't be stored.")
+
+    try:
+        credentials.store(account.credential_ref, secret)
+    except credentials.CredentialError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    # Report the reference, never the value.
+    return {"stored": True, "kind": kind, "label": label, "credential_ref": account.credential_ref}
+
+
+@app.post("/connectors/{kind}/{label}/check")
+def check_connector(kind: str, label: str) -> dict[str, Any]:
+    """Try the account and say whether it works.
+
+    Without this, a wrong password is discovered the next time the user asks
+    about their mail, as an error about something they were not doing.
+    """
+    from .connectors import base as connectors
+
+    try:
+        return connectors.check(kind, label)
+    except connectors.ConnectorError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.delete("/connectors/{kind}/{label}/credential")
 def forget_credential(kind: str, label: str) -> dict[str, Any]:
     from .connectors import credentials
