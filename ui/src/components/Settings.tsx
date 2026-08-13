@@ -29,6 +29,11 @@ export function Settings({ lang, setLang, t, voice }: Props) {
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  // Kept apart from `note` on purpose. A shared one rendered folder errors in
+  // the "Delete all local data" card at the foot of the page — 400px below the
+  // control that produced them, and off-screen at the default window size, so
+  // clicking Add on a bad path looked like nothing happening at all.
+  const [configNote, setConfigNote] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [config, setConfig] = useState<SettingsData["current"] | null>(null);
   const [saving, setSaving] = useState(false);
@@ -68,15 +73,20 @@ export function Settings({ lang, setLang, t, voice }: Props) {
   /** Save one nested patch and reload, so the screen shows what actually landed. */
   async function save(patch: Record<string, Record<string, unknown>>) {
     setSaving(true);
-    setNote(null);
+    setConfigNote(null);
     try {
       await api.saveSettings(patch);
       await load();
       await voice.refresh();
     } catch (caught) {
-      // The backend refuses bad folders by name and reason; showing its message
-      // verbatim is more use than "couldn't save".
-      setNote(caught instanceof ApiError ? caught.message : t("common.error"));
+      // Rethrown so whichever control made the change can show the reason next
+      // to itself. Only the egress switches have nowhere else to put it —
+      // FolderList renders its own, and setting this too showed the same
+      // message twice, once of them 500px from the control that caused it.
+      if ("privacy" in patch) {
+        setConfigNote(caught instanceof ApiError ? caught.message : t("common.error"));
+      }
+      throw caught;
     } finally {
       setSaving(false);
     }
@@ -217,6 +227,11 @@ export function Settings({ lang, setLang, t, voice }: Props) {
 
           <section className="card">
             <h2 className="small muted">{t("settings.egress")}</h2>
+            {configNote && (
+              <p className="small" role="alert" style={{ color: "var(--danger)" }}>
+                {configNote}
+              </p>
+            )}
             {config && (
               <>
                 <label className="spread">
@@ -226,7 +241,9 @@ export function Settings({ lang, setLang, t, voice }: Props) {
                     checked={Boolean(config.privacy?.allow_web_search)}
                     disabled={saving}
                     onChange={(e) =>
-                      void save({ privacy: { allow_web_search: e.target.checked } })
+                      void save({ privacy: { allow_web_search: e.target.checked } }).catch(
+                        () => undefined,
+                      )
                     }
                   />
                 </label>
@@ -237,7 +254,9 @@ export function Settings({ lang, setLang, t, voice }: Props) {
                     checked={Boolean(config.privacy?.allow_live_data)}
                     disabled={saving}
                     onChange={(e) =>
-                      void save({ privacy: { allow_live_data: e.target.checked } })
+                      void save({ privacy: { allow_live_data: e.target.checked } }).catch(
+                        () => undefined,
+                      )
                     }
                   />
                 </label>
@@ -248,7 +267,9 @@ export function Settings({ lang, setLang, t, voice }: Props) {
                     checked={Boolean(config.privacy?.allow_cloud_llm)}
                     disabled={saving}
                     onChange={(e) =>
-                      void save({ privacy: { allow_cloud_llm: e.target.checked } })
+                      void save({ privacy: { allow_cloud_llm: e.target.checked } }).catch(
+                        () => undefined,
+                      )
                     }
                   />
                 </label>

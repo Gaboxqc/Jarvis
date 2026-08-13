@@ -76,7 +76,7 @@ const STRINGS = {
     "folders.add": "Add",
     "folders.remove": "Remove",
     "folders.lastOne": "At least one folder is required.",
-    "folders.placeholder": "C:\Users\you\Documents",
+    "folders.placeholder": "C:/Users/you/Documents",
     "settings.language": "Language",
     "settings.danger": "Delete all local data",
     "settings.dangerNote":
@@ -233,7 +233,7 @@ const STRINGS = {
     "folders.add": "Añadir",
     "folders.remove": "Quitar",
     "folders.lastOne": "Hace falta al menos una carpeta.",
-    "folders.placeholder": "C:\Users\tu\Documents",
+    "folders.placeholder": "C:/Users/tu/Documents",
     "settings.language": "Idioma",
     "settings.danger": "Borrar todos los datos locales",
     "settings.dangerNote":

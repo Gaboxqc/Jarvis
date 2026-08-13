@@ -202,17 +202,27 @@ def _replace_list(existing: Any, value: list[Any]) -> None:
     never edited. Changing one folder should not silently delete the
     documentation of an unrelated setting.
 
-    Comments whose index no longer exists move to the last item rather than
-    being dropped, since they document what comes *after* the list.
+    A comment on the *final* item follows the end of the list rather than that
+    particular entry -- it is almost always documentation for the next setting
+    down -- so it moves to whatever the new final item is. Pinning it to its
+    old index instead strands it mid-list: growing allowed_roots by one left
+    "# Apps closed when a focus session starts" sitting between two folders,
+    reading as though it described one of them.
+
+    Comments on other items keep their position where it still exists.
     """
     comments = dict(getattr(getattr(existing, "ca", None), "items", {}) or {})
+    was_last = len(existing) - 1
     existing[:] = value
 
     if not comments or not hasattr(existing, "ca"):
         return
-    last = len(existing) - 1
+    now_last = len(existing) - 1
+    if now_last < 0:
+        return
     for index, token in comments.items():
-        existing.ca.items.setdefault(min(index, last) if last >= 0 else 0, token)
+        target = now_last if index >= was_last else min(index, now_last)
+        existing.ca.items.setdefault(target, token)
 
 
 def update(changes: dict[str, dict[str, Any]]) -> dict[str, Any]:

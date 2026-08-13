@@ -28,6 +28,23 @@ interface Props {
 
 export function FolderList({ label, hint, folders, busy, onChange, t }: Props) {
   const [draft, setDraft] = useState("");
+  // Held here rather than by the parent so the message lands under the input
+  // that caused it. A single shared note in the settings screen put folder
+  // errors in the card at the foot of the page, off-screen at the default
+  // window size, so a rejected path looked like a button that did nothing.
+  const [error, setError] = useState<string | null>(null);
+
+  async function apply(next: string[], keepDraft: boolean) {
+    setError(null);
+    try {
+      await onChange(next);
+      if (!keepDraft) setDraft("");
+    } catch (caught) {
+      // The backend refuses by name and reason -- "'Q:/nope' doesn't exist" --
+      // which is worth showing verbatim.
+      setError(caught instanceof Error ? caught.message : String(caught));
+    }
+  }
 
   function add(event: React.FormEvent) {
     event.preventDefault();
@@ -39,8 +56,7 @@ export function FolderList({ label, hint, folders, busy, onChange, t }: Props) {
       setDraft("");
       return;
     }
-    void onChange([...folders, value]);
-    setDraft("");
+    void apply([...folders, value], false);
   }
 
   return (
@@ -62,7 +78,7 @@ export function FolderList({ label, hint, folders, busy, onChange, t }: Props) {
                   // backend, and disabling the button explains why in advance
                   // rather than after a failed save.
                   title={folders.length === 1 ? t("folders.lastOne") : undefined}
-                  onClick={() => void onChange(folders.filter((f) => f !== folder))}
+                  onClick={() => void apply(folders.filter((f) => f !== folder), true)}
                 >
                   {t("folders.remove")}
                 </button>
@@ -85,6 +101,11 @@ export function FolderList({ label, hint, folders, busy, onChange, t }: Props) {
         </button>
       </form>
 
+      {error && (
+        <p className="small" role="alert" style={{ color: "var(--danger)" }}>
+          {error}
+        </p>
+      )}
       <p className="small muted">{hint}</p>
     </div>
   );
