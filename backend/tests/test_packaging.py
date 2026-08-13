@@ -344,3 +344,43 @@ def test_a_healthy_database_is_left_alone(tmp_path):
     finally:
         db.close_connection()
         db.set_db_path(None)
+
+
+# -- standard streams in a windowed build ---------------------------------
+
+
+def test_missing_stdout_is_replaced_before_uvicorn_configures_logging():
+    """A windowed build with nothing piping it has sys.stdout set to None.
+
+    uvicorn's default log config builds a StreamHandler on stdout and stderr,
+    and logging.dictConfig raises "Unable to configure formatter 'default'" on
+    the None -- killing the backend before it binds the port, with no console
+    to print the traceback to. The desktop app never hit this because
+    tauri-plugin-shell pipes both streams; running the executable directly does.
+    """
+    import server
+
+    original = sys.stdout, sys.stderr
+    try:
+        sys.stdout = None  # type: ignore[assignment]
+        sys.stderr = None  # type: ignore[assignment]
+        server.ensure_standard_streams()
+
+        assert sys.stdout is not None and sys.stderr is not None
+        # Has to be usable, not merely non-None.
+        sys.stdout.write("")
+        sys.stderr.write("")
+    finally:
+        for stream in (sys.stdout, sys.stderr):
+            if stream is not None and stream not in original:
+                stream.close()
+        sys.stdout, sys.stderr = original
+
+
+def test_existing_streams_are_left_alone():
+    """Replacing a working stream would send the sidecar's logs to nowhere."""
+    import server
+
+    original = sys.stdout
+    server.ensure_standard_streams()
+    assert sys.stdout is original

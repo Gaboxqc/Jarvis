@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import multiprocessing
+import os
 import socket
 import sys
 
@@ -21,6 +22,26 @@ DEFAULT_PORT = 8756
 
 # Below this, packaging has silently dropped capabilities (see _selftest).
 MIN_EXPECTED_SKILLS = 40
+
+
+def ensure_standard_streams() -> None:
+    """Give uvicorn's logging setup somewhere to write.
+
+    The bundle is built with `console=False`, so a windowed process that nobody
+    piped has `sys.stdout` and `sys.stderr` set to None. uvicorn's default log
+    config builds a StreamHandler on each of them, and `logging.dictConfig`
+    fails on the None with
+
+        ValueError: Unable to configure formatter 'default'
+
+    which kills the backend before it binds the port, with no console to print
+    the traceback to. The desktop app never hit it because tauri-plugin-shell
+    pipes both streams; running the executable directly does hit it, and so does
+    piping only one of the two.
+    """
+    for name in ("stdout", "stderr"):
+        if getattr(sys, name, None) is None:
+            setattr(sys, name, open(os.devnull, "w", encoding="utf-8"))
 
 
 def port_is_free(host: str, port: int) -> bool:
@@ -37,6 +58,8 @@ def main(argv: list[str] | None = None) -> int:
     # PyInstaller re-executes the bundle for each child process; without this a
     # frozen app that touches multiprocessing forks itself indefinitely.
     multiprocessing.freeze_support()
+    # Before anything can try to log. uvicorn configures logging during run().
+    ensure_standard_streams()
 
     parser = argparse.ArgumentParser(prog="kai-backend", description="Kai backend service")
     parser.add_argument("--host", default=DEFAULT_HOST)
