@@ -12,10 +12,11 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, type Health } from "../api";
+import { api, ApiError, type Health, type Settings as SettingsData } from "../api";
 import type { Key, Lang } from "../i18n";
 import type { Voice } from "../useVoice";
 import { Accounts } from "./Accounts";
+import { FolderList } from "./FolderList";
 
 interface Props {
   lang: Lang;
@@ -29,6 +30,8 @@ export function Settings({ lang, setLang, t, voice }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [config, setConfig] = useState<SettingsData["current"] | null>(null);
+  const [saving, setSaving] = useState(false);
 
   async function downloadModels() {
     setDownloading(true);
@@ -53,12 +56,31 @@ export function Settings({ lang, setLang, t, voice }: Props) {
 
   const load = useCallback(async () => {
     try {
-      setHealth(await api.health());
+      const [h, s] = await Promise.all([api.health(), api.settings()]);
+      setHealth(h);
+      setConfig(s.current);
       setError(null);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : t("common.error"));
     }
   }, [t]);
+
+  /** Save one nested patch and reload, so the screen shows what actually landed. */
+  async function save(patch: Record<string, Record<string, unknown>>) {
+    setSaving(true);
+    setNote(null);
+    try {
+      await api.saveSettings(patch);
+      await load();
+      await voice.refresh();
+    } catch (caught) {
+      // The backend refuses bad folders by name and reason; showing its message
+      // verbatim is more use than "couldn't save".
+      setNote(caught instanceof ApiError ? caught.message : t("common.error"));
+    } finally {
+      setSaving(false);
+    }
+  }
 
   useEffect(() => {
     void load();
@@ -74,8 +96,6 @@ export function Settings({ lang, setLang, t, voice }: Props) {
       setNote(caught instanceof ApiError ? caught.message : t("common.error"));
     }
   }
-
-  const yesNo = (value: boolean) => (value ? t("common.on") : t("common.off"));
 
   return (
     <div className="view">
@@ -197,20 +217,67 @@ export function Settings({ lang, setLang, t, voice }: Props) {
 
           <section className="card">
             <h2 className="small muted">{t("settings.egress")}</h2>
-            <div className="spread">
-              <span>{t("settings.webSearch")}</span>
-              <span className="muted small">{yesNo(health.privacy.web_search)}</span>
-            </div>
-            <div className="spread">
-              <span>{t("settings.liveData")}</span>
-              <span className="muted small">{yesNo(health.privacy.live_data)}</span>
-            </div>
-            <div className="spread">
-              <span>{t("settings.cloudLlm")}</span>
-              <span className="muted small">{yesNo(health.privacy.cloud_llm)}</span>
-            </div>
+            {config && (
+              <>
+                <label className="spread">
+                  <span>{t("settings.webSearch")}</span>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(config.privacy?.allow_web_search)}
+                    disabled={saving}
+                    onChange={(e) =>
+                      void save({ privacy: { allow_web_search: e.target.checked } })
+                    }
+                  />
+                </label>
+                <label className="spread">
+                  <span>{t("settings.liveData")}</span>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(config.privacy?.allow_live_data)}
+                    disabled={saving}
+                    onChange={(e) =>
+                      void save({ privacy: { allow_live_data: e.target.checked } })
+                    }
+                  />
+                </label>
+                <label className="spread">
+                  <span>{t("settings.cloudLlm")}</span>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(config.privacy?.allow_cloud_llm)}
+                    disabled={saving}
+                    onChange={(e) =>
+                      void save({ privacy: { allow_cloud_llm: e.target.checked } })
+                    }
+                  />
+                </label>
+              </>
+            )}
             <p className="small muted">{t("settings.egressNote")}</p>
           </section>
+
+          {config && (
+            <section className="card">
+              <h2 className="small muted">{t("settings.files")}</h2>
+              <FolderList
+                t={t}
+                busy={saving}
+                label={t("settings.allowedRoots")}
+                hint={t("settings.allowedRootsNote")}
+                folders={(config.system?.allowed_roots as string[]) ?? []}
+                onChange={(folders) => save({ system: { allowed_roots: folders } })}
+              />
+              <FolderList
+                t={t}
+                busy={saving}
+                label={t("settings.indexedFolders")}
+                hint={t("settings.indexedFoldersNote")}
+                folders={(config.documents?.indexed_folders as string[]) ?? []}
+                onChange={(folders) => save({ documents: { indexed_folders: folders } })}
+              />
+            </section>
+          )}
         </>
       )}
 

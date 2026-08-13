@@ -478,12 +478,18 @@ def read_settings() -> dict[str, Any]:
 
 @app.patch("/settings")
 def write_settings(patch: SettingsPatch) -> dict[str, Any]:
-    """Change a local preference.
+    """Change a setting (REQ-26).
 
-    Deliberately narrow. Anything governing what leaves this machine or what the
-    assistant may touch -- privacy switches, connectors, allowed file roots,
-    indexed folders -- is refused here and stays editable only by opening
-    kai.config.yaml (REQ-26).
+    What may be changed is `preferences.WRITABLE` and nothing else — a section
+    or key absent from it is a 403 whatever the caller asks for. `connectors.*`
+    is absent because those carry secrets and go through
+    /connectors/accounts, and `brain.ollama_host` is absent because redirecting
+    the model host would send every prompt somewhere else.
+
+    Egress switches and folder lists *are* writable, which they were not
+    before. Folder lists are validated against the filesystem, and every egress
+    change is logged with its previous value, so widening what the assistant can
+    reach leaves a record even though it no longer needs a text editor.
     """
     try:
         return preferences.update(patch.changes)
