@@ -201,3 +201,79 @@ def test_a_real_zone_still_resolves():
     assert result.ok
     assert "Asia/Tokyo:" in result.message
     assert "zoned" in result.data
+
+
+# -- native tool-calling (T12.6) ------------------------------------------
+#
+# Off by default and unmeasured, so these pin the plumbing rather than the
+# quality: that the schemas are well-formed, that both mechanisms hand back the
+# same shape, and that a model without tool support still routes.
+
+
+def test_schemas_are_valid_json_schema():
+    load_skills()
+    for schema in prompts.tool_schemas(catalog()):
+        function = schema["function"]
+        assert schema["type"] == "function"
+        assert function["name"] and function["description"]
+        params = function["parameters"]
+        assert params["type"] == "object"
+        for name in params["required"]:
+            assert name in params["properties"], f"{function['name']}: {name} required but absent"
+
+
+def test_schemas_keep_the_parameter_prose_that_lines_drop():
+    """tool_lines drops it to fit a prompt; these do not go in the prompt."""
+    load_skills()
+    by_name = {s["function"]["name"]: s for s in prompts.tool_schemas(catalog())}
+    search = by_name["documents.search"]["function"]["parameters"]["properties"]["query"]
+    assert search.get("description")
+
+
+def test_enums_survive_into_the_schema():
+    skill = Skill()
+    skill.name = "mail.mark"
+    skill.description = "Mark messages."
+    skill.parameters = (
+        SkillParam("action", "string", "What to do.", required=True,
+                   enum=("read", "unread")),
+    )
+    schema = prompts.tool_schemas([skill.to_catalog_entry()])[0]
+    assert schema["function"]["parameters"]["properties"]["action"]["enum"] == ["read", "unread"]
+
+
+def test_tool_calls_are_normalised_to_the_json_path_shape():
+    """Callers must not have to know which mechanism answered."""
+    message = {
+        "tool_calls": [
+            {"function": {"name": "utils.time", "arguments": {"timezone_name": "Asia/Tokyo"}}},
+            # Some models hand arguments back as a JSON string.
+            {"function": {"name": "utils.calculate", "arguments": '{"expression": "2+2"}'}},
+        ]
+    }
+    assert llm._read_tool_calls(message) == [
+        {"name": "utils.time", "args": {"timezone_name": "Asia/Tokyo"}},
+        {"name": "utils.calculate", "args": {"expression": "2+2"}},
+    ]
+
+
+def test_a_malformed_tool_call_is_dropped_not_guessed():
+    message = {"tool_calls": [
+        {"function": {"name": "", "arguments": {}}},           # no name
+        {"function": {"name": "utils.time", "arguments": "not json"}},
+        {"nonsense": True},
+    ]}
+    assert llm._read_tool_calls(message) == [{"name": "utils.time", "args": {}}]
+
+
+def test_no_tool_calls_is_an_empty_list():
+    assert llm._read_tool_calls({"content": "just talking"}) == []
+
+
+def test_native_routing_is_off_until_it_has_been_measured():
+    """A default set on the strength of no data is a guess.
+
+    The only figures collected came from CPU inference, where 48 tool schemas
+    cost 165s for one call. Flip this after running the sweep with --native.
+    """
+    assert BrainSettings.native_tools is False

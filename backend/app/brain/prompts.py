@@ -96,6 +96,77 @@ def tool_lines(catalog: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def tool_schemas(catalog: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The catalog as native tool definitions, for models that accept them.
+
+    The compact line format exists because the catalog had to fit in a prompt.
+    These do not go in the prompt: Ollama hands them to the model's own tool
+    template, so the full parameter descriptions are worth keeping here even
+    though tool_lines drops them.
+    """
+    schemas = []
+    for entry in catalog:
+        properties = {}
+        required = []
+        for name, spec in (entry.get("parameters") or {}).items():
+            prop = {"type": spec.get("type", "string")}
+            if spec.get("description"):
+                prop["description"] = spec["description"]
+            if spec.get("enum"):
+                prop["enum"] = list(spec["enum"])
+            properties[name] = prop
+            if spec.get("required"):
+                required.append(name)
+
+        schemas.append({
+            "type": "function",
+            "function": {
+                "name": entry["name"],
+                "description": " ".join((entry.get("description") or "").split()),
+                "parameters": {
+                    "type": "object",
+                    "properties": properties,
+                    "required": required,
+                },
+            },
+        })
+    return schemas
+
+
+def native_router_prompt() -> str:
+    """The system message for native tool-calling.
+
+    Much shorter than router_prompt: the tool list and its argument shapes reach
+    the model through the tools field, so all that is left is the judgement --
+    when to reach for a tool at all, and which of the four search tools answers
+    which kind of question.
+    """
+    return "\n".join([
+        "Decide whether the user's message needs one of your tools, and call it if so.",
+        "",
+        "- Use a tool whenever it would be more accurate than answering from memory: "
+        "arithmetic, unit and currency conversion, the current time, anything about "
+        "the user's own files, mail, calendar, reminders, tasks or stored memories.",
+        "- You cannot see the user's calendar, mail, files, tasks, screen or clipboard "
+        "without calling a tool. If they ask about any of those and you do not call "
+        "one, you will have made the answer up.",
+        "- Pass the user's own wording through for time phrases; do not resolve dates.",
+        "- Four tools search four different places. Pick by where the answer lives, "
+        "not by what the subject is:",
+        "    documents.search - what a document SAYS (a figure, a date, a clause)",
+        "    system.find_files - WHERE a file is, or what it is called",
+        "    mail.read        - anything in an email",
+        "    capture.recall   - anything said in a recorded meeting",
+        "- Someone telling you they have done or finished something is updating a "
+        "task, not giving you a fact to remember.",
+        "- If the user tells you to remember, note or forget something about them, "
+        "that is memory.remember or memory.forget. Agreeing in conversation stores "
+        "nothing.",
+        "- Undoing is not a tool. Answer normally.",
+        "- If no tool is needed, just reply.",
+    ])
+
+
 def router_prompt(catalog: list[dict[str, Any]]) -> str:
     """Instructions for the routing pass. Returns JSON, always."""
     return "\n".join(

@@ -71,6 +71,12 @@ brain:
   # anything longer without saying so. Raise this if you switch to a model with
   # a bigger window; lower it only if you are short of VRAM.
   context_tokens: 8192
+  # Route by handing the model tool definitions directly, instead of describing
+  # the tools in the prompt. Only some models can (qwen2.5 can, llama3 cannot),
+  # and it falls back automatically. Off because it has not been benchmarked
+  # yet -- turn it on and run backend/tools/routing_sweep.py --native --holdout
+  # to see whether it beats 21/24 before trusting it.
+  native_tools: false
   # Seconds before an LLM call is abandoned and reported as a failure (REQ-27)
   timeout_seconds: 120
 

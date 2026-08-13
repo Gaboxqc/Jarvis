@@ -249,9 +249,34 @@ def _run_confirmation(action_id: str, ctx: SkillContext) -> TurnResult:
 
 
 def _route(system: str, history: list[dict[str, str]], text: str) -> dict[str, Any] | None:
+    """Decide which skills, if any, this turn needs.
+
+    Two mechanisms, same return shape. Where the model advertises tool-calling
+    the tools go in the request's own tools field, which is both more accurate
+    and less prompt to carry. Where it does not -- llama3, and most of what
+    Ollama serves -- the tools are described in the prompt and the answer comes
+    back as JSON. The JSON path is the floor, not a legacy branch: it is what
+    keeps the assistant working when someone changes one line of config.
+    """
     available = catalog()
     if not available:
         return None
+
+    if load_config().brain.native_tools and llm.supports_tools():
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "system", "content": prompts.native_router_prompt()},
+            *history[-6:],
+            {"role": "user", "content": text},
+        ]
+        reply = llm.chat(
+            messages, temperature=0.0, tools=prompts.tool_schemas(available)
+        )
+        # A reply with no tool calls is a legitimate answer, not a failure: the
+        # model decided nothing needed running. Carrying its text through means
+        # the caller can use it instead of paying for a second call.
+        return {"skills": reply.tool_calls, "reply": reply.text or None}
+
     messages = [
         {"role": "system", "content": system},
         {"role": "system", "content": prompts.router_prompt(available)},

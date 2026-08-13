@@ -131,6 +131,15 @@ class BrainSettings:
     # The router prompt exceeded it, so the model was choosing skills from a
     # truncated tool list and nothing anywhere said so. Set it explicitly.
     context_tokens: int = 8192
+    # Route via the model's own tool-calling instead of the JSON prompt, where
+    # the model supports it. Off by default because it is unmeasured: the
+    # machine it was written on lost its GPU partway through, and the only
+    # figures collected came from CPU inference, where 48 tool schemas took
+    # 165s for a single call. That is a fact about a CPU, not about
+    # tool-calling, and switching the default on the strength of it would be
+    # guessing. Turn on, run tools/routing_sweep.py --native --holdout, and
+    # compare against 21/24 before making it the default.
+    native_tools: bool = False
 
 
 @dataclass(frozen=True)
@@ -281,6 +290,7 @@ def _build(raw: dict[str, Any], source: Path | None) -> Config:
             temperature=float(brain_raw.get("temperature", 0.4)),
             timeout_seconds=int(brain_raw.get("timeout_seconds", 120)),
             context_tokens=int(brain_raw.get("context_tokens", BrainSettings.context_tokens)),
+            native_tools=bool(brain_raw.get("native_tools", BrainSettings.native_tools)),
         ),
         privacy=PrivacySettings(
             allow_web_search=bool(privacy_raw.get("allow_web_search", True)),

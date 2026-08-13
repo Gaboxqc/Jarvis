@@ -206,16 +206,32 @@ HELDOUT: list[tuple[str, Want]] = [
 ]
 
 
-def route_once(prompt: str, text: str, model: str) -> tuple[str, dict]:
-    """One routing call. Returns the chosen skill name and its arguments."""
-    messages = [
-        {"role": "system", "content": prompt},
-        {"role": "user", "content": text},
-    ]
+def route_once(prompt: str, text: str, model: str, *, native: bool = False) -> tuple[str, dict]:
+    """One routing call. Returns the chosen skill name and its arguments.
+
+    `native` picks the tool-calling path instead of the JSON prompt, so the two
+    mechanisms can be scored against each other on identical cases.
+    """
     settings = llm.load_config().brain
     if model:
         settings = replace(settings, model=model)
 
+    if native:
+        messages = [
+            {"role": "system", "content": prompts.native_router_prompt()},
+            {"role": "user", "content": text},
+        ]
+        reply = llm.chat(messages, temperature=0.0, settings=settings,
+                         tools=prompts.tool_schemas(catalog()))
+        if not reply.tool_calls:
+            return "", {}
+        first = reply.tool_calls[0]
+        return str(first.get("name") or "<unnamed>"), (first.get("args") or {})
+
+    messages = [
+        {"role": "system", "content": prompt},
+        {"role": "user", "content": text},
+    ]
     reply = llm.chat(messages, json_mode=True, temperature=0.0, settings=settings)
     parsed = reply.as_json() or {}
     skills = parsed.get("skills") or []
@@ -227,12 +243,12 @@ def route_once(prompt: str, text: str, model: str) -> tuple[str, dict]:
     return str(first.get("name") or "<unnamed>"), (first.get("args") or {})
 
 
-def run(prompt, cases, model, known, required, *, verbose=True) -> tuple[list[dict], float]:
+def run(prompt, cases, model, known, required, *, verbose=True, native=False) -> tuple[list[dict], float]:
     """Route every case once and classify the answer."""
     rows = []
     started = time.perf_counter()
     for text, want in cases:
-        got, got_args = route_once(prompt, text, model)
+        got, got_args = route_once(prompt, text, model, native=native)
 
         acceptable = (want,) if isinstance(want, str) else want
         if got in acceptable:
@@ -270,6 +286,8 @@ def main() -> int:
     parser.add_argument("--compare", default="",
                         help="Comma-separated models to score side by side, e.g. llama3,qwen2.5")
     parser.add_argument("--json", default="", help="Write full results to this path.")
+    parser.add_argument("--native", action="store_true",
+                        help="Route via the model's own tool-calling instead of the JSON prompt.")
     parser.add_argument("--holdout", action="store_true",
                         help="Run the held-out phrasings the prompt was not tuned on.")
     args = parser.parse_args()
@@ -294,7 +312,8 @@ def main() -> int:
         results = {}
         for model in models:
             print(f"--- {model} ---")
-            rows, elapsed = run(prompt, cases, model, known, required, verbose=False)
+            rows, elapsed = run(prompt, cases, model, known, required,
+                                verbose=False, native=args.native)
             ok = sum(1 for r in rows if r["verdict"] == "ok")
             results[model] = rows
             print(f"    {ok}/{len(rows)}  ({ok / len(rows):.0%})  {elapsed:.0f}s")
@@ -318,7 +337,7 @@ def main() -> int:
         return 0
 
     # -- a single model ---------------------------------------------------
-    rows, elapsed = run(prompt, cases, args.model, known, required)
+    rows, elapsed = run(prompt, cases, args.model, known, required, native=args.native)
     counts = Counter(r["verdict"] for r in rows)
     covered = {r["got"] for r in rows if r["verdict"] == "ok" and r["got"]}
     unreachable = sorted(known - covered)

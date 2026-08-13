@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
@@ -36,9 +36,47 @@ class LLMUnavailable(Exception):
 class LLMReply:
     text: str
     raw: dict[str, Any]
+    # Populated only when the call passed `tools` and the model used them.
+    # Same shape either way -- [{"name": ..., "args": {...}}] -- so callers do
+    # not branch on which mechanism produced the answer.
+    tool_calls: list[dict[str, Any]] = field(default_factory=list)
 
     def as_json(self) -> dict[str, Any] | None:
         return extract_json(self.text)
+
+
+_capabilities: dict[str, frozenset[str]] = {}
+
+
+def supports_tools(settings: BrainSettings | None = None) -> bool:
+    """Whether this model can be given tool definitions natively.
+
+    Asked once per model and cached. A model that cannot do this is not a
+    problem -- routing falls back to the JSON prompt, which every model Ollama
+    serves can follow -- so a failure to answer is treated as "no" rather than
+    raised. Being wrong here costs accuracy, not correctness.
+    """
+    settings = settings or load_config().brain
+    if settings.model not in _capabilities:
+        try:
+            response = httpx.post(
+                f"{settings.ollama_host.rstrip('/')}/api/show",
+                json={"model": settings.model},
+                timeout=10.0,
+            )
+            response.raise_for_status()
+            found = response.json().get("capabilities") or []
+        except (httpx.HTTPError, json.JSONDecodeError, ValueError):
+            log.info("could not read capabilities for %s; assuming no tool support",
+                     settings.model)
+            found = []
+        _capabilities[settings.model] = frozenset(found)
+    return "tools" in _capabilities[settings.model]
+
+
+def reset_capability_cache() -> None:
+    """Test hook, and the escape hatch if a model is swapped under a running app."""
+    _capabilities.clear()
 
 
 def chat(
@@ -47,6 +85,7 @@ def chat(
     json_mode: bool = False,
     temperature: float | None = None,
     settings: BrainSettings | None = None,
+    tools: list[dict[str, Any]] | None = None,
 ) -> LLMReply:
     settings = settings or load_config().brain
     payload: dict[str, Any] = {
@@ -58,7 +97,12 @@ def chat(
             "num_ctx": settings.context_tokens,
         },
     }
-    if json_mode:
+    if tools:
+        payload["tools"] = tools
+    elif json_mode:
+        # Never both. Constraining output to JSON while also asking for tool
+        # calls makes the model emit a JSON *description* of a call instead of
+        # calling anything, and the tool_calls list comes back empty.
         payload["format"] = "json"
 
     _warn_if_oversized(messages, settings)
@@ -87,8 +131,33 @@ def chat(
     except (httpx.HTTPError, json.JSONDecodeError) as exc:
         raise LLMUnavailable(f"The model call failed: {exc}") from exc
 
-    text = ((body.get("message") or {}).get("content") or "").strip()
-    return LLMReply(text=text, raw=body)
+    message = body.get("message") or {}
+    text = (message.get("content") or "").strip()
+    return LLMReply(text=text, raw=body, tool_calls=_read_tool_calls(message))
+
+
+def _read_tool_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
+    """Normalise Ollama's tool_calls into [{"name", "args"}].
+
+    Arguments come back as an object from Ollama, but some models emit them as
+    a JSON string instead, so both are handled. Anything unparseable is dropped
+    rather than guessed at -- the caller treats an empty list as "the model did
+    not route", which degrades to a conversational answer.
+    """
+    calls = []
+    for entry in message.get("tool_calls") or []:
+        function = (entry or {}).get("function") or {}
+        name = function.get("name")
+        if not isinstance(name, str) or not name:
+            continue
+        raw_args = function.get("arguments")
+        if isinstance(raw_args, str):
+            try:
+                raw_args = json.loads(raw_args)
+            except json.JSONDecodeError:
+                raw_args = {}
+        calls.append({"name": name, "args": raw_args if isinstance(raw_args, dict) else {}})
+    return calls
 
 
 def estimate_tokens(messages: list[dict[str, str]]) -> int:
