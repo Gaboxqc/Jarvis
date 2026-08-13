@@ -375,3 +375,18 @@ def json_dumps(value) -> str:
     import json
 
     return json.dumps(value, default=str)
+
+
+def test_an_added_account_matches_the_file_s_indentation(config_with_connectors):
+    """ruamel's default sequence indent is two spaces; this file uses four.
+
+    Without matching it, the section the user just edited is the one that looks
+    wrong next to every hand-written list around it.
+    """
+    setup.add_account("mail", "imap", {
+        "label": "gmail", "host": "imap.gmail.com", "username": "me@gmail.com",
+    })
+
+    lines = config_with_connectors.read_text(encoding="utf-8").splitlines()
+    entry = next(line for line in lines if "provider: imap" in line)
+    assert entry.startswith("    - "), f"expected four-space indent, got {entry!r}"

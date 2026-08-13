@@ -225,6 +225,11 @@ def _load():
     yaml = YAML()
     yaml.preserve_quotes = True
     yaml.width = 4096  # the comments in this file are its documentation
+    # Match the shipped file's style, as preferences.py does. Without it an
+    # added account is emitted at ruamel's default two-space sequence indent
+    # while every hand-written list in the file uses four, so the section the
+    # user just edited is the one that looks wrong.
+    yaml.indent(mapping=2, sequence=4, offset=2)
     try:
         return yaml.load(config_path().read_text(encoding="utf-8")) or {}, yaml
     except OSError as exc:
