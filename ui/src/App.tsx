@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Chat } from "./components/Chat";
 import { History } from "./components/History";
 import { Memory } from "./components/Memory";
+import { Planner } from "./components/Planner";
 import { Prerequisite } from "./components/Prerequisite";
 import { Presence } from "./components/Presence";
 import { Settings } from "./components/Settings";
@@ -18,8 +19,8 @@ import { Notifications } from "./components/Notifications";
 import { detectLang, translate, type Key, type Lang } from "./i18n";
 import { useVoice } from "./useVoice";
 
-type Tab = "chat" | "memory" | "history" | "settings";
-const TABS: Tab[] = ["chat", "memory", "history", "settings"];
+type Tab = "chat" | "planner" | "memory" | "history" | "settings";
+const TABS: Tab[] = ["chat", "planner", "memory", "history", "settings"];
 
 export function App() {
   const [tab, setTab] = useState<Tab>("chat");
@@ -100,6 +101,7 @@ export function App() {
         <div hidden={tab !== "chat"}>
           <Chat lang={lang} t={t} onBusyChange={onBusyChange} voice={voice} />
         </div>
+        {tab === "planner" && <Planner t={t} />}
         {tab === "memory" && <Memory t={t} />}
         {tab === "history" && <History t={t} />}
         {tab === "settings" && <Settings lang={lang} setLang={setLang} t={t} voice={voice} />}
