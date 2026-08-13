@@ -22,6 +22,11 @@ const STRINGS = {
     "chat.you": "You",
     "chat.empty": "Nothing yet. Ask a question, or say what you need doing.",
     "chat.thinking": "Thinking",
+    // Named so the wait is legible: the two slowest parts of a turn cannot
+    // stream, and "Thinking" for eight seconds reads as a hang.
+    "chat.stageRouting": "Working out what you need",
+    "chat.stageWorking": "Doing it",
+    "chat.stageWriting": "Writing",
     "chat.log": "Conversation",
 
     "confirm.title": "Needs your go-ahead",
@@ -127,6 +132,9 @@ const STRINGS = {
     "chat.you": "Tú",
     "chat.empty": "Nada todavía. Pregunta algo, o di qué necesitas.",
     "chat.thinking": "Pensando",
+    "chat.stageRouting": "Viendo qué necesitas",
+    "chat.stageWorking": "Haciéndolo",
+    "chat.stageWriting": "Escribiendo",
     "chat.log": "Conversación",
 
     "confirm.title": "Necesita tu confirmación",

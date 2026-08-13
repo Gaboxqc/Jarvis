@@ -36,6 +36,9 @@ export function Chat({ t, onBusyChange, voice }: Props) {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
+  // Which slow phase is running. Routing and running a skill cannot stream, so
+  // without this the window sits blank through the longest part of the turn.
+  const [stage, setStage] = useState<string | null>(null);
 
   const nextId = useRef(1);
   const logEnd = useRef<HTMLDivElement>(null);
@@ -143,14 +146,67 @@ export function Chat({ t, onBusyChange, voice }: Props) {
     push("user", text);
     setDraft("");
     setBusy(true);
+    setStage(null);
+
+    // The reply is written into one message that grows, rather than a new
+    // message per piece.
+    const streamId = nextId.current++;
+    let streamed = "";
+    let showing = false;
+
     try {
       // The pending id travels with the turn, so "yes" typed into the box is
       // answered against the action actually on screen — never a later one.
-      apply(await api.turn(text, SESSION, pending?.action_id ?? null));
+      const result = await api.streamTurn(
+        text,
+        SESSION,
+        {
+          onStage: setStage,
+          onDelta: (piece) => {
+            streamed += piece;
+            if (!showing) {
+              showing = true;
+              // The stage line has done its job the moment real text appears.
+              setStage(null);
+              setMessages((prior) => [
+                ...prior,
+                { id: streamId, who: "kai", text: streamed },
+              ]);
+            } else {
+              setMessages((prior) =>
+                prior.map((m) => (m.id === streamId ? { ...m, text: streamed } : m)),
+              );
+            }
+          },
+        },
+        pending?.action_id ?? null,
+      );
+
+      // Settle on the authoritative text. The backend revises what it streamed —
+      // memory receipts get appended, and an ungrounded answer is replaced
+      // outright — so the streamed version is provisional until now.
+      setMessages((prior) => {
+        const rest = prior.filter((m) => m.id !== streamId);
+        // When an action is parked the reply *is* the preview, and the panel
+        // below already shows it; printing both duplicated the paragraph.
+        if (result.reply && !result.pending) {
+          return [
+            ...rest,
+            { id: streamId, who: "kai", text: result.reply, error: Boolean(result.error) },
+          ];
+        }
+        return rest;
+      });
+      setPending(result.pending ?? null);
+      // A confirmation is spoken too: with the screen not being looked at, an
+      // unspoken "go ahead?" is a turn that silently stalls.
+      void maybeSpeak(result.reply);
     } catch (error) {
+      setMessages((prior) => prior.filter((m) => m.id !== streamId));
       push("kai", error instanceof ApiError ? error.message : t("common.error"), true);
     } finally {
       setBusy(false);
+      setStage(null);
     }
   }
 
@@ -218,7 +274,18 @@ export function Chat({ t, onBusyChange, voice }: Props) {
         )}
 
         {listening && <p className="listening small">{t("voice.listening")}…</p>}
-        {busy && <p className="muted small">{t("chat.thinking")}…</p>}
+        {busy && (
+          <p className="muted small" role="status">
+            {stage === "routing"
+              ? t("chat.stageRouting")
+              : stage === "working"
+                ? t("chat.stageWorking")
+                : stage === "writing"
+                  ? t("chat.stageWriting")
+                  : t("chat.thinking")}
+            …
+          </p>
+        )}
         <div ref={logEnd} />
       </div>
 
