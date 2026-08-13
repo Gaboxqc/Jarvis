@@ -110,6 +110,10 @@ fn main() {
     tauri::Builder::default()
         .manage(Backend::default())
         .plugin(tauri_plugin_shell::init())
+        // A reminder that only appears inside a visible window is a reminder
+        // you miss by having the window hidden -- which is the normal state for
+        // an assistant that lives in the tray.
+        .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {

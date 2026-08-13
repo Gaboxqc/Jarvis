@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, ApiError, type PendingAction } from "../api";
 import type { Key, Lang } from "../i18n";
 import type { Voice } from "../useVoice";
+import { ensurePermission } from "../desktopNotify";
 
 interface Message {
   id: number;
@@ -44,6 +45,7 @@ export function Chat({ t, onBusyChange, voice }: Props) {
   const logEnd = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
+  const askedToNotify = useRef(false);
 
   // Both of these need braces. An arrow with an expression body returns that
   // expression, React takes an effect's return value to be its cleanup, and it
@@ -201,6 +203,15 @@ export function Chat({ t, onBusyChange, voice }: Props) {
       // A confirmation is spoken too: with the screen not being looked at, an
       // unspoken "go ahead?" is a turn that silently stalls.
       void maybeSpeak(result.reply);
+
+      // Ask for notification permission after the first turn has worked, not on
+      // startup. A permission prompt that appears before the app has shown its
+      // worth is the one people dismiss reflexively, and on Windows a denied
+      // notification permission is awkward to reverse.
+      if (!askedToNotify.current) {
+        askedToNotify.current = true;
+        void ensurePermission();
+      }
     } catch (error) {
       setMessages((prior) => prior.filter((m) => m.id !== streamId));
       push("kai", error instanceof ApiError ? error.message : t("common.error"), true);

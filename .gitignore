@@ -56,3 +56,6 @@ ui/src-tauri/resources/kai-backend/
 ui/src-tauri/binaries/
 # Generated at build time from the filesystem (installer/generate_manifest.py).
 backend/app/skills/_manifest.py
+
+# Local dev overrides (backend port, etc). Machine-specific by nature.
+.env.local
