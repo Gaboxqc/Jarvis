@@ -243,6 +243,25 @@ button.mic.recording span[aria-hidden] { animation: pulse 1.2s ease-in-out infin
 
 .listening { color: var(--ok); }
 
+/* -- account forms (REQ-13) -- */
+
+.stack { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.6rem; }
+.stack .row { margin-top: 0.25rem; }
+
+/* Text inputs outside the composer — the account form, mainly. Matching the
+   composer's treatment rather than inheriting the browser default, which is
+   white-on-white in the dark theme. */
+.stack input,
+.stack select {
+  padding: 0.5rem 0.65rem;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
+}
+
+.stack input::placeholder { color: var(--muted); opacity: 1; }
+
 /* -- reminder toasts (REQ-9) -- */
 
 .toasts {
