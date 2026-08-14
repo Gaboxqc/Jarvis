@@ -204,6 +204,37 @@ export interface Reminder {
   active: boolean;
 }
 
+export interface DocumentHit {
+  file: string;
+  path: string;
+  section: string;
+  /** "lease.pdf (Section 4)" — what the answer should be attributed to. */
+  citation: string;
+  text: string;
+}
+
+export interface IndexedDocument {
+  file: string;
+  path: string;
+  chunks: number;
+  indexed_at: string | null;
+  error: string | null;
+}
+
+export interface IndexStatus {
+  folders: string[];
+  running: boolean;
+  paused: boolean;
+  /** Why a scan is holding off — on battery, machine busy. Null when it isn't. */
+  deferred_because: string | null;
+  last_scan: string | null;
+  documents: number;
+  chunks: number;
+  failed: number;
+  last_indexed: string | null;
+  failures: { path: string; error: string }[];
+}
+
 export interface BriefingSection {
   name: string;
   lines: string[];
@@ -448,6 +479,26 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ changes }),
     }),
+
+  documentStatus: () => request<IndexStatus>("/documents/status"),
+
+  documents: () => request<{ documents: IndexedDocument[] }>("/documents"),
+
+  searchDocuments: (query: string, limit = 6) =>
+    request<{ results: DocumentHit[] }>(
+      `/documents/search?q=${encodeURIComponent(query)}&limit=${limit}`,
+      { timeoutMs: 30_000 },
+    ),
+
+  // A full rescan reads every file in every indexed folder, so it is allowed
+  // far longer than an ordinary call before being abandoned.
+  reindex: () => request<Record<string, unknown>>("/documents/reindex", {
+    method: "POST", timeoutMs: 30 * 60_000,
+  }),
+
+  clearIndex: () => request<{ cleared_documents: number }>("/documents/index", {
+    method: "DELETE",
+  }),
 
   briefing: () => request<{ sections: BriefingSection[] }>("/briefing", { timeoutMs: 60_000 }),
 
