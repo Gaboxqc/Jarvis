@@ -43,6 +43,19 @@ voice:
   # Voice for spoken replies. Downloaded voices are listed by `/voice`.
   voice_id: en_US-amy-medium
 
+  # piper | xtts
+  #
+  # piper plays fixed pre-trained voices: small, fast, always present.
+  # xtts copies a voice from a short recording, but it is a ~2GB optional
+  # dependency (pip install TTS) that shares the GPU with the language model,
+  # and it is licensed for non-commercial use only (Coqui CPML).
+  tts_engine: piper
+
+  # Cloning stays off until this is set, and clearing it turns it off again.
+  # A convincing copy of someone's speech can be used to say things they never
+  # said, and the person whose voice it is may not be the person using this.
+  clone_consent: false
+
   # Wake word means an always-open microphone, so it is opt-in on top of voice.
   # With it off, use push-to-talk. Nothing is transcribed before the phrase
   # fires either way (REQ-2, REQ-26).

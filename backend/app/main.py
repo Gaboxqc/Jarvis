@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from collections.abc import Iterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -46,7 +47,14 @@ async def lifespan(app: FastAPI):
     # Reconcile the document index with disk in the background. Startup must not
     # block on it: a first scan of a large Documents folder takes minutes, and
     # the assistant is fully usable without it (REQ-16, REQ-27).
-    if load_config().documents.indexed_folders:
+    #
+    # Suppressed under test. Every TestClient runs this lifespan, so each one
+    # spawned a scanner thread writing to the same SQLite file as the test that
+    # started it -- which surfaced as an occasional "database is locked" and one
+    # unrelated failure in six full runs. A background thread racing the test
+    # that started it is a flake generator, and the scan itself is covered
+    # directly in test_documents.py.
+    if os.environ.get("KAI_NO_BACKGROUND_SCAN") != "1" and load_config().documents.indexed_folders:
         index_scanner.scan_in_background()
     try:
         yield
@@ -601,6 +609,87 @@ def speak(request: SpeakRequest) -> dict[str, Any]:
     except tts.TTSUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {"seconds": round(speech.seconds, 2), "sample_rate": speech.sample_rate}
+
+
+class CloneConsentRequest(BaseModel):
+    consent: bool
+    enable: bool = False
+
+
+@app.get("/voice/clone")
+def clone_status() -> dict[str, Any]:
+    from .voice import cloning
+
+    return cloning.status()
+
+
+@app.post("/voice/clone/consent")
+def clone_consent(request: CloneConsentRequest) -> dict[str, Any]:
+    """Record — or withdraw — the acknowledgement that gates cloning.
+
+    Withdrawing switches the engine back to Piper in the same call. Leaving
+    `tts_engine: xtts` set while consent is false would mean the setting said
+    one thing and the behaviour did another; tts.use_cloned_voice() would refuse
+    anyway, but a config that lies about what it is doing is its own problem.
+    """
+    from .voice import cloning
+
+    changes: dict[str, Any] = {"clone_consent": bool(request.consent)}
+    if request.consent and request.enable:
+        changes["tts_engine"] = "xtts"
+    elif not request.consent:
+        changes["tts_engine"] = "piper"
+
+    try:
+        preferences.update({"voice": changes})
+    except preferences.NotWritable as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return cloning.status()
+
+
+@app.post("/voice/clone/record")
+def record_clone_reference(seconds: int = 12) -> dict[str, Any]:
+    """Record the reference sample from the microphone.
+
+    Recorded here rather than uploaded: a file picker would accept any audio,
+    including a recording of somebody who never agreed to be cloned. Speaking
+    into the machine at least puts whoever is being copied in the room.
+    """
+    from .voice import audio, cloning
+
+    if not load_config().voice.clone_consent:
+        raise HTTPException(
+            status_code=403,
+            detail="Voice cloning hasn't been acknowledged yet.",
+        )
+
+    seconds = max(int(cloning.MIN_REFERENCE_SECONDS), min(int(seconds), 30))
+    try:
+        capture = audio.record_fixed(seconds)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=503, detail=f"Couldn't record: {exc}") from exc
+
+    if not capture.speech_detected:
+        # Saving silence produces a clone that sounds like nothing, discovered
+        # only when the first reply comes out wrong.
+        raise HTTPException(
+            status_code=400,
+            detail="I didn't hear anything. Try again, speaking normally.",
+        )
+
+    pcm = (capture.samples.clip(-1.0, 1.0) * 32767).astype("<i2").tobytes()
+    try:
+        return {**cloning.save_reference(pcm, audio.SAMPLE_RATE), **cloning.status()}
+    except cloning.CloningUnavailable as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/voice/clone/reference")
+def forget_clone_reference() -> dict[str, Any]:
+    """Delete the recording. It is a sample of somebody's voice (REQ-26)."""
+    from .voice import cloning
+
+    return {"removed": cloning.forget_reference(), **cloning.status()}
 
 
 @app.post("/voice/listen")

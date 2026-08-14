@@ -17,6 +17,7 @@ import type { Key, Lang } from "../i18n";
 import type { Voice } from "../useVoice";
 import { Accounts } from "./Accounts";
 import { FolderList } from "./FolderList";
+import { VoiceCloning } from "./VoiceCloning";
 
 interface Props {
   lang: Lang;
@@ -182,6 +183,8 @@ export function Settings({ lang, setLang, t, voice }: Props) {
         )}
         <p className="small muted">{t("settings.voiceLocal")}</p>
       </section>
+
+      <VoiceCloning t={t} />
 
       <Accounts t={t} configFile={health?.config_file ?? null} />
 

@@ -164,6 +164,24 @@ const STRINGS = {
     "voiceBlocked.inputOff": "Voice input is switched off. Turn it on in Settings.",
     "voiceBlocked.failed": "Something went wrong while listening.",
 
+    "clone.title": "Your own voice",
+    "clone.notInstalled":
+      "Speaking in a cloned voice needs the XTTS engine, which isn't installed. It's about 2GB and optional — everything else works without it.",
+    "clone.consent": "Let Kai speak in a cloned voice",
+    "clone.consentNote":
+      "A copy of a voice can be used to say things that voice never said. Only clone your own, or someone who is here and agrees. Unticking this switches back to the built-in voice straight away.",
+    "clone.noReference": "No recording yet — about {seconds} seconds of speech is enough.",
+    "clone.haveReference": "Recorded: {seconds} seconds.",
+    "clone.record": "Record a sample",
+    "clone.rerecord": "Record again",
+    "clone.recording": "Recording…",
+    "clone.recordingNow": "Recording — read something out loud, normally.",
+    "clone.recorded": "Saved {seconds} seconds. Replies will use this voice.",
+    "clone.recordNote":
+      "Recorded here rather than uploaded, so whoever is being copied is actually in the room. Stored on this machine and deletable at any time.",
+    "clone.forget": "Delete recording",
+    "clone.forgetConfirm":
+      "Delete the voice recording? Replies go back to the built-in voice.",
     "settings.voice": "Voice",
     "settings.voiceEnabled": "Talk and listen",
     "settings.voiceInput": "Microphone input",
@@ -387,6 +405,24 @@ const STRINGS = {
     "voiceBlocked.inputOff": "La entrada de voz está desactivada. Actívala en Ajustes.",
     "voiceBlocked.failed": "Algo salió mal al escuchar.",
 
+    "clone.title": "Tu propia voz",
+    "clone.notInstalled":
+      "Hablar con una voz clonada necesita el motor XTTS, que no está instalado. Ocupa unos 2GB y es opcional: todo lo demás funciona sin él.",
+    "clone.consent": "Permitir que Kai hable con una voz clonada",
+    "clone.consentNote":
+      "Una copia de una voz puede usarse para decir cosas que esa voz nunca dijo. Clona solo la tuya, o la de alguien presente que acceda. Al desmarcarlo se vuelve a la voz incluida de inmediato.",
+    "clone.noReference": "Aún no hay grabación: con unos {seconds} segundos basta.",
+    "clone.haveReference": "Grabado: {seconds} segundos.",
+    "clone.record": "Grabar una muestra",
+    "clone.rerecord": "Grabar de nuevo",
+    "clone.recording": "Grabando…",
+    "clone.recordingNow": "Grabando: lee algo en voz alta, con normalidad.",
+    "clone.recorded": "Guardados {seconds} segundos. Las respuestas usarán esta voz.",
+    "clone.recordNote":
+      "Se graba aquí en vez de subir un archivo, para que quien se copia esté presente. Se guarda en este equipo y puedes borrarla cuando quieras.",
+    "clone.forget": "Borrar grabación",
+    "clone.forgetConfirm":
+      "¿Borrar la grabación de voz? Las respuestas volverán a la voz incluida.",
     "settings.voice": "Voz",
     "settings.voiceEnabled": "Hablar y escuchar",
     "settings.voiceInput": "Entrada de micrófono",
