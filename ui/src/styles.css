@@ -243,6 +243,13 @@ button.mic.recording span[aria-hidden] { animation: pulse 1.2s ease-in-out infin
 
 .listening { color: var(--ok); }
 
+/* A running recording must never look idle. The outline is a second signal
+   beside the pulsing dot, for anyone who cannot see colour change. */
+.card.recording-now {
+  border-color: var(--danger);
+  box-shadow: inset 0 0 0 1px var(--danger);
+}
+
 /* -- switches (REQ-28) -- */
 
 /* A checkbox says "tick this and submit"; these apply the moment they move, so
