@@ -114,6 +114,10 @@ fn main() {
         // you miss by having the window hidden -- which is the normal state for
         // an assistant that lives in the tray.
         .plugin(tauri_plugin_notification::init())
+        // Checking is a deliberate act, not something that happens on launch.
+        // The plugin only exposes the capability; nothing here reaches out to
+        // GitHub until the user presses the button in Settings.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         // Start with Windows, so an assistant that lives in the tray is
         // actually there after a reboot rather than waiting to be remembered.
         // Registered but not enabled: the plugin only writes the run key when

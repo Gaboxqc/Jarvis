@@ -59,3 +59,11 @@ backend/app/skills/_manifest.py
 
 # Local dev overrides (backend port, etc). Machine-specific by nature.
 .env.local
+
+# Updater signing keys. The private key must never enter the repository: it is
+# what proves an update came from you, and anyone holding it can push signed
+# code to every install. It lives in ~/.tauri/ and is backed up by hand.
+*.key
+*.key.pem
+!*.key.pub
+.tauri/

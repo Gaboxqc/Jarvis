@@ -46,6 +46,18 @@
       }
     },
     "shortDescription": "Personal desktop assistant",
-    "longDescription": "A local assistant for your calendar, mail, files and meetings. Requires Ollama (ollama.com) for the language model; everything else is included."
+    "longDescription": "A local assistant for your calendar, mail, files and meetings. Requires Ollama (ollama.com) for the language model; everything else is included.",
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/Gaboxqc/Jarvis/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlCN0JDNTU0NDMyMUM2MjkKUldRcHhpRkRWTVY3bTZHTm5VRndJQkx4azVuTllBbnhXMjlGcWpoeXVHc3FnbHFLNi9ML0s0N20K",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

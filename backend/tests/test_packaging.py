@@ -441,3 +441,88 @@ def test_the_icon_generator_runs():
         [sys.executable, str(generator)], capture_output=True, text=True, timeout=120
     )
     assert result.returncode == 0, result.stderr
+
+
+# -- the updater signing key (REQ-26, REQ-29) -----------------------------
+
+
+def test_no_private_signing_key_is_in_the_repository():
+    """The one secret in this project that cannot be rotated quietly.
+
+    The updater private key is what proves an update came from us. Anyone
+    holding it can push signed code to every install, and every install trusts
+    it implicitly because the matching public key is compiled in. Committing it
+    once means it is in the history forever.
+    """
+    # Two things make the naive version of this test useless, and both were
+    # found by planting a real key and watching it pass:
+    #
+    #   the key file is base64-encoded as a whole, so searching the raw text
+    #       for the header never matches anything
+    #   the header says "rsign", not "minisign" -- Tauri's signer writes rsign
+    #       secret keys and minisign public ones
+    #
+    # A guard that cannot fire is worse than none, because it is believed.
+    import base64
+
+    # Assembled rather than written out, or this file matches itself.
+    markers = ("rsign encrypted " + "secret key", "minisign encrypted " + "secret key")
+
+    def looks_like_a_private_key(text: str) -> bool:
+        if any(marker in text for marker in markers):
+            return True
+        stripped = "".join(text.split())
+        if len(stripped) < 32:
+            return False
+        try:
+            decoded = base64.b64decode(stripped, validate=True).decode("utf-8", "ignore")
+        except Exception:  # noqa: BLE001 - not base64, nothing more to check
+            return False
+        return any(marker in decoded for marker in markers)
+
+    offenders = []
+
+    for path in PROJECT.rglob("*"):
+        if not path.is_file():
+            continue
+        if any(part in {".git", "node_modules", "target", "dist", "build", ".venv",
+                        "__pycache__"} for part in path.parts):
+            continue
+        if path.suffix in {".png", ".ico", ".icns", ".exe", ".dll", ".pyd", ".wav", ".pyc"}:
+            continue
+        try:
+            if looks_like_a_private_key(path.read_text(encoding="utf-8", errors="ignore")):
+                offenders.append(str(path.relative_to(PROJECT)))
+        except OSError:
+            continue
+
+    assert not offenders, f"private signing key material found in: {offenders}"
+
+
+def test_the_public_key_is_configured_and_is_not_a_private_one():
+    """The public half must be present, or updates cannot be verified at all."""
+    import json
+
+    config = json.loads((PROJECT / "ui" / "src-tauri" / "tauri.conf.json").read_text("utf-8"))
+    updater = config["plugins"]["updater"]
+
+    assert updater["pubkey"], "no public key: the updater would accept nothing"
+    assert updater["endpoints"], "no endpoint: there is nowhere to check"
+
+    import base64
+
+    decoded = base64.b64decode(updater["pubkey"]).decode("utf-8", "ignore")
+    assert "public key" in decoded, "that does not look like a minisign public key"
+    assert "secret key" not in decoded, "a PRIVATE key is configured as the public one"
+
+
+def test_updater_artifacts_are_produced():
+    """Tauri v2 only emits the .sig files the updater needs when asked.
+
+    Without this the release would carry an installer nobody can verify, and
+    the failure appears on the user's machine rather than at build time.
+    """
+    import json
+
+    config = json.loads((PROJECT / "ui" / "src-tauri" / "tauri.conf.json").read_text("utf-8"))
+    assert config["bundle"].get("createUpdaterArtifacts") is True
