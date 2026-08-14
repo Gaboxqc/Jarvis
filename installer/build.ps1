@@ -58,10 +58,38 @@ $mb = [int]((Get-ChildItem -Recurse $staged | Measure-Object -Property Length -S
 Write-Host "    staged $mb MB" -ForegroundColor Green
 
 Write-Host "==> Bundling the installer" -ForegroundColor Cyan
+
+# The updater key signs the installer so existing installs will accept it.
+#
+# Read from disk here rather than being committed: whoever holds this key can
+# push signed code to every install, and every install trusts it implicitly
+# because the matching public key is compiled in. It lives outside the
+# repository and is backed up by hand -- losing it means no existing install
+# can ever be updated again, because the public key they carry will not match a
+# replacement.
+#
+# A build without it still produces a working installer; it just cannot be
+# offered as an update to anyone. That is said out loud rather than failing,
+# because a first-time build on a fresh checkout has no reason to have a key.
+$keyFile = Join-Path $env:USERPROFILE ".tauri\kai-updater.key"
+if (Test-Path $keyFile) {
+    $env:TAURI_SIGNING_PRIVATE_KEY = Get-Content $keyFile -Raw
+    $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
+    Write-Host "    signing with $keyFile" -ForegroundColor Green
+} else {
+    Write-Host "    no signing key at $keyFile" -ForegroundColor Yellow
+    Write-Host "    the installer will work, but cannot be published as an update" -ForegroundColor Yellow
+}
+
 Push-Location (Join-Path $root "ui")
 try {
     npm run tauri build
     if ($LASTEXITCODE -ne 0) { throw "Tauri bundle failed" }
-} finally { Pop-Location }
+} finally {
+    Pop-Location
+    # Out of the environment as soon as it is done with.
+    Remove-Item Env:\TAURI_SIGNING_PRIVATE_KEY -ErrorAction SilentlyContinue
+    Remove-Item Env:\TAURI_SIGNING_PRIVATE_KEY_PASSWORD -ErrorAction SilentlyContinue
+}
 
 Write-Host "`nInstallers written to ui\src-tauri\target\release\bundle" -ForegroundColor Green

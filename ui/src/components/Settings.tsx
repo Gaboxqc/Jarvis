@@ -18,6 +18,7 @@ import type { Voice } from "../useVoice";
 import { Accounts } from "./Accounts";
 import { FolderList } from "./FolderList";
 import { Startup } from "./Startup";
+import { Updates } from "./Updates";
 import { VoiceCloning } from "./VoiceCloning";
 
 interface Props {
@@ -26,6 +27,9 @@ interface Props {
   t: (key: Key, vars?: Record<string, string | number>) => string;
   voice: Voice;
 }
+
+// Injected by Vite from package.json, so it cannot drift from the build.
+const APP_VERSION = __APP_VERSION__;
 
 export function Settings({ lang, setLang, t, voice }: Props) {
   const [health, setHealth] = useState<Health | null>(null);
@@ -188,6 +192,8 @@ export function Settings({ lang, setLang, t, voice }: Props) {
       <VoiceCloning t={t} />
 
       <Accounts t={t} configFile={health?.config_file ?? null} />
+
+      <Updates t={t} version={APP_VERSION} />
 
       <Startup t={t} />
 

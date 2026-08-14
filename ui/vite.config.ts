@@ -1,7 +1,11 @@
 import { defineConfig } from "vite";
+import pkg from "./package.json";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
+  // Taken from package.json so the version on the Updates card cannot
+  // drift from the version the installer reports.
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   plugins: [react()],
 
   // Tauri compiles into ui/src-tauri/target, which sits inside Vite's project
