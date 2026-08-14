@@ -500,13 +500,29 @@ export const api = {
       body: JSON.stringify({ consent, enable }),
     }),
 
-  // Blocks for the length of the recording plus the save, so it is allowed
-  // well past the default timeout.
-  recordCloneReference: (seconds = 12) =>
-    request<CloneStatus & { seconds: number }>(
-      `/voice/clone/record?seconds=${seconds}`,
-      { method: "POST", timeoutMs: 120_000 },
-    ),
+  /**
+   * Upload the reference sample.
+   *
+   * Sent as multipart, so no Content-Type is set by hand — the browser has to
+   * supply the boundary, and overriding it produces a body the server cannot
+   * parse.
+   */
+  uploadCloneReference: async (file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    const response = await fetch(`${BASE}/voice/clone/reference`, { method: "POST", body });
+    if (!response.ok) {
+      let detail = `${response.status} ${response.statusText}`;
+      try {
+        const parsed = await response.json();
+        if (parsed?.detail) detail = String(parsed.detail);
+      } catch {
+        /* keep the status line */
+      }
+      throw new ApiError(detail, response.status);
+    }
+    return (await response.json()) as CloneStatus & { seconds: number };
+  },
 
   forgetCloneReference: () =>
     request<CloneStatus & { removed: boolean }>("/voice/clone/reference", {

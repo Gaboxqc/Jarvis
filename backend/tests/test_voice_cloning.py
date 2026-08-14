@@ -58,8 +58,12 @@ def test_cloning_is_off_until_it_is_acknowledged(client):
     assert status["enabled"] is False
 
 
-def test_recording_a_reference_is_refused_without_acknowledgement(client):
-    response = client.post("/voice/clone/record")
+def test_a_reference_cannot_be_set_without_acknowledgement(client):
+    """Superseded /voice/clone/record; the gate moved with the endpoint."""
+    response = client.post(
+        "/voice/clone/reference",
+        files={"file": ("me.wav", b"RIFF....WAVE", "audio/wav")},
+    )
     assert response.status_code == 403
     assert "acknowledged" in response.json()["detail"]
 
@@ -152,23 +156,93 @@ def test_deleting_a_missing_reference_is_not_an_error(client):
     assert client.delete("/voice/clone/reference").json()["removed"] is False
 
 
-def test_silence_is_not_saved_as_a_reference(client, monkeypatch):
-    """A clone built from silence sounds like nothing, and the failure surfaces
-    much later as a reply that comes out wrong."""
-    from app.voice import audio
+def wav_bytes(seconds=8.0, rate=16_000, channels=1, width=2):
+    """A valid WAV of the requested shape."""
+    import io
+    import math
+    import struct
+    import wave
 
-    class Silent:
-        samples = None
-        seconds = 12.0
-        speech_detected = False
-        peak_level = 0.0
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as handle:
+        handle.setnchannels(channels)
+        handle.setsampwidth(width)
+        handle.setframerate(rate)
+        frames = bytearray()
+        for i in range(int(seconds * rate)):
+            value = int(12000 * math.sin(i * 0.05))
+            for _ in range(channels):
+                frames += struct.pack("<h", value)
+        handle.writeframes(bytes(frames))
+    return buffer.getvalue()
 
+
+def test_a_wav_can_be_uploaded_as_the_reference(client):
     consent(client)
-    monkeypatch.setattr(audio, "record_fixed", lambda seconds: Silent())
+    response = client.post(
+        "/voice/clone/reference",
+        files={"file": ("me.wav", wav_bytes(), "audio/wav")},
+    )
 
-    response = client.post("/voice/clone/record")
+    assert response.status_code == 200
+    assert response.json()["has_reference"] is True
+
+
+def test_uploading_is_refused_without_acknowledgement(client):
+    response = client.post(
+        "/voice/clone/reference",
+        files={"file": ("me.wav", wav_bytes(), "audio/wav")},
+    )
+    assert response.status_code == 403
+
+
+def test_a_non_wav_is_refused_by_name(client):
+    """Half-decoding an mp3 produces noise that only reveals itself later."""
+    consent(client)
+    response = client.post(
+        "/voice/clone/reference",
+        files={"file": ("me.mp3", b"not really an mp3", "audio/mpeg")},
+    )
     assert response.status_code == 400
-    assert "didn't hear" in response.json()["detail"]
+    assert ".wav" in response.json()["detail"]
+
+
+def test_a_corrupt_wav_is_refused(client):
+    consent(client)
+    response = client.post(
+        "/voice/clone/reference",
+        files={"file": ("me.wav", b"RIFFnope", "audio/wav")},
+    )
+    assert response.status_code == 400
+    assert "readable WAV" in response.json()["detail"]
+
+
+def test_a_short_upload_is_refused_with_the_length(client):
+    consent(client)
+    response = client.post(
+        "/voice/clone/reference",
+        files={"file": ("me.wav", wav_bytes(seconds=2.0), "audio/wav")},
+    )
+    assert response.status_code == 400
+    assert "seconds" in response.json()["detail"]
+
+
+def test_stereo_is_mixed_down_rather_than_refused(workspace):
+    """Most phone recordings are two identical channels.
+
+    Refusing them would send people to an audio editor for no reason.
+    """
+    pcm, rate = cloning.pcm_from_wav(wav_bytes(seconds=6.0, channels=2))
+
+    assert rate == 16_000
+    # One channel's worth of samples, not two.
+    assert len(pcm) == int(6.0 * 16_000) * 2
+
+
+def test_an_unusual_sample_width_is_refused_not_reinterpreted(workspace):
+    """Misreading the width loads happily and sounds like static."""
+    with pytest.raises(cloning.CloningUnavailable, match="16-bit"):
+        cloning.pcm_from_wav(wav_bytes(seconds=6.0, width=1))
 
 
 # -- falling back ----------------------------------------------------------

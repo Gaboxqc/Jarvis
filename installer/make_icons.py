@@ -11,15 +11,20 @@ icon *is* instead of opening fifteen PNGs. Run it after changing anything here:
 
     python installer/make_icons.py
 
-The mark is an open ring around a solid centre. It is meant to read as
-attention -- something listening, not something recording -- and the shape was
-chosen for the 16-pixel case first: at tray size a ring and a dot survive, where
-a monogram or anything with fine strokes turns to mush. Everything is drawn at
-1024 and downsampled with LANCZOS, because generating each size directly leaves
-visible stair-stepping on the curves.
+The mark is the brand logo -- icons/Logo.png, supplied by the owner -- set on a
+rounded square in the app's own panel colour. An earlier version of this script
+drew a ring and a dot, which was a stand-in until there was a real mark; it is
+gone.
 
-Colours come from the app's own palette in ui/src/styles.css, so the icon and
-the window it opens are the same object.
+Two things are done to the logo rather than pasting it as-is. Its transparent
+margins are trimmed, because the source is a tall portrait canvas and centring
+it untrimmed would leave the bolt small and high. And it is fitted to a share of
+the tile rather than a fixed size, so the same script still works if the logo is
+ever replaced with one of different proportions.
+
+Everything is composed at 1024 and downsampled with LANCZOS: generating each
+size directly leaves visible stair-stepping on the diagonals, which this mark is
+made almost entirely of.
 """
 
 from __future__ import annotations
@@ -61,6 +66,25 @@ PNG_SIZES = {
 ICO_SIZES = [16, 24, 32, 48, 64, 128, 256]
 
 
+LOGO = ICONS / "Logo.png"
+
+# How much of the tile's width the mark occupies. Below about 0.5 it looks lost;
+# above about 0.7 it collides with the rounded corners at small sizes.
+LOGO_SCALE = 0.62
+
+
+def trimmed_logo() -> Image.Image:
+    """The brand mark with its transparent margins removed.
+
+    The source is a tall canvas with the bolt inset. Pasting it whole would
+    centre the *canvas* rather than the mark, leaving it small and sitting high
+    on the tile.
+    """
+    logo = Image.open(LOGO).convert("RGBA")
+    box = logo.getbbox()  # ignores fully transparent edges
+    return logo.crop(box) if box else logo
+
+
 def draw_master() -> Image.Image:
     """The icon at 1024, from which every other size is reduced."""
     image = Image.new("RGBA", (MASTER, MASTER), (0, 0, 0, 0))
@@ -88,20 +112,20 @@ def draw_master() -> Image.Image:
     image.paste(gradient, (0, 0), mask)
     draw = ImageDraw.Draw(image)
 
-    centre = MASTER / 2
-    ring_radius = MASTER * 0.30
-    stroke = int(MASTER * 0.085)
+    mark = trimmed_logo()
+    # Fit inside a square box while keeping the logo's own aspect ratio, so a
+    # tall mark stays tall rather than being squashed into the tile.
+    target = int(MASTER * LOGO_SCALE)
+    ratio = min(target / mark.width, target / mark.height)
+    mark = mark.resize(
+        (max(1, int(mark.width * ratio)), max(1, int(mark.height * ratio))), Image.LANCZOS
+    )
 
-    # The ring, open at the bottom. A closed circle reads as a target or a
-    # record button; leaving it open makes it a gesture rather than a state.
-    box = [centre - ring_radius, centre - ring_radius,
-           centre + ring_radius, centre + ring_radius]
-    draw.arc(box, start=118, end=62, fill=ACCENT, width=stroke)
-
-    # The centre. Bright rather than accent-coloured so the two shapes separate
-    # at small sizes instead of merging into one blue blob.
-    dot = MASTER * 0.105
-    draw.ellipse([centre - dot, centre - dot, centre + dot, centre + dot], fill=BRIGHT)
+    image.paste(
+        mark,
+        ((MASTER - mark.width) // 2, (MASTER - mark.height) // 2),
+        mark,  # its own alpha, so the rounded tile shows through around it
+    )
 
     return image
 

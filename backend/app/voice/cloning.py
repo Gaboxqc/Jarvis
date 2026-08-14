@@ -191,6 +191,53 @@ def synthesize(text: str, language: str = "en") -> tuple[bytes, int]:
     return pcm, 24_000  # XTTS-v2 outputs at 24kHz
 
 
+def pcm_from_wav(raw: bytes) -> tuple[bytes, int]:
+    """Decode an uploaded WAV to mono PCM16.
+
+    Stereo is mixed down rather than refused -- most phone recordings are two
+    identical channels, and rejecting them would send people to an audio editor
+    for no reason. Anything that is not 16-bit is refused by name instead of
+    being reinterpreted, because misreading the sample width produces a file
+    that loads happily and sounds like static.
+    """
+    import io
+    import wave
+
+    # audioop would have done the downmix, but it was removed in Python 3.13.
+    # numpy is already a dependency and lets the sample width and byte order be
+    # stated explicitly rather than assumed from the platform.
+    import numpy as np
+
+    try:
+        with wave.open(io.BytesIO(raw), "rb") as handle:
+            channels = handle.getnchannels()
+            width = handle.getsampwidth()
+            rate = handle.getframerate()
+            frames = handle.readframes(handle.getnframes())
+    except Exception as exc:  # noqa: BLE001
+        raise CloningUnavailable(
+            "That doesn't look like a readable WAV file."
+        ) from exc
+
+    if width != 2:
+        raise CloningUnavailable(
+            f"That WAV is {width * 8}-bit. Please export it as 16-bit PCM."
+        )
+    if not frames:
+        raise CloningUnavailable("That file has no audio in it.")
+
+    if channels > 1:
+        samples = np.frombuffer(frames, dtype="<i2")
+        # Trailing bytes from a truncated file would make the reshape fail.
+        usable = (len(samples) // channels) * channels
+        # int32 for the sum: two samples near full scale overflow int16 before
+        # the division, which shows up as loud crackling in the clone.
+        mixed = samples[:usable].reshape(-1, channels).astype("<i4").mean(axis=1)
+        frames = mixed.astype("<i2").tobytes()
+
+    return frames, rate
+
+
 def save_reference(pcm: bytes, sample_rate: int) -> dict[str, Any]:
     """Store the reference recording, replacing any previous one."""
     seconds = len(pcm) / 2 / sample_rate if sample_rate else 0.0

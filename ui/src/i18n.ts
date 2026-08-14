@@ -188,15 +188,14 @@ const STRINGS = {
     "clone.consent": "Let Kai speak in a cloned voice",
     "clone.consentNote":
       "A copy of a voice can be used to say things that voice never said. Only clone your own, or someone who is here and agrees. Unticking this switches back to the built-in voice straight away.",
-    "clone.noReference": "No recording yet — about {seconds} seconds of speech is enough.",
+    "clone.noReference": "No sample yet — about {seconds} seconds of speech is enough.",
     "clone.haveReference": "Recorded: {seconds} seconds.",
-    "clone.record": "Record a sample",
-    "clone.rerecord": "Record again",
-    "clone.recording": "Recording…",
-    "clone.recordingNow": "Recording — read something out loud, normally.",
-    "clone.recorded": "Saved {seconds} seconds. Replies will use this voice.",
-    "clone.recordNote":
-      "Recorded here rather than uploaded, so whoever is being copied is actually in the room. Stored on this machine and deletable at any time.",
+    "clone.choose": "Choose a .wav file",
+    "clone.replace": "Choose a different file",
+    "clone.uploading": "Uploading…",
+    "clone.uploaded": "Saved {seconds} seconds. Replies will use this voice.",
+    "clone.uploadNote":
+      "A 16-bit .wav of someone speaking clearly, ten seconds or more. Stored on this machine and deletable at any time.",
     "clone.forget": "Delete recording",
     "clone.forgetConfirm":
       "Delete the voice recording? Replies go back to the built-in voice.",
@@ -205,6 +204,9 @@ const STRINGS = {
     "settings.voiceInput": "Microphone input",
     "settings.voiceOutput": "Speak replies aloud",
     "settings.voiceWake": "Wake word",
+    "settings.voiceWakeDownloading": "Fetching the wake word model… this takes a moment.",
+    "settings.voiceWakeFailed":
+      "Couldn't fetch the wake word model, so it hasn't been turned on. Check your connection and try again.",
     "settings.voiceWakeNote":
       "Leaves the microphone open all the time. Nothing is transcribed before the phrase is heard.",
     "settings.voiceModels": "Speech models",
@@ -449,13 +451,12 @@ const STRINGS = {
       "Una copia de una voz puede usarse para decir cosas que esa voz nunca dijo. Clona solo la tuya, o la de alguien presente que acceda. Al desmarcarlo se vuelve a la voz incluida de inmediato.",
     "clone.noReference": "Aún no hay grabación: con unos {seconds} segundos basta.",
     "clone.haveReference": "Grabado: {seconds} segundos.",
-    "clone.record": "Grabar una muestra",
-    "clone.rerecord": "Grabar de nuevo",
-    "clone.recording": "Grabando…",
-    "clone.recordingNow": "Grabando: lee algo en voz alta, con normalidad.",
-    "clone.recorded": "Guardados {seconds} segundos. Las respuestas usarán esta voz.",
-    "clone.recordNote":
-      "Se graba aquí en vez de subir un archivo, para que quien se copia esté presente. Se guarda en este equipo y puedes borrarla cuando quieras.",
+    "clone.choose": "Elegir un archivo .wav",
+    "clone.replace": "Elegir otro archivo",
+    "clone.uploading": "Subiendo…",
+    "clone.uploaded": "Guardados {seconds} segundos. Las respuestas usarán esta voz.",
+    "clone.uploadNote":
+      "Un .wav de 16 bits con alguien hablando claro, diez segundos o más. Se guarda en este equipo y puedes borrarlo cuando quieras.",
     "clone.forget": "Borrar grabación",
     "clone.forgetConfirm":
       "¿Borrar la grabación de voz? Las respuestas volverán a la voz incluida.",
@@ -464,6 +465,9 @@ const STRINGS = {
     "settings.voiceInput": "Entrada de micrófono",
     "settings.voiceOutput": "Leer las respuestas en voz alta",
     "settings.voiceWake": "Palabra de activación",
+    "settings.voiceWakeDownloading": "Descargando el modelo de palabra de activación… tarda un momento.",
+    "settings.voiceWakeFailed":
+      "No se pudo descargar el modelo, así que no se ha activado. Revisa la conexión e inténtalo de nuevo.",
     "settings.voiceWakeNote":
       "Deja el micrófono abierto todo el tiempo. Nada se transcribe antes de oír la frase.",
     "settings.voiceModels": "Modelos de voz",

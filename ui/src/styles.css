@@ -243,6 +243,67 @@ button.mic.recording span[aria-hidden] { animation: pulse 1.2s ease-in-out infin
 
 .listening { color: var(--ok); }
 
+/* -- switches (REQ-28) -- */
+
+/* A checkbox says "tick this and submit"; these apply the moment they move, so
+   they should look like switches. Built from the checkbox rather than replacing
+   it, so keyboard focus, the accessible name and the checked state all keep
+   working exactly as before. */
+
+input[type="checkbox"].switch {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  width: 2.6rem;
+  height: 1.45rem;
+  flex: none;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+input[type="checkbox"].switch::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0.18rem;
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 50%;
+  background: var(--muted);
+  transform: translateY(-50%);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+input[type="checkbox"].switch:checked {
+  background: var(--accent);
+  border-color: transparent;
+}
+
+input[type="checkbox"].switch:checked::after {
+  background: #06101f;
+  transform: translateY(-50%) translateX(1.1rem);
+}
+
+input[type="checkbox"].switch:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Under prefers-contrast the accent alone is not enough of a signal, so the
+   knob carries the state too. */
+@media (prefers-contrast: more) {
+  input[type="checkbox"].switch:checked::after { background: #000; }
+  input[type="checkbox"].switch { border-width: 2px; }
+}
+
+/* Icons sit on the text baseline rather than floating above it. */
+button svg, nav.tabs button svg { vertical-align: -0.15em; }
+nav.tabs button { display: inline-flex; align-items: center; gap: 0.4rem; }
+button.mic svg, button.speaker svg { display: block; }
+
 /* -- account forms (REQ-13) -- */
 
 .stack { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.6rem; }

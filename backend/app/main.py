@@ -14,7 +14,7 @@ from collections.abc import Iterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -647,15 +647,22 @@ def clone_consent(request: CloneConsentRequest) -> dict[str, Any]:
     return cloning.status()
 
 
-@app.post("/voice/clone/record")
-def record_clone_reference(seconds: int = 12) -> dict[str, Any]:
-    """Record the reference sample from the microphone.
+@app.post("/voice/clone/reference")
+async def upload_clone_reference(file: UploadFile = File(...)) -> dict[str, Any]:
+    """Take the reference sample as an uploaded audio file.
 
-    Recorded here rather than uploaded: a file picker would accept any audio,
-    including a recording of somebody who never agreed to be cloned. Speaking
-    into the machine at least puts whoever is being copied in the room.
+    This replaced recording from the microphone. The argument for recording was
+    that it put whoever is being cloned in the room -- but it is not enforcement
+    (a phone held to a laptop defeats it) and it made the feature unusable for
+    the ordinary case of already having a clean recording of your own voice.
+    Since it bought manners rather than safety, the consent acknowledgement is
+    doing the real work, and this is the more useful shape.
+
+    Anything ffmpeg-free is accepted directly: WAV in, PCM out. Other formats
+    are refused by name rather than half-decoded into noise that only reveals
+    itself when the clone speaks.
     """
-    from .voice import audio, cloning
+    from .voice import cloning
 
     if not load_config().voice.clone_consent:
         raise HTTPException(
@@ -663,23 +670,27 @@ def record_clone_reference(seconds: int = 12) -> dict[str, Any]:
             detail="Voice cloning hasn't been acknowledged yet.",
         )
 
-    seconds = max(int(cloning.MIN_REFERENCE_SECONDS), min(int(seconds), 30))
-    try:
-        capture = audio.record_fixed(seconds)
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=503, detail=f"Couldn't record: {exc}") from exc
-
-    if not capture.speech_detected:
-        # Saving silence produces a clone that sounds like nothing, discovered
-        # only when the first reply comes out wrong.
+    name = (file.filename or "").lower()
+    if not name.endswith(".wav"):
         raise HTTPException(
             status_code=400,
-            detail="I didn't hear anything. Try again, speaking normally.",
+            detail=(
+                "Please upload a .wav file. Most voice recorders can export one, "
+                "and converting here would mean guessing at the format."
+            ),
         )
 
-    pcm = (capture.samples.clip(-1.0, 1.0) * 32767).astype("<i2").tobytes()
+    raw = await file.read()
+    if len(raw) > 50 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="That file is too large to be a voice sample.")
+
     try:
-        return {**cloning.save_reference(pcm, audio.SAMPLE_RATE), **cloning.status()}
+        pcm, rate = cloning.pcm_from_wav(raw)
+    except cloning.CloningUnavailable as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    try:
+        return {**cloning.save_reference(pcm, rate), **cloning.status()}
     except cloning.CloningUnavailable as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
