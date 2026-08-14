@@ -89,6 +89,7 @@ export function Startup({ t }: { t: (key: Key) => string }) {
         <span>{t("startup.enable")}</span>
         <input
           type="checkbox"
+          className="switch"
           checked={enabled}
           disabled={busy}
           onChange={(event) => void toggle(event.target.checked)}

@@ -44,16 +44,45 @@ export function Settings({ lang, setLang, t, voice }: Props) {
   const [config, setConfig] = useState<SettingsData["current"] | null>(null);
   const [saving, setSaving] = useState(false);
 
-  async function downloadModels() {
+  async function downloadModels(includeWake = false) {
     setDownloading(true);
     try {
-      await api.downloadVoiceModels(Boolean(voice.status?.wake.enabled));
+      await api.downloadVoiceModels(includeWake);
       await voice.refresh();
     } catch (caught) {
       setNote(caught instanceof ApiError ? caught.message : t("common.error"));
     } finally {
       setDownloading(false);
     }
+  }
+
+  /**
+   * Turning the wake word on, including fetching its model.
+   *
+   * This used to be impossible. The switch was disabled until the model was
+   * installed, and the only download button passed `wake.enabled` — which was
+   * false, because the switch was disabled. The button also disappeared once
+   * the speech models were ready, so after first setup there was no path to
+   * the wake model at all. A closed loop, and the user hit it.
+   *
+   * The switch now fetches what it needs. Asking someone to find a download
+   * button before they may use a setting is a step that exists only because
+   * the code was arranged that way.
+   */
+  async function toggleWake(on: boolean) {
+    if (on && !voice.status?.wake.installed) {
+      setNote(t("settings.voiceWakeDownloading"));
+      await downloadModels(true);
+      // Fetching can fail — no network, no disk. Enabling anyway would leave
+      // the setting on with nothing behind it, silently never waking.
+      const refreshed = await api.voiceStatus().catch(() => null);
+      if (!refreshed?.wake.installed) {
+        setNote(t("settings.voiceWakeFailed"));
+        return;
+      }
+      setNote(null);
+    }
+    toggle("wake_enabled", on);
   }
 
   function toggle(key: string, value: boolean) {
@@ -124,7 +153,7 @@ export function Settings({ lang, setLang, t, voice }: Props) {
         {voice.status && !voice.status.models_ready && (
           <div className="spread">
             <span className="small">{t("settings.voiceModels")}</span>
-            <button className="primary" onClick={downloadModels} disabled={downloading}>
+            <button className="primary" onClick={() => void downloadModels(false)} disabled={downloading}>
               {downloading
                 ? t("settings.voiceDownloading")
                 : t("settings.voiceDownload", { mb: voice.status.download_mb })}
@@ -138,6 +167,7 @@ export function Settings({ lang, setLang, t, voice }: Props) {
               <span>{t("settings.voiceEnabled")}</span>
               <input
                 type="checkbox"
+                className="switch"
                 checked={voice.status.enabled}
                 disabled={voice.busy}
                 onChange={(event) => toggle("enabled", event.target.checked)}
@@ -147,6 +177,7 @@ export function Settings({ lang, setLang, t, voice }: Props) {
               <span>{t("settings.voiceInput")}</span>
               <input
                 type="checkbox"
+                className="switch"
                 checked={voice.status.input_enabled}
                 disabled={voice.busy || !voice.status.enabled}
                 onChange={(event) => toggle("input_enabled", event.target.checked)}
@@ -156,6 +187,7 @@ export function Settings({ lang, setLang, t, voice }: Props) {
               <span>{t("settings.voiceOutput")}</span>
               <input
                 type="checkbox"
+                className="switch"
                 checked={voice.status.output_enabled}
                 disabled={voice.busy || !voice.status.enabled}
                 onChange={(event) => toggle("output_enabled", event.target.checked)}
@@ -168,9 +200,12 @@ export function Settings({ lang, setLang, t, voice }: Props) {
               </span>
               <input
                 type="checkbox"
+                className="switch"
                 checked={voice.status.wake.enabled}
-                disabled={voice.busy || !voice.status.enabled || !voice.status.wake.installed}
-                onChange={(event) => toggle("wake_enabled", event.target.checked)}
+                // Not gated on the model being present any more: the handler
+                // fetches it. Only voice being off, or a call in flight, block.
+                disabled={voice.busy || !voice.status.enabled || downloading}
+                onChange={(event) => void toggleWake(event.target.checked)}
               />
             </label>
             <p className="small muted">{t("settings.voiceWakeNote")}</p>
@@ -250,6 +285,7 @@ export function Settings({ lang, setLang, t, voice }: Props) {
                   <span>{t("settings.webSearch")}</span>
                   <input
                     type="checkbox"
+                    className="switch"
                     checked={Boolean(config.privacy?.allow_web_search)}
                     disabled={saving}
                     onChange={(e) =>
@@ -263,6 +299,7 @@ export function Settings({ lang, setLang, t, voice }: Props) {
                   <span>{t("settings.liveData")}</span>
                   <input
                     type="checkbox"
+                    className="switch"
                     checked={Boolean(config.privacy?.allow_live_data)}
                     disabled={saving}
                     onChange={(e) =>
@@ -276,6 +313,7 @@ export function Settings({ lang, setLang, t, voice }: Props) {
                   <span>{t("settings.cloudLlm")}</span>
                   <input
                     type="checkbox"
+                    className="switch"
                     checked={Boolean(config.privacy?.allow_cloud_llm)}
                     disabled={saving}
                     onChange={(e) =>

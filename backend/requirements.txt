@@ -1,5 +1,8 @@
 # Kai backend — all free / open source (REQ-30)
 fastapi==0.121.2
+# Required by FastAPI for multipart uploads: the voice-cloning reference
+# arrives as a file, and without this the endpoint fails at import time.
+python-multipart==0.0.32
 uvicorn[standard]==0.41.0
 pydantic==2.12.4
 httpx==0.28.1

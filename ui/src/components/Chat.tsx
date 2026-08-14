@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, ApiError, type PendingAction } from "../api";
 import type { Key, Lang } from "../i18n";
 import type { Voice } from "../useVoice";
+import { Icon } from "./Icon";
 import { ensurePermission } from "../desktopNotify";
 
 interface Message {
@@ -321,7 +322,7 @@ export function Chat({ t, onBusyChange, voice }: Props) {
           aria-pressed={listening}
           title={voice.canListen ? t("voice.talk") : t((voice.blockedBecause ?? "voice.talk") as Key)}
         >
-          <span aria-hidden="true">●</span>
+          <Icon name={listening ? "mic-off" : "mic"} />
           <span className="sr-only">{t("voice.talk")}</span>
         </button>
         <button
@@ -329,7 +330,8 @@ export function Chat({ t, onBusyChange, voice }: Props) {
           type="submit"
           disabled={busy || listening || !draft.trim()}
         >
-          {t("chat.send")}
+          <Icon name="send" />
+          <span className="sr-only">{t("chat.send")}</span>
         </button>
       </form>
     </div>

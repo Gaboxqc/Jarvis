@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Chat } from "./components/Chat";
+import { Icon, type IconName } from "./components/Icon";
 import { History } from "./components/History";
 import { Memory } from "./components/Memory";
 import { Planner } from "./components/Planner";
@@ -73,7 +74,7 @@ export function App() {
           title={voice.speaks ? t("voice.speakOn") : t("voice.speakOff")}
           onClick={() => void voice.setSpeaks(!voice.speaks).catch(() => undefined)}
         >
-          <span aria-hidden="true">{voice.speaks ? "▶" : "□"}</span>
+          <Icon name={voice.speaks ? "speaker" : "speaker-off"} />
           <span className="sr-only">
             {voice.speaks ? t("voice.speakOn") : t("voice.speakOff")}
           </span>
@@ -85,6 +86,7 @@ export function App() {
               onClick={() => setTab(name)}
               aria-current={tab === name ? "page" : undefined}
             >
+              <Icon name={name as IconName} />
               {t(`nav.${name}` as Key)}
             </button>
           ))}

@@ -16,9 +16,10 @@
  * says so and Piper carries on speaking replies exactly as before.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, type CloneStatus } from "../api";
 import type { Key } from "../i18n";
+import { Icon } from "./Icon";
 
 interface Props {
   t: (key: Key, vars?: Record<string, string | number>) => string;
@@ -27,7 +28,8 @@ interface Props {
 export function VoiceCloning({ t }: Props) {
   const [status, setStatus] = useState<CloneStatus | null>(null);
   const [note, setNote] = useState<string | null>(null);
-  const [recording, setRecording] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -54,17 +56,20 @@ export function VoiceCloning({ t }: Props) {
     }
   }
 
-  async function record() {
-    setRecording(true);
-    setNote(t("clone.recordingNow"));
+  async function upload(file: File | undefined) {
+    if (!file) return;
+    setUploading(true);
+    setNote(null);
     try {
-      const result = await api.recordCloneReference(12);
+      const result = await api.uploadCloneReference(file);
       setStatus(result);
-      setNote(t("clone.recorded", { seconds: result.reference_seconds }));
+      setNote(t("clone.uploaded", { seconds: result.reference_seconds }));
     } catch (caught) {
       setNote(caught instanceof ApiError ? caught.message : t("common.error"));
     } finally {
-      setRecording(false);
+      setUploading(false);
+      // Cleared so choosing the same file again still fires a change event.
+      if (fileInput.current) fileInput.current.value = "";
     }
   }
 
@@ -92,6 +97,7 @@ export function VoiceCloning({ t }: Props) {
             <span>{t("clone.consent")}</span>
             <input
               type="checkbox"
+              className="switch"
               checked={status.consented}
               disabled={busy}
               onChange={(event) =>
@@ -110,16 +116,24 @@ export function VoiceCloning({ t }: Props) {
                     : t("clone.noReference", { seconds: status.min_seconds })}
                 </span>
                 <div className="row">
+                  <input
+                    ref={fileInput}
+                    type="file"
+                    accept=".wav,audio/wav"
+                    className="sr-only"
+                    onChange={(event) => void upload(event.target.files?.[0])}
+                  />
                   <button
                     className="primary"
-                    disabled={busy || recording}
-                    onClick={() => void record()}
+                    disabled={busy || uploading}
+                    onClick={() => fileInput.current?.click()}
                   >
-                    {recording
-                      ? t("clone.recording")
+                    <Icon name="upload" />
+                    {uploading
+                      ? t("clone.uploading")
                       : status.has_reference
-                        ? t("clone.rerecord")
-                        : t("clone.record")}
+                        ? t("clone.replace")
+                        : t("clone.choose")}
                   </button>
                   {status.has_reference && (
                     <button className="ghost" disabled={busy} onClick={forget}>
@@ -128,7 +142,7 @@ export function VoiceCloning({ t }: Props) {
                   )}
                 </div>
               </div>
-              <p className="small muted">{t("clone.recordNote")}</p>
+              <p className="small muted">{t("clone.uploadNote")}</p>
             </>
           )}
 
