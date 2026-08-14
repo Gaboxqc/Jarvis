@@ -143,6 +143,10 @@ const STRINGS = {
     "folders.remove": "Remove",
     "folders.lastOne": "At least one folder is required.",
     "folders.placeholder": "C:/Users/you/Documents",
+    "startup.title": "Startup",
+    "startup.enable": "Start Kai when Windows starts",
+    "startup.note":
+      "Opens minimised to the tray. Without this, the Ctrl+Alt+K hotkey does nothing until you launch Kai yourself.",
     "settings.language": "Language",
     "settings.danger": "Delete all local data",
     "settings.dangerNote":
@@ -384,6 +388,10 @@ const STRINGS = {
     "folders.remove": "Quitar",
     "folders.lastOne": "Hace falta al menos una carpeta.",
     "folders.placeholder": "C:/Users/tu/Documents",
+    "startup.title": "Inicio",
+    "startup.enable": "Abrir Kai al iniciar Windows",
+    "startup.note":
+      "Se abre minimizado en la bandeja. Sin esto, el atajo Ctrl+Alt+K no hace nada hasta que abras Kai tú mismo.",
     "settings.language": "Idioma",
     "settings.danger": "Borrar todos los datos locales",
     "settings.dangerNote":

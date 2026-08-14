@@ -114,6 +114,14 @@ fn main() {
         // you miss by having the window hidden -- which is the normal state for
         // an assistant that lives in the tray.
         .plugin(tauri_plugin_notification::init())
+        // Start with Windows, so an assistant that lives in the tray is
+        // actually there after a reboot rather than waiting to be remembered.
+        // Registered but not enabled: the plugin only writes the run key when
+        // the user asks for it in Settings.
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {
