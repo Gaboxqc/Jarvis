@@ -116,6 +116,25 @@ def unload_if_idle() -> bool:
     return unload()
 
 
+def use_cloned_voice() -> bool:
+    """Whether this install should speak in the cloned voice.
+
+    Every condition has to hold. Consent is checked here rather than only where
+    it is granted, so that clearing it in the config file switches cloning off
+    on the next sentence — the acknowledgement is a live setting, not a
+    one-time gate that stays open once passed.
+    """
+    from . import cloning
+
+    config = load_config().voice
+    return (
+        config.tts_engine == "xtts"
+        and config.clone_consent
+        and cloning.is_installed()
+        and cloning.has_reference()
+    )
+
+
 def synthesize(text: str) -> Speech:
     """Render text to PCM. Raises TTSUnavailable rather than returning silence."""
     global _last_used
@@ -123,6 +142,18 @@ def synthesize(text: str) -> Speech:
     text = (text or "").strip()
     if not text:
         return Speech(audio=b"", sample_rate=22_050)
+
+    if use_cloned_voice():
+        from . import cloning
+
+        try:
+            pcm, rate = cloning.synthesize(text, language=load_config().voice.language)
+            return Speech(audio=pcm, sample_rate=rate)
+        except cloning.CloningUnavailable as exc:
+            # Fall through to Piper rather than going silent. Losing the cloned
+            # timbre is a cosmetic downgrade; losing the reply is not, and REQ-4
+            # says speech is a way out, never a capability of its own.
+            log.warning("cloned voice unavailable, falling back to piper: %s", exc)
 
     voice = load()
     chunks: list[bytes] = []

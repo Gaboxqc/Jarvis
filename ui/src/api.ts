@@ -204,6 +204,18 @@ export interface Reminder {
   active: boolean;
 }
 
+export interface CloneStatus {
+  /** Whether the XTTS package is present. It is a ~2GB optional dependency. */
+  installed: boolean;
+  enabled: boolean;
+  consented: boolean;
+  has_reference: boolean;
+  reference_seconds: number;
+  loaded: boolean;
+  min_seconds: number;
+  licence: string;
+}
+
 export interface DocumentHit {
   file: string;
   path: string;
@@ -478,6 +490,27 @@ export const api = {
     request<{ changed: Record<string, unknown> }>("/settings", {
       method: "PATCH",
       body: JSON.stringify({ changes }),
+    }),
+
+  cloneStatus: () => request<CloneStatus>("/voice/clone"),
+
+  setCloneConsent: (consent: boolean, enable = false) =>
+    request<CloneStatus>("/voice/clone/consent", {
+      method: "POST",
+      body: JSON.stringify({ consent, enable }),
+    }),
+
+  // Blocks for the length of the recording plus the save, so it is allowed
+  // well past the default timeout.
+  recordCloneReference: (seconds = 12) =>
+    request<CloneStatus & { seconds: number }>(
+      `/voice/clone/record?seconds=${seconds}`,
+      { method: "POST", timeoutMs: 120_000 },
+    ),
+
+  forgetCloneReference: () =>
+    request<CloneStatus & { removed: boolean }>("/voice/clone/reference", {
+      method: "DELETE",
     }),
 
   documentStatus: () => request<IndexStatus>("/documents/status"),

@@ -196,6 +196,16 @@ class VoiceSettings:
     input_enabled: bool = True
     output_enabled: bool = True
     voice_id: str = "en_US-amy-medium"
+    # piper | xtts. Piper plays fixed pre-trained voices and is the default
+    # because it is small, fast and always present; xtts copies a voice from a
+    # recording but is a ~2GB optional dependency that competes with the
+    # language model for the GPU.
+    tts_engine: str = "piper"
+    # Set once, on purpose. A convincing copy of someone's speech can be used to
+    # say things they never said, and the person whose voice it is may not be
+    # the person operating this app -- so cloning stays off until this is
+    # recorded, and clearing it turns the feature off again.
+    clone_consent: bool = False
     stt_model: str = "base"  # tiny | base | small | medium
     language: str = "en"
     # Wake word is opt-in on top of voice: it means an always-open microphone,
@@ -285,6 +295,8 @@ def _build(raw: dict[str, Any], source: Path | None) -> Config:
             input_enabled=bool(voice_raw.get("input_enabled", True)),
             output_enabled=bool(voice_raw.get("output_enabled", True)),
             voice_id=voice_raw.get("voice_id", "en_US-amy-medium"),
+            tts_engine=str(voice_raw.get("tts_engine", VoiceSettings.tts_engine)).lower(),
+            clone_consent=bool(voice_raw.get("clone_consent", False)),
             stt_model=voice_raw.get("stt_model", "base"),
             language=voice_raw.get("language", persona_raw.get("language", "en")),
             wake_enabled=bool(voice_raw.get("wake_enabled", False)),

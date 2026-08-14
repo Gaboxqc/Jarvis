@@ -74,6 +74,9 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     config_file = tmp_path / "kai.config.yaml"
     config_file.write_text(yaml.safe_dump(config), encoding="utf-8")
 
+    # Keeps the lifespan from starting a scanner thread that writes to the same
+    # database the test is using. See the note in app/main.py:lifespan.
+    monkeypatch.setenv("KAI_NO_BACKGROUND_SCAN", "1")
     monkeypatch.setenv("KAI_DATA_DIR", str(data))
     monkeypatch.setenv("KAI_CONFIG", str(config_file))
     settings.reset_config_cache()

@@ -78,6 +78,9 @@ WRITABLE: dict[str, dict[str, Any]] = {
         "stt_model": {"tiny", "base", "small", "medium"},
         "wake_word": str,
         "language": {"en", "es"},
+        "tts_engine": {"piper", "xtts"},
+        # Writable so it can be withdrawn, which must be as easy as granting it.
+        "clone_consent": bool,
     },
     "persona": {
         "name": str,
