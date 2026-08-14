@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Chat } from "./components/Chat";
 import { Icon, type IconName } from "./components/Icon";
 import { History } from "./components/History";
+import { Meetings } from "./components/Meetings";
 import { Memory } from "./components/Memory";
 import { Planner } from "./components/Planner";
 import { Documents } from "./components/Documents";
@@ -22,8 +23,8 @@ import { Notifications } from "./components/Notifications";
 import { detectLang, translate, type Key, type Lang } from "./i18n";
 import { useVoice } from "./useVoice";
 
-type Tab = "chat" | "today" | "planner" | "documents" | "memory" | "history" | "settings";
-const TABS: Tab[] = ["chat", "today", "planner", "documents", "memory", "history", "settings"];
+type Tab = "chat" | "today" | "planner" | "meetings" | "documents" | "memory" | "history" | "settings";
+const TABS: Tab[] = ["chat", "today", "planner", "meetings", "documents", "memory", "history", "settings"];
 
 export function App() {
   const [tab, setTab] = useState<Tab>("chat");
@@ -107,6 +108,7 @@ export function App() {
         </div>
         {tab === "today" && <Today t={t} />}
         {tab === "planner" && <Planner t={t} />}
+        {tab === "meetings" && <Meetings t={t} />}
         {tab === "documents" && <Documents t={t} />}
         {tab === "memory" && <Memory t={t} />}
         {tab === "history" && <History t={t} />}
