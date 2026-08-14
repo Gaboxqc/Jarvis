@@ -67,3 +67,7 @@ backend/app/skills/_manifest.py
 *.key.pem
 !*.key.pub
 .tauri/
+
+# The Live2D runtime is proprietary and licensed per-user from live2d.com.
+# It is dropped in locally, never committed.
+ui/public/live2d/live2dcubismcore.min.js

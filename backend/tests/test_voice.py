@@ -386,3 +386,86 @@ def test_speech_can_be_written_as_a_wav_file(tmp_path):
 
     assert path.exists()
     assert path.read_bytes()[:4] == b"RIFF"
+
+
+# -- speaking, and the shape the avatar reads (REQ-4, REQ-32) -------------
+
+
+def test_speak_actually_plays(workspace, config_file, monkeypatch):
+    """The endpoint used to synthesize and throw the audio away.
+
+    The CLI and the voice loop both call tts.speak(), which plays; this endpoint
+    called synthesize(), which does not. So the desktop app's "speak replies
+    aloud" switch produced silence while every other path worked, and nothing
+    caught it because nothing asserted sound came out.
+    """
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+    from app.settings import reset_config_cache
+    from app.voice import audio, tts
+
+    config_file.write_text(
+        "voice:\n  enabled: true\n  output_enabled: true\n", encoding="utf-8"
+    )
+    reset_config_cache()
+
+    played: list[tuple[int, int]] = []
+    monkeypatch.setattr(
+        tts, "synthesize",
+        lambda text: tts.Speech(audio=b"\x10\x00" * 16_000, sample_rate=16_000),
+    )
+    monkeypatch.setattr(
+        audio, "play",
+        lambda pcm, rate, blocking=True: played.append((len(pcm), rate)),
+    )
+
+    with TestClient(app) as client:
+        body = client.post("/voice/speak", json={"text": "hello"}).json()
+
+    assert played, "no audio reached the output device"
+    assert body["spoke"] is True
+
+
+def test_speak_is_silent_when_muted_without_being_an_error(workspace, config_file):
+    """Muting output disables output and nothing else (REQ-4)."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+    from app.settings import reset_config_cache
+
+    config_file.write_text(
+        "voice:\n  enabled: true\n  output_enabled: false\n", encoding="utf-8"
+    )
+    reset_config_cache()
+
+    with TestClient(app) as client:
+        response = client.post("/voice/speak", json={"text": "hello"})
+
+    assert response.status_code == 200
+    assert response.json()["spoke"] is False
+
+
+def test_the_envelope_tracks_loudness(workspace):
+    """It drives the avatar's mouth, so quiet must read as closed."""
+    import math
+    import struct
+
+    from app.voice import tts
+
+    rate = 16_000
+    # A second of silence, then a second of tone.
+    quiet = b"\x00\x00" * rate
+    loud = b"".join(struct.pack("<h", int(20000 * math.sin(i * 0.2))) for i in range(rate))
+    shape = tts.envelope(tts.Speech(audio=quiet + loud, sample_rate=rate), fps=30)
+
+    assert len(shape) == 60, "two seconds at 30fps"
+    assert max(shape[:25]) < 0.05, "silence should keep the mouth shut"
+    assert max(shape[35:]) > 0.8, "the tone should open it"
+    assert all(0.0 <= value <= 1.0 for value in shape)
+
+
+def test_an_empty_utterance_has_no_envelope(workspace):
+    from app.voice import tts
+
+    assert tts.envelope(tts.Speech(audio=b"", sample_rate=22_050)) == []

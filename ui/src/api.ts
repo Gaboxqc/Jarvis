@@ -111,6 +111,15 @@ export interface VoiceStatus {
   wake: { phrase: string; enabled: boolean; installed: boolean; available: boolean };
 }
 
+export interface SpeechShape {
+  /** False when speech output is muted, or no device would take it. */
+  spoke: boolean;
+  seconds: number;
+  sample_rate: number;
+  /** Loudness 0–1 at 30 samples per second. Drives the avatar's mouth. */
+  envelope: number[];
+}
+
 export interface VoiceTurn {
   heard: string;
   confidence: number;
@@ -476,7 +485,7 @@ export const api = {
     request<VoiceTurn>("/voice/listen", { method: "POST", timeoutMs: 120_000 }),
 
   speak: (text: string) =>
-    request<{ seconds: number }>("/voice/speak", {
+    request<SpeechShape>("/voice/speak", {
       method: "POST",
       body: JSON.stringify({ text }),
       timeoutMs: 120_000,

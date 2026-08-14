@@ -194,6 +194,37 @@ def speak(text: str, *, blocking: bool = True) -> Speech | None:
     return speech
 
 
+def envelope(speech: Speech, fps: int = 30) -> list[float]:
+    """Loudness over time, 0-1, at `fps` samples per second.
+
+    For driving a mouth. Live2D's own approach is amplitude rather than
+    phonemes, which is what makes lip sync possible here at all: Piper does not
+    expose phoneme timings, and deriving them would mean a second model.
+
+    Peak rather than RMS per frame. RMS is the better loudness measure, but a
+    mouth follows the shape of speech, and peaks track consonants and syllable
+    edges -- the things that visibly move a jaw.
+    """
+    if not speech.audio or not speech.sample_rate:
+        return []
+
+    import numpy as np
+
+    samples = np.frombuffer(speech.audio, dtype="<i2").astype("float32") / 32768.0
+    per_frame = max(1, speech.sample_rate // max(1, fps))
+    usable = (len(samples) // per_frame) * per_frame
+    if usable == 0:
+        return []
+
+    frames = np.abs(samples[:usable]).reshape(-1, per_frame).max(axis=1)
+    # Normalised against this utterance rather than full scale: Piper's output
+    # sits well below 0dBFS, so absolute values would barely open the mouth.
+    loudest = float(frames.max())
+    if loudest > 0:
+        frames = frames / loudest
+    return [round(float(v), 3) for v in frames]
+
+
 def available_voices() -> list[str]:
     """Voices already downloaded, for the settings screen (REQ-4)."""
     return sorted(path.stem for path in models.piper_dir().glob("*.onnx"))

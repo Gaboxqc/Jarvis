@@ -243,6 +243,31 @@ button.mic.recording span[aria-hidden] { animation: pulse 1.2s ease-in-out infin
 
 .listening { color: var(--ok); }
 
+/* -- avatar (REQ-32) -- */
+
+.avatar {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+  /* Reserved whether or not the model loads, so the conversation below does not
+     jump down when it finishes loading. */
+  min-height: 300px;
+}
+
+.avatar canvas { display: block; }
+
+.avatar-missing {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-height: 0;
+  padding: 0.6rem 0.9rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  text-align: center;
+}
+
 /* -- switches (REQ-28) -- */
 
 /* A checkbox says "tick this and submit"; these apply the moment they move, so

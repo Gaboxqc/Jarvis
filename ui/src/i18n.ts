@@ -101,6 +101,8 @@ const STRINGS = {
     "confirm.undoable": "This can be undone.",
     "confirm.permanent": "This cannot be undone.",
 
+    "avatar.needsCore":
+      "The avatar needs Live2D's Cubism Core, which is licensed separately and isn't included. Drop it into the app's live2d folder to switch it on — everything else works without it.",
     "state.idle": "Idle",
     "state.listening": "Listening",
     "state.thinking": "Thinking",
@@ -362,6 +364,8 @@ const STRINGS = {
     "confirm.undoable": "Esto se puede deshacer.",
     "confirm.permanent": "Esto no se puede deshacer.",
 
+    "avatar.needsCore":
+      "El avatar necesita Cubism Core de Live2D, que tiene su propia licencia y no viene incluido. Colócalo en la carpeta live2d de la app para activarlo; todo lo demás funciona sin él.",
     "state.idle": "En reposo",
     "state.listening": "Escuchando",
     "state.thinking": "Pensando",

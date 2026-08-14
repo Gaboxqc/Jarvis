@@ -13,6 +13,8 @@ import { api, ApiError, type PendingAction } from "../api";
 import type { Key, Lang } from "../i18n";
 import type { Voice } from "../useVoice";
 import { Icon } from "./Icon";
+import { Avatar, type AvatarState } from "./Avatar";
+import { playEnvelope, stop as stopSpeaking } from "../speechLevel";
 import { ensurePermission } from "../desktopNotify";
 
 interface Message {
@@ -58,6 +60,10 @@ export function Chat({ t, onBusyChange, voice }: Props) {
     onBusyChange(busy);
   }, [busy, onBusyChange]);
 
+  // Leaving mid-sentence should close the mouth. The audio is the backend's
+  // and carries on, but the avatar must not be left mouthing at nothing.
+  useEffect(() => stopSpeaking, []);
+
   useEffect(() => {
     logEnd.current?.scrollIntoView({ block: "end" });
   }, [messages, pending]);
@@ -82,7 +88,9 @@ export function Chat({ t, onBusyChange, voice }: Props) {
   async function maybeSpeak(text: string, alreadySpoken = false) {
     if (!text || alreadySpoken || !voice.speaks) return;
     try {
-      await api.speak(text);
+      const shape = await api.speak(text);
+      // The backend starts playing as this returns, so the envelope starts now.
+      if (shape.spoke) playEnvelope(shape.envelope);
     } catch {
       // Losing the audio is a degradation; the reply is already on screen.
     }
@@ -140,6 +148,16 @@ export function Chat({ t, onBusyChange, voice }: Props) {
       setListening(false);
     }
   }
+
+  // The avatar shows what the app already knows it is doing, so the two can
+  // never disagree.
+  const avatarState: AvatarState = listening
+    ? "listening"
+    : busy && stage === "writing"
+      ? "speaking"
+      : busy
+        ? "thinking"
+        : "idle";
 
   async function send(event: React.FormEvent) {
     event.preventDefault();
@@ -243,6 +261,8 @@ export function Chat({ t, onBusyChange, voice }: Props) {
   return (
     <div className="view">
       <h1 className="sr-only">{t("nav.chat")}</h1>
+
+      <Avatar state={avatarState} t={t} />
 
       <div className="log" role="log" aria-label={t("chat.log")} aria-live="polite">
         {messages.length === 0 && !pending && (
