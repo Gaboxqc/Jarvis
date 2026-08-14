@@ -353,3 +353,72 @@ def test_a_pdf_answer_cites_its_page(docs_folder):
     assert outcome.status == gate.EXECUTED
     # The page number is what makes the citation actionable.
     assert "lease.pdf (page 2)" in outcome.message
+
+
+# -- the API the Documents screen is built on (REQ-16) ---------------------
+
+
+def test_search_results_carry_a_citation_and_the_passage(workspace, docs_folder):
+    """An answer about your lease is worth nothing if you can't see the line.
+
+    The screen quotes the passage verbatim and names the file, so both have to
+    survive the trip through the API.
+    """
+    from fastapi.testclient import TestClient
+
+    from app.index import scanner
+    from app.main import app
+
+    (docs_folder / "tenancy.txt").write_text(
+        "Section 3 - Deposit\nThe tenant shall pay a security deposit of 1450 EUR.",
+        encoding="utf-8",
+    )
+    scanner.scan(force=True)
+
+    with TestClient(app) as client:
+        results = client.get("/documents/search?q=security deposit").json()["results"]
+
+    assert results, "the indexed passage should be findable"
+    hit = results[0]
+    assert hit["file"] == "tenancy.txt"
+    assert "1450 EUR" in hit["text"]
+    assert "tenancy.txt" in hit["citation"]
+    assert hit["path"].endswith("tenancy.txt")
+
+
+def test_status_tells_the_screen_why_a_search_would_find_nothing(workspace):
+    """Empty results have several causes and they are not interchangeable.
+
+    "Nothing matched", "nothing is indexed" and "the scan is waiting" mean
+    different things, and a user who cannot tell them apart concludes the
+    feature is broken. The screen needs all three from this one call.
+    """
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    with TestClient(app) as client:
+        status = client.get("/documents/status").json()
+
+    for key in ("folders", "running", "paused", "deferred_because", "documents", "chunks",
+                "failed", "failures"):
+        assert key in status, f"the screen needs {key} to explain an empty result"
+
+
+def test_clearing_the_index_leaves_the_files_alone(workspace, docs_folder):
+    """REQ-26: 'clear index' must never read as 'delete my documents'."""
+    from fastapi.testclient import TestClient
+
+    from app.index import scanner
+    from app.main import app
+
+    document = docs_folder / "keep-me.txt"
+    document.write_text("something worth keeping", encoding="utf-8")
+    scanner.scan(force=True)
+
+    with TestClient(app) as client:
+        assert client.delete("/documents/index").json()["cleared_documents"] >= 1
+        assert client.get("/documents/status").json()["documents"] == 0
+
+    assert document.exists(), "clearing the index must not touch the file"
+    assert document.read_text(encoding="utf-8") == "something worth keeping"
