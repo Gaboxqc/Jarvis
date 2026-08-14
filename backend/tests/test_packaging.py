@@ -384,3 +384,60 @@ def test_existing_streams_are_left_alone():
     original = sys.stdout
     server.ensure_standard_streams()
     assert sys.stdout is original
+
+
+# -- the icon (REQ-29) -----------------------------------------------------
+
+
+def test_every_icon_the_bundle_references_exists_and_is_the_right_size():
+    """A missing icon fails the Tauri build; a wrong-sized one ships blurred.
+
+    Both are the kind of thing nobody notices until the installer is in front
+    of someone else.
+    """
+    import json
+
+    from PIL import Image
+
+    config = json.loads((PROJECT / "ui" / "src-tauri" / "tauri.conf.json").read_text("utf-8"))
+    icons = PROJECT / "ui" / "src-tauri"
+
+    for relative in config["bundle"]["icon"]:
+        path = icons / relative
+        assert path.exists(), f"{relative} is referenced by the bundle but missing"
+
+        if path.suffix == ".png":
+            # "128x128@2x.png" is 256; the rest state their size in the name.
+            name = path.stem
+            expected = int(name.split("x")[0]) * (2 if name.endswith("@2x") else 1)
+            assert Image.open(path).size == (expected, expected), f"{relative} is the wrong size"
+
+
+def test_the_icon_is_not_the_placeholder():
+    """The first build shipped a blue dot on white, written to unblock
+    packaging and nearly shipped to a user.
+
+    The real mark is drawn on the app's own dark panel colour, so a white
+    background means the placeholder came back.
+    """
+    from PIL import Image
+
+    icon = Image.open(PROJECT / "ui" / "src-tauri" / "icons" / "128x128.png").convert("RGB")
+    corner = icon.getpixel((4, 4))
+
+    assert sum(corner) < 200, f"the corner is {corner}; the icon looks like the placeholder again"
+
+
+def test_the_icon_generator_runs():
+    """It is a script so the mark can be changed by editing numbers.
+
+    A generator that has rotted is worse than none: the next person edits it,
+    sees nothing change, and hand-edits the PNGs instead.
+    """
+    generator = PROJECT / "installer" / "make_icons.py"
+    assert generator.exists()
+
+    result = subprocess.run(
+        [sys.executable, str(generator)], capture_output=True, text=True, timeout=120
+    )
+    assert result.returncode == 0, result.stderr
