@@ -34,6 +34,9 @@ interface Props {
   t: (key: Key, vars?: Record<string, string | number>) => string;
 }
 
+const WIDTH = 260;
+const HEIGHT = 300;
+
 const MODEL = "/live2d/Alexia.model3.json";
 const CORE = "/live2d/live2dcubismcore.min.js";
 
@@ -43,6 +46,35 @@ const EXPRESSIONS: Partial<Record<AvatarState, string>> = {
   thinking: "mj",
   speaking: "wh",
 };
+
+/** The newest Core the bundled Cubism framework can actually drive. */
+const MAX_CORE_MAJOR = 5;
+
+/**
+ * Whether this Cubism Core is one the renderer can work with.
+ *
+ * Core 6.0.1 removed `drawables.renderOrders`, which every published PIXI
+ * Live2D binding calls -- they all bundle a Cubism 4 or 5 framework. The model
+ * loads, reports its 222 drawables, sits in the scene graph looking healthy,
+ * and draws nothing. Restoring that one array is not enough either; more of the
+ * API moved with it.
+ *
+ * So this is checked up front and reported, rather than being discovered as a
+ * blank rectangle.
+ */
+function coreIsUsable(): { ok: boolean; version: string } {
+  const core = (window as any).Live2DCubismCore;
+  try {
+    const packed = core.Version.csmGetVersion();
+    const major = (packed >> 24) & 0xff;
+    const minor = (packed >> 16) & 0xff;
+    const version = `${major}.${minor}.${packed & 0xffff}`;
+    return { ok: major <= MAX_CORE_MAJOR, version };
+  } catch {
+    // An unreadable version is not a reason to refuse; let it try.
+    return { ok: true, version: "unknown" };
+  }
+}
 
 async function loadCore(): Promise<boolean> {
   if ("Live2DCubismCore" in window) return true;
@@ -70,6 +102,7 @@ export function Avatar({ state, t }: Props) {
   const app = useRef<any>(null);
   const levelRef = useRef(0);
   const [ready, setReady] = useState<boolean | null>(null);
+  const [coreVersion, setCoreVersion] = useState<string | null>(null);
 
   // Straight into a ref: the ticker runs outside React's render cycle, and
   // re-rendering this component thirty times a second to move a mouth would be
@@ -86,6 +119,15 @@ export function Avatar({ state, t }: Props) {
         return;
       }
 
+      const core = coreIsUsable();
+      if (!core.ok) {
+        if (!cancelled) {
+          setCoreVersion(core.version);
+          setReady(false);
+        }
+        return;
+      }
+
       try {
         const PIXI = await import("pixi.js");
         const { Live2DModel } = await import("pixi-live2d-display/cubism4");
@@ -97,12 +139,26 @@ export function Avatar({ state, t }: Props) {
 
         const application = new PIXI.Application({
           view: canvas.current,
+          // Given explicitly. PIXI ignores width/height set on the canvas
+          // element and falls back to its own 800x600 default, which is three
+          // times the panel and pushes the conversation off the screen.
+          width: WIDTH,
+          height: HEIGHT,
           backgroundAlpha: 0,
           antialias: true,
           autoDensity: true,
           resolution: window.devicePixelRatio || 1,
         });
-        const loaded = await Live2DModel.from(MODEL);
+
+        // autoInteract: false is not an optimisation, it is what makes this
+        // work at all. pixi-live2d-display 0.4 registers a pointer handler
+        // against PIXI 6's InteractionManager; PIXI 7 replaced that with
+        // EventSystem, so registerInteraction() gets an object with no `.on`
+        // and throws -- inside _render, on every frame. The model sits in the
+        // scene graph looking perfectly healthy and never draws a pixel.
+        // Nothing here needs hit-testing: the avatar is decoration and is
+        // aria-hidden.
+        const loaded = await Live2DModel.from(MODEL, { autoInteract: false });
         if (cancelled) {
           application.destroy();
           return;
@@ -173,7 +229,11 @@ export function Avatar({ state, t }: Props) {
   if (ready === false) {
     return (
       <div className="avatar avatar-missing">
-        <p className="small muted">{t("avatar.needsCore")}</p>
+        <p className="small muted">
+          {coreVersion
+            ? t("avatar.coreTooNew", { version: coreVersion, max: MAX_CORE_MAJOR })
+            : t("avatar.needsCore")}
+        </p>
         <code className="small">live2dcubismcore.min.js</code>
       </div>
     );
@@ -181,7 +241,7 @@ export function Avatar({ state, t }: Props) {
 
   return (
     <div className={`avatar avatar-${state}`}>
-      <canvas ref={canvas} width={260} height={300} aria-hidden="true" />
+      <canvas ref={canvas} aria-hidden="true" />
       {/* The avatar is decoration; this is what a screen reader is told. */}
       <span className="sr-only">{t(`state.${state}` as Key)}</span>
     </div>

@@ -16,6 +16,13 @@ distributed by Live2D under a licence the operator has to accept, and accepting
 that on someone's behalf is not this script's business. Drop
 `live2dcubismcore.min.js` into ui/public/live2d/ and the avatar starts working;
 until then the app runs exactly as before and the avatar panel explains itself.
+
+Get **Cubism SDK for Web 5.x**, not the newest. Core 6.0.1 removed
+`drawables.renderOrders`, and every published PIXI Live2D binding still calls it
+-- they bundle a Cubism 4 or 5 framework. With Core 6 the model loads, reports
+its drawables, sits in the scene graph looking healthy and draws nothing at all.
+The avatar checks the version on startup and says so rather than showing a blank
+rectangle.
 """
 
 from __future__ import annotations
