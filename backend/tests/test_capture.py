@@ -341,3 +341,54 @@ def test_recall_with_no_recordings_says_so(workspace):
 
     assert outcome.status == gate.FAILED
     assert "no recorded meetings" in (outcome.error or "").lower()
+
+
+# -- the API the Meetings screen is built on (REQ-19, REQ-26) -------------
+
+
+def test_status_tells_the_screen_it_is_recording(workspace, monkeypatch):
+    """A running recording must never be able to look idle.
+
+    The screen draws its outline, its pulsing dot and its Stop button from this
+    one field, so it has to be right even when the recorder is degraded.
+    """
+    from fastapi.testclient import TestClient
+
+    from app.capture import session as capture
+    from app.main import app
+
+    with TestClient(app) as client:
+        assert client.get("/capture/status").json()["recording"] is False
+
+
+def test_a_transcript_can_be_listed_read_and_deleted(workspace):
+    """The three things the screen does with a past recording."""
+    from fastapi.testclient import TestClient
+
+    from app.capture import store as capture_store
+    from app.main import app
+
+    saved = capture_store.create("call with Ana", ["microphone"])
+    capture_store.append_text(saved.id, "We agreed to ship on Friday.")
+    capture_store.finish(saved.id, 125.0)
+
+    with TestClient(app) as client:
+        listed = client.get("/capture/transcripts").json()["transcripts"]
+        assert any(t["id"] == saved.id for t in listed)
+        assert listed[0]["minutes"] == 2.1
+
+        full = client.get(f"/capture/transcripts/{saved.id}").json()
+        # The list omits the text; opening one is what fetches it.
+        assert full["text"] == "We agreed to ship on Friday."
+
+        assert client.delete(f"/capture/transcripts/{saved.id}").status_code == 200
+        assert client.get("/capture/transcripts").json()["transcripts"] == []
+
+
+def test_reading_a_missing_transcript_is_404(workspace):
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    with TestClient(app) as client:
+        assert client.get("/capture/transcripts/nope").status_code == 404

@@ -42,7 +42,8 @@ export type IconName =
   | "trash"
   | "plus"
   | "refresh"
-  | "upload";
+  | "upload"
+  | "meetings";
 
 const PATHS: Record<IconName, ReactNode> = {
   mic: (
@@ -123,6 +124,13 @@ const PATHS: Record<IconName, ReactNode> = {
     <>
       <path d="M20 12a8 8 0 1 1-2.3-5.6" />
       <path d="M20 4v5h-5" />
+    </>
+  ),
+  meetings: (
+    <>
+      <rect x="9" y="2" width="6" height="11" rx="3" />
+      <path d="M5 10a7 7 0 0 0 14 0M12 17v4" />
+      <circle cx="18.5" cy="18.5" r="3.5" />
     </>
   ),
   upload: (

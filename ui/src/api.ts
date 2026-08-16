@@ -225,6 +225,40 @@ export interface CloneStatus {
   licence: string;
 }
 
+export interface CaptureSummary {
+  summary: string;
+  decisions: string[];
+  actions: string[];
+  /** True when the recording was too long to summarise whole. */
+  truncated: boolean;
+  error: string | null;
+}
+
+export interface Transcript {
+  id: string;
+  label: string;
+  started_at: string | null;
+  ended_at: string | null;
+  /** Which inputs were captured. Microphone only, today. */
+  sources: string[];
+  minutes: number;
+  words: number;
+  summary: CaptureSummary | null;
+  running: boolean;
+  text?: string;
+}
+
+export interface CaptureStatus {
+  recording: boolean;
+  transcript_id: string | null;
+  label: string;
+  seconds: number;
+  sources: string[];
+  words: number;
+  /** Why capture is degraded — no microphone, a failed source. */
+  note: string;
+}
+
 export interface DocumentHit {
   file: string;
   path: string;
@@ -535,6 +569,28 @@ export const api = {
 
   forgetCloneReference: () =>
     request<CloneStatus & { removed: boolean }>("/voice/clone/reference", {
+      method: "DELETE",
+    }),
+
+  captureStatus: () => request<CaptureStatus>("/capture/status"),
+
+  startCapture: (label: string) =>
+    request<CaptureStatus>(`/capture/start?label=${encodeURIComponent(label)}`, {
+      method: "POST",
+    }),
+
+  // Stopping transcribes whatever was captured and then summarises it, both of
+  // which are model work on a recording that may be an hour long.
+  stopCapture: () =>
+    request<Transcript>("/capture/stop", { method: "POST", timeoutMs: 30 * 60_000 }),
+
+  transcripts: () => request<{ transcripts: Transcript[] }>("/capture/transcripts"),
+
+  transcript: (id: string) =>
+    request<Transcript & { text: string }>(`/capture/transcripts/${encodeURIComponent(id)}`),
+
+  deleteTranscript: (id: string) =>
+    request<{ removed: boolean }>(`/capture/transcripts/${encodeURIComponent(id)}`, {
       method: "DELETE",
     }),
 
