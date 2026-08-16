@@ -103,8 +103,6 @@ const STRINGS = {
 
     "avatar.needsCore":
       "The avatar needs Live2D's Cubism Core, which is licensed separately and isn't included. Drop it into the app's live2d folder to switch it on — everything else works without it.",
-    "avatar.coreTooNew":
-      "The Live2D runtime you have is version {version}, and the renderer needs {max}.x or older — version 6 removed an API every Live2D web renderer still uses, so the model loads but never draws. Download the Cubism SDK for Web 5.x and replace the file.",
     "state.idle": "Idle",
     "state.listening": "Listening",
     "state.thinking": "Thinking",
@@ -368,8 +366,6 @@ const STRINGS = {
 
     "avatar.needsCore":
       "El avatar necesita Cubism Core de Live2D, que tiene su propia licencia y no viene incluido. Colócalo en la carpeta live2d de la app para activarlo; todo lo demás funciona sin él.",
-    "avatar.coreTooNew":
-      "El runtime de Live2D que tienes es la versión {version} y el renderizador necesita {max}.x o anterior: la 6 quitó una API que todos los renderizadores web siguen usando, así que el modelo carga pero no se dibuja. Descarga el Cubism SDK for Web 5.x y reemplaza el archivo.",
     "state.idle": "En reposo",
     "state.listening": "Escuchando",
     "state.thinking": "Pensando",

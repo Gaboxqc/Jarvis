@@ -40,40 +40,161 @@ const HEIGHT = 300;
 const MODEL = "/live2d/Alexia.model3.json";
 const CORE = "/live2d/live2dcubismcore.min.js";
 
-/** Which expression plays in which state. Names come from the model. */
+/**
+ * Which expression plays in which state. Names come from the model.
+ *
+ * The model ships sixteen, named `bbt`, `dyj`, `mj` and so on, and each one is
+ * a single anonymous parameter nudged to 30 -- there is nothing in the files
+ * that says what any of them looks like. These three were chosen by rendering
+ * all sixteen and comparing: they are the ones that leave the eyes open, which
+ * is the only property that actually matters here. An avatar with its eyes shut
+ * while the microphone is live reads as asleep, not as listening.
+ */
 const EXPRESSIONS: Partial<Record<AvatarState, string>> = {
   listening: "yf",
   thinking: "mj",
   speaking: "wh",
 };
 
-/** The newest Core the bundled Cubism framework can actually drive. */
-const MAX_CORE_MAJOR = 5;
+/**
+ * Where the avatar looks in each state: a direction, x and y in -1..1, with
+ * +y up and +x to the model's right.
+ *
+ * Given to the focus controller directly rather than through `model.focus()`.
+ * That wrapper takes a point on the canvas, and it keeps only the *angle* from
+ * the model's centre to that point -- the distance is thrown away. The panel is
+ * a tight crop of the head, so every pixel in it sits above and near the middle
+ * of a 5167x9410 model, which collapses to almost one angle: four of these five
+ * states came out as the same pose when routed through it.
+ *
+ * The controller damps toward the target over about a second, so these are
+ * destinations rather than positions, and the avatar drifts between them
+ * instead of snapping.
+ *
+ * Looking away while thinking is the one that carries real meaning. Holding eye
+ * contact through a long pause reads as having frozen; breaking it reads as
+ * working on something, which is what is actually happening.
+ */
+const GAZE: Record<AvatarState, [number, number]> = {
+  idle: [0, 0],
+  listening: [0, 0.18],
+  thinking: [-0.75, 0.55],
+  speaking: [0, 0],
+  offline: [0, -0.55],
+};
 
 /**
- * Whether this Cubism Core is one the renderer can work with.
+ * Put `renderOrders` back where the Cubism framework looks for it.
  *
- * Core 6.0.1 removed `drawables.renderOrders`, which every published PIXI
- * Live2D binding calls -- they all bundle a Cubism 4 or 5 framework. The model
- * loads, reports its 222 drawables, sits in the scene graph looking healthy,
- * and draws nothing. Restoring that one array is not enough either; more of the
- * API moved with it.
+ * Core 6 moved it from `model.drawables.renderOrders` to `model.renderOrders`.
+ * Every published PIXI Live2D binding bundles a Cubism 4 or 5 framework and
+ * reads the old location, so with Core 6 the model loads, reports its 222
+ * drawables, sits in the scene graph looking entirely healthy, and draws
+ * nothing at all -- `doDrawModel` indexes an undefined array on its first line.
  *
- * So this is checked up front and reported, rather than being discovered as a
- * blank rectangle.
+ * The array itself is unchanged: 222 distinct values, one per drawable, the
+ * same permutation the renderer has always sorted by. Only its address moved.
+ * So this is an alias, not a reimplementation -- worth being clear about,
+ * because an earlier attempt substituted `drawables.drawOrders`, which is a
+ * different quantity (every entry 500 here) and rendered nothing while looking
+ * like the same kind of fix.
+ *
+ * Written as a property on the instance rather than a patch to the Core, so a
+ * Core that already has it in the old place is left alone.
  */
-function coreIsUsable(): { ok: boolean; version: string } {
-  const core = (window as any).Live2DCubismCore;
+function bridgeRenderOrders(coreModel: any): void {
+  const raw = coreModel?._model;
+  if (!raw?.drawables) return;
+  if (raw.drawables.renderOrders) return;      // Core 5 and earlier: nothing to do
+  if (!raw.renderOrders) return;               // neither location: not ours to fix
+  raw.drawables.renderOrders = raw.renderOrders;
+}
+
+/**
+ * Where the head is, in the model's own canvas pixels.
+ *
+ * There is nothing to read this off: the drawables are named `ArtMesh0` up to
+ * `ArtMesh201`, so no amount of string matching finds a face. But the head is
+ * definable without names -- it is whatever moves when the head turns. Tilting
+ * `ParamAngleZ` and diffing the vertices identifies it exactly, hair and all,
+ * and the box those meshes occupy at rest is the head.
+ *
+ * Measured rather than hard-coded because the numbers are a property of the
+ * model, not of this app: drop in a different character and the framing follows
+ * it instead of cropping its face off. Costs one extra pose evaluation, once.
+ *
+ * Returns null when the model has no head-angle parameter, which is the honest
+ * answer for a model this cannot reason about -- the caller falls back to
+ * showing the whole thing.
+ */
+function headBox(coreModel: any): { x: number; y: number; width: number; height: number } | null {
+  const raw = coreModel?._model;
+  const info = raw?.canvasinfo;
+  if (!info || typeof coreModel.getDrawableCount !== "function") return null;
+
+  const count = coreModel.getDrawableCount();
+  const update = () => (raw.update ? raw.update() : coreModel.update?.());
+  const snapshot = () => {
+    const frames: (Float32Array | null)[] = [];
+    for (let i = 0; i < count; i++) {
+      const vertices = coreModel.getDrawableVertices(i);
+      frames.push(vertices ? Float32Array.from(vertices) : null);
+    }
+    return frames;
+  };
+
+  let neutral: (Float32Array | null)[];
+  let tilted: (Float32Array | null)[];
   try {
-    const packed = core.Version.csmGetVersion();
-    const major = (packed >> 24) & 0xff;
-    const minor = (packed >> 16) & 0xff;
-    const version = `${major}.${minor}.${packed & 0xffff}`;
-    return { ok: major <= MAX_CORE_MAJOR, version };
-  } catch {
-    // An unreadable version is not a reason to refuse; let it try.
-    return { ok: true, version: "unknown" };
+    coreModel.setParameterValueById("ParamAngleZ", 0);
+    update();
+    neutral = snapshot();
+    coreModel.setParameterValueById("ParamAngleZ", 30);
+    update();
+    tilted = snapshot();
+  } finally {
+    // Whatever happened, the model must not be left holding a pose.
+    coreModel.setParameterValueById("ParamAngleZ", 0);
+    update();
   }
+
+  let left = Infinity, right = -Infinity, bottom = Infinity, top = -Infinity;
+  let found = 0;
+  for (let i = 0; i < count; i++) {
+    const before = neutral[i];
+    const after = tilted[i];
+    if (!before || !after || before.length !== after.length) continue;
+
+    let moved = 0;
+    for (let k = 0; k < before.length; k++) {
+      moved = Math.max(moved, Math.abs(before[k] - after[k]));
+    }
+    // A threshold, not a strict inequality: meshes far down the body pick up a
+    // rounding-level wobble from the deformers above them.
+    if (moved <= 0.002) continue;
+    if (coreModel.getDrawableOpacity?.(i) <= 0.01) continue;
+
+    found++;
+    for (let k = 0; k < before.length; k += 2) {
+      const x = before[k];
+      const y = before[k + 1];
+      if (x < left) left = x;
+      if (x > right) right = x;
+      if (y < bottom) bottom = y;
+      if (y > top) top = y;
+    }
+  }
+  if (!found) return null;
+
+  // Vertices are in model units with the origin at the canvas centre and y
+  // pointing up; everything downstream wants canvas pixels with y down.
+  const { CanvasOriginX, CanvasOriginY, PixelsPerUnit } = info;
+  return {
+    x: CanvasOriginX + left * PixelsPerUnit,
+    y: CanvasOriginY - top * PixelsPerUnit,
+    width: (right - left) * PixelsPerUnit,
+    height: (top - bottom) * PixelsPerUnit,
+  };
 }
 
 async function loadCore(): Promise<boolean> {
@@ -102,7 +223,6 @@ export function Avatar({ state, t }: Props) {
   const app = useRef<any>(null);
   const levelRef = useRef(0);
   const [ready, setReady] = useState<boolean | null>(null);
-  const [coreVersion, setCoreVersion] = useState<string | null>(null);
 
   // Straight into a ref: the ticker runs outside React's render cycle, and
   // re-rendering this component thirty times a second to move a mouth would be
@@ -116,15 +236,6 @@ export function Avatar({ state, t }: Props) {
     void (async () => {
       if (!(await loadCore())) {
         if (!cancelled) setReady(false);
-        return;
-      }
-
-      const core = coreIsUsable();
-      if (!core.ok) {
-        if (!cancelled) {
-          setCoreVersion(core.version);
-          setReady(false);
-        }
         return;
       }
 
@@ -164,12 +275,23 @@ export function Avatar({ state, t }: Props) {
           return;
         }
 
-        // pixi-live2d-display 0.4 is typed against PIXI 6; the runtime shape is
-        // right, DisplayObject just gained a method since.
+        // Before anything renders.
+        bridgeRenderOrders(loaded.internalModel.coreModel);
+
+        // The binding is typed against PIXI 6; the runtime shape is right,
+        // DisplayObject just gained a method since.
         application.stage.addChild(loaded as any);
         app.current = application;
         model.current = loaded;
         fit(application, loaded);
+
+        // Dev only. The avatar renders on requestAnimationFrame, which a headless
+        // or backgrounded window never fires, so "is it drawing?" cannot be
+        // answered from outside without a handle to force a frame. Stripped from
+        // the production bundle by the constant folding on import.meta.env.DEV.
+        if (import.meta.env.DEV) {
+          (window as any).__kaiAvatar = { application, loaded };
+        }
 
         // One ticker for the mouth. Interpolated rather than set directly:
         // amplitude jumps frame to frame, and a mouth that snaps between values
@@ -200,10 +322,17 @@ export function Avatar({ state, t }: Props) {
     };
   }, []);
 
-  // Expression follows state.
+  // Gaze and expression follow state. `ready` is a dependency because loading is
+  // asynchronous: without it, whatever state the avatar was in while the model
+  // was still loading is simply never applied, and it sits neutral until the
+  // next change.
   useEffect(() => {
     const loaded = model.current;
     if (!loaded) return;
+
+    const [x, y] = GAZE[state];
+    loaded.internalModel.focusController?.focus(x, y);
+
     const expression = EXPRESSIONS[state];
     try {
       if (expression) loaded.expression(expression);
@@ -212,28 +341,46 @@ export function Avatar({ state, t }: Props) {
       // The names come from the model and may not all exist in a replacement.
       // A missing expression should not take the avatar down.
     }
-  }, [state]);
+  }, [state, ready]);
 
   function fit(application: any, loaded: any) {
     const width = application.renderer.width;
     const height = application.renderer.height;
-    // Framed on the head and shoulders: the model is full-body, and shrinking
-    // all of it into a 260px panel makes the face too small to read.
-    const scale = (height / loaded.internalModel.originalHeight) * 2.1;
-    loaded.scale.set(scale);
+    const canvasWidth = loaded.internalModel.originalWidth;
+    const canvasHeight = loaded.internalModel.originalHeight;
+
+    // Framed on the head and shoulders. The model is full-body and nearly twice
+    // as tall as it is wide; fitting all of it into a 260px panel leaves a face
+    // about forty pixels across, which reads as a smudge rather than as someone
+    // looking at you.
+    const head = headBox(loaded.internalModel.coreModel);
+    if (!head) {
+      // No head-angle parameter to measure with. Show the whole model rather
+      // than crop a guess -- an unflattering framing beats a decapitation.
+      loaded.scale.set(Math.min(width / canvasWidth, height / canvasHeight));
+      loaded.anchor.set(0.5, 0.5);
+      loaded.x = width / 2;
+      loaded.y = height / 2;
+      return;
+    }
+
+    // A tenth of a head of air above the hair, and down to roughly mid-chest.
+    const top = head.y - head.height * 0.1;
+    const band = head.height * 1.65;
+
+    loaded.scale.set(height / band);
+    loaded.anchor.set(
+      (head.x + head.width / 2) / canvasWidth,
+      (top + band / 2) / canvasHeight,
+    );
     loaded.x = width / 2;
-    loaded.y = height * 0.12;
-    loaded.anchor.set(0.5, 0);
+    loaded.y = height / 2;
   }
 
   if (ready === false) {
     return (
       <div className="avatar avatar-missing">
-        <p className="small muted">
-          {coreVersion
-            ? t("avatar.coreTooNew", { version: coreVersion, max: MAX_CORE_MAJOR })
-            : t("avatar.needsCore")}
-        </p>
+        <p className="small muted">{t("avatar.needsCore")}</p>
         <code className="small">live2dcubismcore.min.js</code>
       </div>
     );
