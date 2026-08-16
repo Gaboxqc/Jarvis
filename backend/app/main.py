@@ -602,13 +602,49 @@ class SpeakRequest(BaseModel):
 
 @app.post("/voice/speak")
 def speak(request: SpeakRequest) -> dict[str, Any]:
+    """Say something out loud, and describe its shape for the avatar.
+
+    This used to call synthesize() and return the duration -- rendering the
+    audio and discarding it. The CLI and the voice loop both call tts.speak(),
+    which plays; this endpoint did not, so the desktop app's "speak replies
+    aloud" switch produced silence while every other path worked.
+
+    Playback is non-blocking so the response comes back at the moment sound
+    starts rather than when it finishes. That matters for the avatar: the
+    envelope below is walked from the moment this returns, so a blocking call
+    would put the mouth a whole sentence behind the voice.
+    """
     from .voice import tts
+    from .voice.audio import play
+
+    config = load_config().voice
+    if not config.enabled or not config.output_enabled:
+        # Muting silences output and nothing else (REQ-4). Not an error.
+        return {"spoke": False, "seconds": 0.0, "sample_rate": 0, "envelope": []}
 
     try:
         speech = tts.synthesize(request.text)
     except tts.TTSUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return {"seconds": round(speech.seconds, 2), "sample_rate": speech.sample_rate}
+
+    shape = tts.envelope(speech)
+    if speech.audio:
+        try:
+            play(speech.audio, speech.sample_rate, blocking=False)
+        except Exception as exc:  # noqa: BLE001
+            # No output device, or one that is busy. The reply is already on
+            # screen, so this degrades rather than fails the turn.
+            log.warning("could not play speech: %s", exc)
+            return {"spoke": False, "seconds": round(speech.seconds, 2),
+                    "sample_rate": speech.sample_rate, "envelope": []}
+
+    return {
+        "spoke": True,
+        "seconds": round(speech.seconds, 2),
+        "sample_rate": speech.sample_rate,
+        # 30 values per second of speech, 0-1. Drives the avatar's mouth.
+        "envelope": shape,
+    }
 
 
 class CloneConsentRequest(BaseModel):
