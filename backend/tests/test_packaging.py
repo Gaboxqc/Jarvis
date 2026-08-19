@@ -242,17 +242,18 @@ def test_only_one_installer_format_is_built():
     assert config["bundle"]["targets"] == ["nsis"]
 
 
-def test_the_csp_lets_the_avatar_compile_its_runtime():
-    """The packaged app must allow WebAssembly, or the avatar cannot start.
+def test_the_csp_stays_tight():
+    """No script execution beyond the app's own files.
 
-    Cubism Core 6 reaches WebAssembly through instantiateStreaming, and a CSP
-    without 'wasm-unsafe-eval' refuses to compile it. This shipped once: the
-    dev server sends no CSP at all, so the avatar was verified working there
-    while the installed build showed "needs Cubism Core" with the Core sitting
-    inside the binary.
+    This replaced a test asserting the opposite. The avatar failing in the
+    packaged build was diagnosed as the CSP refusing to compile Cubism Core's
+    WebAssembly, and 'wasm-unsafe-eval' was added to fix it. Serving the real
+    built assets under both policies disproved that: with WebAssembly blocked
+    outright, Core 6.0.1 still parses the .moc3 and reports all 222 drawables.
+    The relaxation bought nothing and was reverted.
 
-    Asserted on the config rather than on a running window because that is the
-    artifact that was wrong, and it is the one a future edit would break.
+    What is asserted now is that it stays that way -- eval of any kind is a
+    much bigger door than the one that needed opening.
     """
     import json
 
@@ -261,19 +262,11 @@ def test_the_csp_lets_the_avatar_compile_its_runtime():
     )
     csp = config["app"]["security"]["csp"]
 
-    assert "wasm-unsafe-eval" in csp
-    # In script-src specifically: default-src is not consulted for a directive
-    # that is present, so putting it anywhere else would leave scripts governed
-    # by a script-src that still forbids it.
-    script_src = next(
-        (part for part in csp.split(";") if part.strip().startswith("script-src")),
-        None,
-    )
-    assert script_src is not None, "csp defines no script-src"
-    assert "'wasm-unsafe-eval'" in script_src
-
-    # The point is WebAssembly, not arbitrary evaluation.
-    assert "'unsafe-eval'" not in script_src.replace("'wasm-unsafe-eval'", "")
+    assert "default-src 'self'" in csp
+    assert "unsafe-eval" not in csp
+    # Inline scripts too: the built frontend has none, and allowing them is the
+    # usual way a CSP stops meaning anything.
+    assert "'unsafe-inline'" not in csp.replace("style-src 'self' 'unsafe-inline'", "")
 
 
 # -- the origin the packaged app actually uses (REQ-26, REQ-27) -----------

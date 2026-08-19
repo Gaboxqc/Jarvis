@@ -209,50 +209,35 @@ function headBox(coreModel: any): { x: number; y: number; width: number; height:
  */
 type CoreProblem = "missing" | "blocked" | "failed";
 
-/**
- * Whether this page is allowed to compile WebAssembly.
- *
- * Eight bytes: the WebAssembly magic number and version, which is a complete
- * and valid empty module. Compiling it does nothing and costs nothing, but a
- * page whose CSP lacks 'wasm-unsafe-eval' throws here rather than returning
- * false -- which is exactly the signal wanted, and cannot be obtained by
- * looking for the API, since `WebAssembly` is defined either way.
- *
- * Cubism Core 6 reaches WebAssembly through instantiateStreaming, so this is
- * a precondition for the avatar rather than a detail of it.
- */
-function webAssemblyAllowed(): boolean {
-  try {
-    new WebAssembly.Module(new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 async function loadCore(): Promise<CoreProblem | null> {
   if ("Live2DCubismCore" in window) return null;
 
+  // The script tag goes first, with no preflight. An earlier version sent a
+  // HEAD request to tell "missing" from "broken" before loading anything, which
+  // works against an ordinary web server and is a guess against whatever serves
+  // the app's own assets in a packaged build -- a protocol handler that answers
+  // only GET turns a present file into a missing one, and the panel then says
+  // the Core is absent while it sits inside the binary.
+  //
+  // So the happy path makes exactly one request, and the fallback below only
+  // runs once something has already gone wrong, where an extra round trip costs
+  // nothing and the answer has to be right.
+  const loaded = await new Promise<boolean>((resolve) => {
+    const tag = document.createElement("script");
+    tag.src = CORE;
+    tag.onload = () => resolve("Live2DCubismCore" in window);
+    tag.onerror = () => resolve(false);
+    document.head.appendChild(tag);
+  });
+  if (loaded) return null;
+
+  // It did not load. A GET rather than a HEAD, for the same reason.
   try {
-    // A HEAD first: injecting a <script> for a missing file gives an error
-    // event with no detail, and "it didn't work" is not a useful thing to show.
-    const probe = await fetch(CORE, { method: "HEAD" });
-    if (!probe.ok) return "missing";
+    const probe = await fetch(CORE);
+    return probe.ok ? "failed" : "missing";
   } catch {
     return "missing";
   }
-
-  // Checked after the file, because "you are missing a file" is the more
-  // actionable of the two when both are true.
-  if (!webAssemblyAllowed()) return "blocked";
-
-  return new Promise((resolve) => {
-    const tag = document.createElement("script");
-    tag.src = CORE;
-    tag.onload = () => resolve("Live2DCubismCore" in window ? null : "failed");
-    tag.onerror = () => resolve("failed");
-    document.head.appendChild(tag);
-  });
 }
 
 export function Avatar({ state, t }: Props) {
