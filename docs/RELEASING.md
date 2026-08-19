@@ -31,12 +31,16 @@ actually fires, and only then trusted.
 
 ## Cutting a release
 
-1. **Bump the version in three files.** They must match, or the updater compares
-   the wrong numbers:
+1. **Bump the version in five files.** The first three must match or the
+   updater compares the wrong numbers; the two lockfiles carry the version as
+   well, and leaving them behind means the next `npm install` or `cargo build`
+   quietly rewrites them and dirties the tree:
 
    ```
    ui/package.json
+   ui/package-lock.json          <- twice: the top level and the "" package
    ui/src-tauri/Cargo.toml
+   ui/src-tauri/Cargo.lock       <- the [[package]] entry named "kai"
    ui/src-tauri/tauri.conf.json
    ```
 
