@@ -223,6 +223,24 @@ class VoiceSettings:
 
 
 @dataclass(frozen=True)
+class AvatarSettings:
+    """REQ-32 — the Live2D avatar.
+
+    Cubism Core is Live2D's proprietary runtime, shipped with the app but not
+    ours to grant. Nobody can accept a licence on someone else's behalf, so the
+    runtime stays inert until the person using it says yes, and this is where
+    that answer lives. Clearing it turns the avatar off again, which is what
+    makes it consent rather than a dialog to click past.
+
+    `licence_accepted_at` exists so the record can be shown back: "you accepted
+    this on the 3rd" is checkable, "accepted: true" is not.
+    """
+
+    licence_accepted: bool = False
+    licence_accepted_at: str = ""
+
+
+@dataclass(frozen=True)
 class Config:
     persona: Persona
     voice: VoiceSettings
@@ -231,6 +249,7 @@ class Config:
     actions: ActionSettings
     system: SystemSettings
     documents: DocumentSettings
+    avatar: AvatarSettings = field(default_factory=AvatarSettings)
     # Raw connector entries (REQ-8, REQ-13). Kept as plain data because
     # connectors/base.py owns their shape, and because they must never hold
     # a secret -- only a reference to one in the OS credential store.
@@ -268,6 +287,7 @@ def _build(raw: dict[str, Any], source: Path | None) -> Config:
     skills_raw = raw.get("skills") or {}
     system_raw = raw.get("system") or {}
     documents_raw = raw.get("documents") or {}
+    avatar_raw = raw.get("avatar") or {}
 
     def _paths(entries: Any) -> tuple[Path, ...]:
         resolved: list[Path] = []
@@ -338,6 +358,10 @@ def _build(raw: dict[str, Any], source: Path | None) -> Config:
             max_file_mb=int(documents_raw.get("max_file_mb", 25)),
             rescan_minutes=int(documents_raw.get("rescan_minutes", 15)),
             pause_on_battery=bool(documents_raw.get("pause_on_battery", True)),
+        ),
+        avatar=AvatarSettings(
+            licence_accepted=bool(avatar_raw.get("licence_accepted", False)),
+            licence_accepted_at=str(avatar_raw.get("licence_accepted_at") or ""),
         ),
         disabled_skills=tuple(skills_raw.get("disabled") or ()),
         source_path=source,

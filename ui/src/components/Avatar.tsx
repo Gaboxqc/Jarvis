@@ -24,6 +24,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { api, type AvatarLicence } from "../api";
 import type { Key } from "../i18n";
 import { subscribe } from "../speechLevel";
 
@@ -261,13 +262,54 @@ export function Avatar({ state, t }: Props) {
   const levelRef = useRef(0);
   const [ready, setReady] = useState<boolean | null>(null);
   const [problem, setProblem] = useState<CoreProblem | null>(null);
+  // null while unknown. The panel must not flash a licence prompt at someone
+  // who accepted months ago just because the answer has not arrived yet.
+  const [licence, setLicence] = useState<AvatarLicence | null>(null);
+  const [accepting, setAccepting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api
+      .avatarLicence()
+      .then((value) => {
+        if (!cancelled) setLicence(value);
+      })
+      .catch(() => {
+        // Without an answer the gate can never open, so the panel would sit
+        // empty forever waiting for a permission it will not be granted. Say
+        // that it failed instead -- a blank rectangle is the failure mode this
+        // whole change exists to stop.
+        if (!cancelled) {
+          setProblem("failed");
+          setReady(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function accept() {
+    setAccepting(true);
+    try {
+      setLicence(await api.acceptAvatarLicence(true));
+    } catch {
+      setAccepting(false);
+    }
+  }
 
   // Straight into a ref: the ticker runs outside React's render cycle, and
   // re-rendering this component thirty times a second to move a mouth would be
   // absurd.
   useEffect(() => subscribe((value) => { levelRef.current = value; }), []);
 
+  const accepted = licence?.licence_accepted ?? false;
+
   useEffect(() => {
+    // Nothing is fetched, injected or instantiated before acceptance. A gate
+    // that loads the runtime and then hides it behind a dialog is not a gate.
+    if (!accepted) return;
+
     let cancelled = false;
     let ticker: (() => void) | null = null;
 
@@ -365,7 +407,7 @@ export function Avatar({ state, t }: Props) {
       app.current?.destroy(true, { children: true, texture: true, baseTexture: true });
       app.current = null;
     };
-  }, []);
+  }, [accepted]);
 
   // Gaze and expression follow state. `ready` is a dependency because loading is
   // asynchronous: without it, whatever state the avatar was in while the model
@@ -420,6 +462,29 @@ export function Avatar({ state, t }: Props) {
     );
     loaded.x = width / 2;
     loaded.y = height / 2;
+  }
+
+  // Asked once, before the runtime is touched. Declining is a real option and
+  // costs nothing else in the app, so there is no second prompt and no nagging:
+  // the panel simply stays here until it is answered, and Settings can withdraw
+  // it later.
+  if (licence && !licence.licence_accepted) {
+    return (
+      <div className="avatar avatar-missing">
+        <p className="small">{licence.licence_summary}</p>
+        <a
+          className="small"
+          href={licence.licence_url}
+          target="_blank"
+          rel="noreferrer noopener"
+        >
+          {t("avatar.licenceTerms")}
+        </a>
+        <button className="primary" onClick={() => void accept()} disabled={accepting}>
+          {t("avatar.licenceAccept")}
+        </button>
+      </div>
+    );
   }
 
   if (ready === false) {

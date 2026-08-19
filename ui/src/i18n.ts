@@ -133,6 +133,10 @@ const STRINGS = {
       "The avatar is installed but can't start: this app's security policy is blocking WebAssembly, which Cubism Core needs. That's a bug in the app, not something you can fix here — everything else works.",
     "avatar.coreFailed":
       "The avatar failed to start. Everything else works without it.",
+    "avatar.licenceTerms": "Read Live2D's licence terms",
+    "avatar.licenceAccept": "Accept and turn the avatar on",
+    "avatar.licenceAccepted": "Live2D runtime licence accepted on {date}",
+    "avatar.licenceWithdraw": "Withdraw and turn the avatar off",
     "state.idle": "Idle",
     "state.listening": "Listening",
     "state.thinking": "Thinking",
@@ -154,6 +158,7 @@ const STRINGS = {
 
     "settings.title": "Settings and privacy",
     "settings.brain": "Language model",
+    "settings.avatarLicence": "Avatar runtime licence",
     "settings.brainMissingOption": "{model} (not installed)",
     "settings.brainMismatch":
       "Kai is set to use {model}, which isn't installed. Installed: {installed}. Pick one above — nothing else will work until the model matches.",
@@ -429,6 +434,10 @@ const STRINGS = {
       "El avatar está instalado pero no puede arrancar: la política de seguridad de la app bloquea WebAssembly, que Cubism Core necesita. Es un fallo de la app, no algo que puedas arreglar aquí; todo lo demás funciona.",
     "avatar.coreFailed":
       "El avatar no pudo arrancar. Todo lo demás funciona sin él.",
+    "avatar.licenceTerms": "Leer los términos de licencia de Live2D",
+    "avatar.licenceAccept": "Aceptar y activar el avatar",
+    "avatar.licenceAccepted": "Licencia del runtime de Live2D aceptada el {date}",
+    "avatar.licenceWithdraw": "Retirar y desactivar el avatar",
     "state.idle": "En reposo",
     "state.listening": "Escuchando",
     "state.thinking": "Pensando",
@@ -450,6 +459,7 @@ const STRINGS = {
 
     "settings.title": "Ajustes y privacidad",
     "settings.brain": "Modelo de lenguaje",
+    "settings.avatarLicence": "Licencia del runtime del avatar",
     "settings.brainMissingOption": "{model} (no instalado)",
     "settings.brainMismatch":
       "Kai está configurado para usar {model}, que no está instalado. Instalados: {installed}. Elige uno arriba: nada más funcionará hasta que el modelo coincida.",

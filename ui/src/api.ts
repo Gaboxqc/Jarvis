@@ -150,6 +150,14 @@ export interface Settings {
   writable: Record<string, string[]>;
 }
 
+/** Live2D's runtime licence — the avatar stays inert until this is accepted. */
+export interface AvatarLicence {
+  licence_accepted: boolean;
+  licence_accepted_at: string;
+  licence_summary: string;
+  licence_url: string;
+}
+
 export interface Health {
   ok: boolean;
   brain: {
@@ -547,6 +555,14 @@ export const api = {
     request<{ changed: Record<string, unknown> }>("/settings", {
       method: "PATCH",
       body: JSON.stringify({ changes }),
+    }),
+
+  avatarLicence: () => request<AvatarLicence>("/avatar"),
+
+  acceptAvatarLicence: (accepted: boolean) =>
+    request<AvatarLicence>("/avatar/licence", {
+      method: "POST",
+      body: JSON.stringify({ accepted }),
     }),
 
   cloneStatus: () => request<CloneStatus>("/voice/clone"),

@@ -20,6 +20,7 @@ import { FolderList } from "./FolderList";
 import { Startup } from "./Startup";
 import { Updates } from "./Updates";
 import { VoiceCloning } from "./VoiceCloning";
+import { AvatarLicenceCard } from "./AvatarLicenceCard";
 
 interface Props {
   lang: Lang;
@@ -230,6 +231,8 @@ export function Settings({ lang, setLang, t, voice }: Props) {
         )}
         <p className="small muted">{t("settings.voiceLocal")}</p>
       </section>
+
+      <AvatarLicenceCard t={t} />
 
       <VoiceCloning t={t} />
 

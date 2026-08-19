@@ -112,6 +112,13 @@ WRITABLE: dict[str, dict[str, Any]] = {
         # rest: this is the blast radius of every file skill.
         "allowed_roots": Folders,
     },
+    "avatar": {
+        # Live2D's runtime licence. Writable so it can be withdrawn, which has
+        # to be as easy as granting it, and written by the same endpoint that
+        # stamps the date -- see main.py.
+        "licence_accepted": bool,
+        "licence_accepted_at": str,
+    },
     "brain": {
         "model": str,
         "temperature": float,
