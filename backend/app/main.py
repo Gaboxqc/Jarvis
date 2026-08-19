@@ -755,6 +755,50 @@ def clone_consent(request: CloneConsentRequest) -> dict[str, Any]:
     return cloning.status()
 
 
+@app.get("/voice/clone/engine")
+def clone_engine_progress() -> dict[str, Any]:
+    from .voice import engines
+
+    return {"installed": engines.xtts_installed(), **engines.progress()}
+
+
+@app.post("/voice/clone/engine")
+def install_clone_engine() -> dict[str, Any]:
+    """Start fetching the cloning engine. Explicit, and never on startup.
+
+    Returns immediately rather than holding the request open for a download
+    measured in hundreds of megabytes: the settings screen polls the GET above.
+    A second call while one is running is refused by the installer's own lock
+    rather than starting a competing download.
+    """
+    import threading
+
+    from .voice import engines
+
+    if engines.xtts_installed():
+        return {"installed": True, **engines.progress()}
+
+    def run() -> None:
+        try:
+            engines.install_xtts()
+        except engines.EngineError:
+            # Recorded in the progress snapshot the UI is already polling, and
+            # logged by the installer. Nothing here to raise into.
+            log.warning("voice engine install failed", exc_info=True)
+
+    threading.Thread(target=run, name="xtts-install", daemon=True).start()
+    return {"installed": False, **engines.progress()}
+
+
+@app.delete("/voice/clone/engine")
+def remove_clone_engine() -> dict[str, Any]:
+    """Give the disk space back. As easy as spending it."""
+    from .voice import engines
+
+    removed = engines.remove_xtts()
+    return {"removed": removed, "installed": engines.xtts_installed()}
+
+
 @app.post("/voice/clone/reference")
 async def upload_clone_reference(file: UploadFile = File(...)) -> dict[str, Any]:
     """Take the reference sample as an uploaded audio file.

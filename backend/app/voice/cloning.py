@@ -74,6 +74,13 @@ def has_reference() -> bool:
     return reference_path().exists()
 
 
+def _engine_installed() -> bool:
+    """Whether the downloadable sidecar is present on disk."""
+    from . import engines
+
+    return engines.xtts_installed()
+
+
 def is_installed() -> bool:
     """Whether the XTTS package is importable, without importing it for real.
 
@@ -283,6 +290,10 @@ def status() -> dict[str, Any]:
     path = reference_path()
     return {
         "installed": is_installed(),
+        # Present but separate from `installed`: the engine being on disk is
+        # not the same as being able to synthesise with it, and conflating the
+        # two would let the card offer a working feature before it works.
+        "engine_installed": _engine_installed(),
         # Whether this is a frozen build. It decides what "not installed" means:
         # in a checkout it is a missing package somebody can install, and in a
         # packaged app it is a component that was never shipped, where advice to

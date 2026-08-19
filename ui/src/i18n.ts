@@ -227,6 +227,13 @@ const STRINGS = {
       "Voice cloning couldn't be checked — the backend didn't answer. Nothing else is affected.",
     "clone.notShipped":
       "Voice cloning isn't included in this build. It needs the XTTS engine, which is about 2GB with its dependencies and ships separately.",
+    "clone.engineSize":
+      "The engine is a separate download of roughly 2GB. Nothing is fetched until you ask, and you can remove it again afterwards.",
+    "clone.engineInstall": "Download the voice engine",
+    "clone.engineProgress": "Downloading… {percent}%",
+    "clone.engine.downloading": "Downloading…",
+    "clone.engine.verifying": "Checking the download…",
+    "clone.engine.installing": "Installing…",
     "clone.notInstalled":
       "Speaking in a cloned voice needs the XTTS engine, which isn't installed. It's about 2GB and optional — everything else works without it.",
     "clone.consent": "Let Kai speak in a cloned voice",
@@ -532,6 +539,13 @@ const STRINGS = {
       "No se pudo comprobar la clonación de voz: el backend no respondió. Nada más se ve afectado.",
     "clone.notShipped":
       "La clonación de voz no viene en esta versión. Necesita el motor XTTS, que ocupa unos 2GB con sus dependencias y se distribuye aparte.",
+    "clone.engineSize":
+      "El motor es una descarga aparte de unos 2GB. No se descarga nada hasta que lo pidas, y puedes eliminarlo después.",
+    "clone.engineInstall": "Descargar el motor de voz",
+    "clone.engineProgress": "Descargando… {percent}%",
+    "clone.engine.downloading": "Descargando…",
+    "clone.engine.verifying": "Comprobando la descarga…",
+    "clone.engine.installing": "Instalando…",
     "clone.notInstalled":
       "Hablar con una voz clonada necesita el motor XTTS, que no está instalado. Ocupa unos 2GB y es opcional: todo lo demás funciona sin él.",
     "clone.consent": "Permitir que Kai hable con una voz clonada",

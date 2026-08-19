@@ -240,6 +240,8 @@ export interface CloneStatus {
   installed: boolean;
   /** A frozen build. Decides what advice "not installed" should carry. */
   packaged?: boolean;
+  /** The downloadable sidecar is on disk. Not the same as being usable yet. */
+  engine_installed?: boolean;
   enabled: boolean;
   consented: boolean;
   has_reference: boolean;
@@ -247,6 +249,15 @@ export interface CloneStatus {
   loaded: boolean;
   min_seconds: number;
   licence: string;
+}
+
+/** A download in flight. `total` is 0 until the server reports a length. */
+export interface EngineProgress {
+  installed: boolean;
+  state: "idle" | "downloading" | "verifying" | "installing" | "installed" | "failed";
+  received: number;
+  total: number;
+  error: string | null;
 }
 
 export interface CaptureSummary {
@@ -568,6 +579,16 @@ export const api = {
     }),
 
   cloneStatus: () => request<CloneStatus>("/voice/clone"),
+
+  engineProgress: () => request<EngineProgress>("/voice/clone/engine"),
+
+  installEngine: () =>
+    request<EngineProgress>("/voice/clone/engine", { method: "POST" }),
+
+  removeEngine: () =>
+    request<{ removed: boolean; installed: boolean }>("/voice/clone/engine", {
+      method: "DELETE",
+    }),
 
   setCloneConsent: (consent: boolean, enable = false) =>
     request<CloneStatus>("/voice/clone/consent", {

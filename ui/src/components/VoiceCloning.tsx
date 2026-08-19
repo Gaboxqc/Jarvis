@@ -17,7 +17,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, ApiError, type CloneStatus } from "../api";
+import { api, ApiError, type CloneStatus, type EngineProgress } from "../api";
 import type { Key } from "../i18n";
 import { Icon } from "./Icon";
 
@@ -31,6 +31,7 @@ export function VoiceCloning({ t }: Props) {
   const [uploading, setUploading] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [engine, setEngine] = useState<EngineProgress | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -43,6 +44,45 @@ export function VoiceCloning({ t }: Props) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Polled rather than streamed: this is a progress number on a settings screen,
+  // and a second of latency on it costs nothing. Only while something is
+  // actually running, so an idle settings tab is not a timer.
+  useEffect(() => {
+    if (!status?.packaged || status.installed) return;
+    let live = true;
+
+    const tick = async () => {
+      try {
+        const next = await api.engineProgress();
+        if (!live) return;
+        setEngine(next);
+        // The engine landing changes what the whole card should show.
+        if (next.installed) void load();
+      } catch {
+        // A missed poll is not worth a message; the next one will do.
+      }
+    };
+
+    void tick();
+    const timer = window.setInterval(() => void tick(), 1000);
+    return () => {
+      live = false;
+      window.clearInterval(timer);
+    };
+  }, [status?.packaged, status?.installed, load]);
+
+  async function startInstall() {
+    setBusy(true);
+    setNote(null);
+    try {
+      setEngine(await api.installEngine());
+    } catch (caught) {
+      setNote(caught instanceof ApiError ? caught.message : t("common.error"));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function run(action: () => Promise<CloneStatus>) {
     setBusy(true);
@@ -107,6 +147,39 @@ export function VoiceCloning({ t }: Props) {
               <code>pip install TTS</code>
             </p>
           )}
+
+          {/* The download only exists for packaged builds. A checkout installs
+              the package itself, and offering both would be two ways to get one
+              thing, differing in which one the code then uses. */}
+          {status.packaged && (
+            <>
+              <p className="small muted">{t("clone.engineSize")}</p>
+              {engine?.state === "downloading" || engine?.state === "verifying" ||
+               engine?.state === "installing" ? (
+                <p className="small" role="status">
+                  {engine.state === "downloading" && engine.total > 0
+                    ? t("clone.engineProgress", {
+                        percent: Math.floor((engine.received / engine.total) * 100),
+                      })
+                    : t(`clone.engine.${engine.state}` as Key)}
+                </p>
+              ) : (
+                <button
+                  className="primary"
+                  onClick={() => void startInstall()}
+                  disabled={busy}
+                >
+                  {t("clone.engineInstall")}
+                </button>
+              )}
+              {engine?.state === "failed" && engine.error && (
+                <p className="small" role="alert" style={{ color: "var(--danger)" }}>
+                  {engine.error}
+                </p>
+              )}
+            </>
+          )}
+
           <p className="small muted">{status.licence}</p>
         </>
       ) : (
