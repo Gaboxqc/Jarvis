@@ -79,7 +79,18 @@ fn start_backend(app: &tauri::AppHandle) {
         }
     };
 
-    match app.shell().command(executable).spawn() {
+    // Arms the backend's own watchdog. stop_backend below covers every exit this
+    // process can see; it cannot cover the ones where it never runs -- a crash,
+    // a kill, a policy stopping the binary. The sidecar then outlives the app,
+    // keeps the port, and holds its DLLs open so the next installer cannot
+    // overwrite them. With this set it notices the closed stdin and exits by
+    // itself.
+    match app
+        .shell()
+        .command(executable)
+        .env("KAI_PARENT_WATCH", "1")
+        .spawn()
+    {
         Ok((mut rx, child)) => {
             app.state::<Backend>().0.lock().unwrap().replace(child);
             // Drain the pipes. Left unread they fill and block the child.

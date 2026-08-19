@@ -16,6 +16,7 @@ import multiprocessing
 import os
 import socket
 import sys
+import threading
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8756
@@ -42,6 +43,47 @@ def ensure_standard_streams() -> None:
     for name in ("stdout", "stderr"):
         if getattr(sys, name, None) is None:
             setattr(sys, name, open(os.devnull, "w", encoding="utf-8"))
+
+
+# Set by the desktop app when it spawns this as a sidecar. Absent when someone
+# runs the executable themselves, where exiting on a closed stdin would be
+# baffling rather than helpful.
+PARENT_WATCH_ENV = "KAI_PARENT_WATCH"
+
+
+def watch_parent() -> None:
+    """Exit when whoever launched this process goes away.
+
+    The desktop app already kills the sidecar on its own exit, and that covers
+    every path it can see: the tray menu, the taskbar, a logout. It cannot cover
+    the paths where it never runs -- a crash, a kill, an Application Control
+    policy stopping the binary mid-flight. Then the backend is orphaned: it
+    keeps port 8756, holds its own DLLs open so an upgrade cannot overwrite
+    them, and answers requests for an app that is no longer running. All three
+    happened, and the third is the worst, because nothing about it looks broken.
+
+    Reading the inherited stdin is how the child learns. The pipe stays open and
+    empty for as long as the parent lives, and reaches EOF the moment it dies,
+    whatever killed it -- so this needs no polling, no process handles and no
+    platform-specific code.
+
+    `os._exit` rather than a graceful shutdown: there is nothing left to be
+    graceful for, the parent is already gone, and the database is journalled
+    precisely so an abrupt stop is recoverable. Hanging around to close sockets
+    tidily is how the orphan gets created in the first place.
+    """
+    stream = getattr(sys, "stdin", None)
+    if stream is None:
+        return
+
+    def wait() -> None:
+        try:
+            stream.read()
+        except Exception:  # noqa: BLE001 - a broken pipe means the same thing
+            pass
+        os._exit(0)
+
+    threading.Thread(target=wait, name="parent-watch", daemon=True).start()
 
 
 def port_is_free(host: str, port: int) -> bool:
@@ -91,6 +133,11 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 3
+
+    # Armed before the server starts, so a parent that dies during startup is
+    # noticed too.
+    if os.environ.get(PARENT_WATCH_ENV):
+        watch_parent()
 
     import uvicorn
 
