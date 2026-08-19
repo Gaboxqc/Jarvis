@@ -197,22 +197,59 @@ function headBox(coreModel: any): { x: number; y: number; width: number; height:
   };
 }
 
-async function loadCore(): Promise<boolean> {
-  if ("Live2DCubismCore" in window) return true;
+/**
+ * Why the avatar is not showing, when it is not showing.
+ *
+ * One message for every cause is what let a broken release out: the packaged
+ * app said "needs Cubism Core" while the Core was sitting inside the binary,
+ * because the real fault was the content security policy refusing to compile
+ * its WebAssembly. Those need different answers from whoever reads them, so
+ * they are different values here.
+ */
+type CoreProblem = "missing" | "blocked" | "failed";
+
+/**
+ * Whether this page is allowed to compile WebAssembly.
+ *
+ * Eight bytes: the WebAssembly magic number and version, which is a complete
+ * and valid empty module. Compiling it does nothing and costs nothing, but a
+ * page whose CSP lacks 'wasm-unsafe-eval' throws here rather than returning
+ * false -- which is exactly the signal wanted, and cannot be obtained by
+ * looking for the API, since `WebAssembly` is defined either way.
+ *
+ * Cubism Core 6 reaches WebAssembly through instantiateStreaming, so this is
+ * a precondition for the avatar rather than a detail of it.
+ */
+function webAssemblyAllowed(): boolean {
+  try {
+    new WebAssembly.Module(new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function loadCore(): Promise<CoreProblem | null> {
+  if ("Live2DCubismCore" in window) return null;
+
   try {
     // A HEAD first: injecting a <script> for a missing file gives an error
     // event with no detail, and "it didn't work" is not a useful thing to show.
     const probe = await fetch(CORE, { method: "HEAD" });
-    if (!probe.ok) return false;
+    if (!probe.ok) return "missing";
   } catch {
-    return false;
+    return "missing";
   }
+
+  // Checked after the file, because "you are missing a file" is the more
+  // actionable of the two when both are true.
+  if (!webAssemblyAllowed()) return "blocked";
 
   return new Promise((resolve) => {
     const tag = document.createElement("script");
     tag.src = CORE;
-    tag.onload = () => resolve("Live2DCubismCore" in window);
-    tag.onerror = () => resolve(false);
+    tag.onload = () => resolve("Live2DCubismCore" in window ? null : "failed");
+    tag.onerror = () => resolve("failed");
     document.head.appendChild(tag);
   });
 }
@@ -223,6 +260,7 @@ export function Avatar({ state, t }: Props) {
   const app = useRef<any>(null);
   const levelRef = useRef(0);
   const [ready, setReady] = useState<boolean | null>(null);
+  const [problem, setProblem] = useState<CoreProblem | null>(null);
 
   // Straight into a ref: the ticker runs outside React's render cycle, and
   // re-rendering this component thirty times a second to move a mouth would be
@@ -234,8 +272,12 @@ export function Avatar({ state, t }: Props) {
     let ticker: (() => void) | null = null;
 
     void (async () => {
-      if (!(await loadCore())) {
-        if (!cancelled) setReady(false);
+      const blocker = await loadCore();
+      if (blocker) {
+        if (!cancelled) {
+          setProblem(blocker);
+          setReady(false);
+        }
         return;
       }
 
@@ -307,7 +349,10 @@ export function Avatar({ state, t }: Props) {
 
         setReady(true);
       } catch {
-        if (!cancelled) setReady(false);
+        if (!cancelled) {
+          setProblem("failed");
+          setReady(false);
+        }
       }
     })();
 
@@ -378,10 +423,19 @@ export function Avatar({ state, t }: Props) {
   }
 
   if (ready === false) {
+    // Each cause gets its own answer. They are not interchangeable: one is a
+    // missing download, one is this app's own security policy, and one is a
+    // bug. Showing the first message for all three is what shipped a release
+    // whose avatar could never have worked.
+    const message: Record<CoreProblem, Key> = {
+      missing: "avatar.needsCore",
+      blocked: "avatar.coreBlocked",
+      failed: "avatar.coreFailed",
+    };
     return (
       <div className="avatar avatar-missing">
-        <p className="small muted">{t("avatar.needsCore")}</p>
-        <code className="small">live2dcubismcore.min.js</code>
+        <p className="small muted">{t(message[problem ?? "missing"])}</p>
+        {problem === "missing" && <code className="small">live2dcubismcore.min.js</code>}
       </div>
     );
   }

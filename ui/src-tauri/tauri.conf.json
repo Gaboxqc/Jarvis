@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:8756 http://localhost:8756; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:8756 http://localhost:8756; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'"
     }
   },
   "bundle": {

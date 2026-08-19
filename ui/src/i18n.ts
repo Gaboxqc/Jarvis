@@ -129,6 +129,10 @@ const STRINGS = {
 
     "avatar.needsCore":
       "The avatar needs Live2D's Cubism Core, which is licensed separately and isn't included. Drop it into the app's live2d folder to switch it on — everything else works without it.",
+    "avatar.coreBlocked":
+      "The avatar is installed but can't start: this app's security policy is blocking WebAssembly, which Cubism Core needs. That's a bug in the app, not something you can fix here — everything else works.",
+    "avatar.coreFailed":
+      "The avatar failed to start. Everything else works without it.",
     "state.idle": "Idle",
     "state.listening": "Listening",
     "state.thinking": "Thinking",
@@ -421,6 +425,10 @@ const STRINGS = {
 
     "avatar.needsCore":
       "El avatar necesita Cubism Core de Live2D, que tiene su propia licencia y no viene incluido. Colócalo en la carpeta live2d de la app para activarlo; todo lo demás funciona sin él.",
+    "avatar.coreBlocked":
+      "El avatar está instalado pero no puede arrancar: la política de seguridad de la app bloquea WebAssembly, que Cubism Core necesita. Es un fallo de la app, no algo que puedas arreglar aquí; todo lo demás funciona.",
+    "avatar.coreFailed":
+      "El avatar no pudo arrancar. Todo lo demás funciona sin él.",
     "state.idle": "En reposo",
     "state.listening": "Escuchando",
     "state.thinking": "Pensando",

@@ -242,6 +242,40 @@ def test_only_one_installer_format_is_built():
     assert config["bundle"]["targets"] == ["nsis"]
 
 
+def test_the_csp_lets_the_avatar_compile_its_runtime():
+    """The packaged app must allow WebAssembly, or the avatar cannot start.
+
+    Cubism Core 6 reaches WebAssembly through instantiateStreaming, and a CSP
+    without 'wasm-unsafe-eval' refuses to compile it. This shipped once: the
+    dev server sends no CSP at all, so the avatar was verified working there
+    while the installed build showed "needs Cubism Core" with the Core sitting
+    inside the binary.
+
+    Asserted on the config rather than on a running window because that is the
+    artifact that was wrong, and it is the one a future edit would break.
+    """
+    import json
+
+    config = json.loads(
+        (PROJECT / "ui" / "src-tauri" / "tauri.conf.json").read_text(encoding="utf-8")
+    )
+    csp = config["app"]["security"]["csp"]
+
+    assert "wasm-unsafe-eval" in csp
+    # In script-src specifically: default-src is not consulted for a directive
+    # that is present, so putting it anywhere else would leave scripts governed
+    # by a script-src that still forbids it.
+    script_src = next(
+        (part for part in csp.split(";") if part.strip().startswith("script-src")),
+        None,
+    )
+    assert script_src is not None, "csp defines no script-src"
+    assert "'wasm-unsafe-eval'" in script_src
+
+    # The point is WebAssembly, not arbitrary evaluation.
+    assert "'unsafe-eval'" not in script_src.replace("'wasm-unsafe-eval'", "")
+
+
 # -- the origin the packaged app actually uses (REQ-26, REQ-27) -----------
 
 
