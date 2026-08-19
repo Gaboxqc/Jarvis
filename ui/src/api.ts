@@ -152,7 +152,21 @@ export interface Settings {
 
 export interface Health {
   ok: boolean;
-  brain: { ok: boolean; model?: string; error?: string | null };
+  brain: {
+    ok: boolean;
+    model?: string;
+    error?: string | null;
+    /**
+     * What Ollama actually reports, tags included (`qwen2.5:latest`).
+     *
+     * The picker needs this rather than a fixed list: the only models worth
+     * offering are the ones already pulled, and offering one that is not
+     * installed produces an app that cannot answer anything.
+     */
+    models?: string[];
+    model_installed?: boolean;
+    host?: string;
+  };
   skills: number;
   persona: string;
   config_file: string | null;

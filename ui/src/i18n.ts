@@ -150,6 +150,9 @@ const STRINGS = {
 
     "settings.title": "Settings and privacy",
     "settings.brain": "Language model",
+    "settings.brainMissingOption": "{model} (not installed)",
+    "settings.brainMismatch":
+      "Kai is set to use {model}, which isn't installed. Installed: {installed}. Pick one above — nothing else will work until the model matches.",
     "settings.skills": "Skills loaded",
     "settings.config": "Config file",
     "settings.data": "Your data lives in",
@@ -439,6 +442,9 @@ const STRINGS = {
 
     "settings.title": "Ajustes y privacidad",
     "settings.brain": "Modelo de lenguaje",
+    "settings.brainMissingOption": "{model} (no instalado)",
+    "settings.brainMismatch":
+      "Kai está configurado para usar {model}, que no está instalado. Instalados: {installed}. Elige uno arriba: nada más funcionará hasta que el modelo coincida.",
     "settings.skills": "Habilidades cargadas",
     "settings.config": "Archivo de configuración",
     "settings.data": "Tus datos están en",

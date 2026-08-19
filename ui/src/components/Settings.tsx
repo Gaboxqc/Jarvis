@@ -105,6 +105,13 @@ export function Settings({ lang, setLang, t, voice }: Props) {
     }
   }, [t]);
 
+  // Ollama reports tags (`qwen2.5:latest`); the config stores whatever the user
+  // wrote. `model_installed` is the backend's own comparison, which already
+  // treats `qwen2.5` and `qwen2.5:latest` as the same model, so it is trusted
+  // here rather than re-derived from the list with different rules.
+  const installedModels = health?.brain.models ?? [];
+  const modelInstalled = health?.brain.model_installed ?? false;
+
   /** Save one nested patch and reload, so the screen shows what actually landed. */
   async function save(patch: Record<string, Record<string, unknown>>) {
     setSaving(true);
@@ -250,14 +257,52 @@ export function Settings({ lang, setLang, t, voice }: Props) {
       {health && (
         <>
           <section className="card">
-            <div className="spread">
+            <label className="spread">
               <span>{t("settings.brain")}</span>
-              <span className="muted small">
-                {health.brain.ok
-                  ? health.brain.model
-                  : (health.brain.error ?? t("state.offline"))}
-              </span>
-            </div>
+              {installedModels.length > 0 ? (
+                <select
+                  value={health.brain.model ?? ""}
+                  disabled={saving}
+                  onChange={(event) => {
+                    void save({ brain: { model: event.target.value } }).catch(
+                      () => undefined,
+                    );
+                  }}
+                >
+                  {/* The configured model is offered even when it is not
+                      installed, so the select has something to show rather
+                      than silently displaying a different model than the one
+                      in the config. */}
+                  {!modelInstalled && health.brain.model && (
+                    <option value={health.brain.model}>
+                      {t("settings.brainMissingOption", { model: health.brain.model })}
+                    </option>
+                  )}
+                  {installedModels.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="muted small">
+                  {health.brain.error ?? t("state.offline")}
+                </span>
+              )}
+            </label>
+
+            {/* A mismatch is the one failure that makes every other feature
+                look broken, so it gets a sentence rather than a status word.
+                It is not repaired silently: which model answers is a decision
+                worth seeing, and picking one from the list above applies it. */}
+            {!modelInstalled && installedModels.length > 0 && (
+              <p className="small" role="alert" style={{ color: "var(--warn)" }}>
+                {t("settings.brainMismatch", {
+                  model: health.brain.model ?? "—",
+                  installed: installedModels.join(", "),
+                })}
+              </p>
+            )}
             <div className="spread">
               <span>{t("settings.skills")}</span>
               <span className="muted small">{health.skills}</span>
