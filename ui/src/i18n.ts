@@ -223,6 +223,10 @@ const STRINGS = {
     "voiceBlocked.failed": "Something went wrong while listening.",
 
     "clone.title": "Your own voice",
+    "clone.unavailable":
+      "Voice cloning couldn't be checked — the backend didn't answer. Nothing else is affected.",
+    "clone.notShipped":
+      "Voice cloning isn't included in this build. It needs the XTTS engine, which is about 2GB with its dependencies and ships separately.",
     "clone.notInstalled":
       "Speaking in a cloned voice needs the XTTS engine, which isn't installed. It's about 2GB and optional — everything else works without it.",
     "clone.consent": "Let Kai speak in a cloned voice",
@@ -524,6 +528,10 @@ const STRINGS = {
     "voiceBlocked.failed": "Algo salió mal al escuchar.",
 
     "clone.title": "Tu propia voz",
+    "clone.unavailable":
+      "No se pudo comprobar la clonación de voz: el backend no respondió. Nada más se ve afectado.",
+    "clone.notShipped":
+      "La clonación de voz no viene en esta versión. Necesita el motor XTTS, que ocupa unos 2GB con sus dependencias y se distribuye aparte.",
     "clone.notInstalled":
       "Hablar con una voz clonada necesita el motor XTTS, que no está instalado. Ocupa unos 2GB y es opcional: todo lo demás funciona sin él.",
     "clone.consent": "Permitir que Kai hable con una voz clonada",

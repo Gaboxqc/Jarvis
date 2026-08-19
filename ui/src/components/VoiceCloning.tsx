@@ -78,7 +78,17 @@ export function VoiceCloning({ t }: Props) {
     void run(() => api.forgetCloneReference());
   }
 
-  if (!status) return null;
+  // Never nothing. A card that erases itself when its status call fails is
+  // indistinguishable from a feature that was never built -- which is exactly
+  // how this one was reported missing.
+  if (!status) {
+    return (
+      <section className="card">
+        <h2 className="small muted">{t("clone.title")}</h2>
+        <p className="small muted">{t("clone.unavailable")}</p>
+      </section>
+    );
+  }
 
   return (
     <section className="card">
@@ -86,10 +96,18 @@ export function VoiceCloning({ t }: Props) {
 
       {!status.installed ? (
         <>
-          <p className="small">{t("clone.notInstalled")}</p>
-          <p className="small muted">
-            <code>pip install TTS</code>
+          {/* `pip install TTS` is sound advice in a checkout and nonsense in an
+              installed app, where there is no environment to install into. The
+              backend knows which build this is, so the answer differs. */}
+          <p className="small">
+            {status.packaged ? t("clone.notShipped") : t("clone.notInstalled")}
           </p>
+          {!status.packaged && (
+            <p className="small muted">
+              <code>pip install TTS</code>
+            </p>
+          )}
+          <p className="small muted">{status.licence}</p>
         </>
       ) : (
         <>

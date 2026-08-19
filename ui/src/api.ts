@@ -238,6 +238,8 @@ export interface Reminder {
 export interface CloneStatus {
   /** Whether the XTTS package is present. It is a ~2GB optional dependency. */
   installed: boolean;
+  /** A frozen build. Decides what advice "not installed" should carry. */
+  packaged?: boolean;
   enabled: boolean;
   consented: boolean;
   has_reference: boolean;

@@ -33,6 +33,7 @@ it is the operator's call -- but nobody should discover it by accident.
 from __future__ import annotations
 
 import logging
+import sys
 import threading
 import time
 from pathlib import Path
@@ -282,6 +283,12 @@ def status() -> dict[str, Any]:
     path = reference_path()
     return {
         "installed": is_installed(),
+        # Whether this is a frozen build. It decides what "not installed" means:
+        # in a checkout it is a missing package somebody can install, and in a
+        # packaged app it is a component that was never shipped, where advice to
+        # run pip is not just useless but misleading -- there is no environment
+        # to install into.
+        "packaged": bool(getattr(sys, "frozen", False)),
         "enabled": config.tts_engine == "xtts",
         "consented": config.clone_consent,
         "has_reference": path.exists(),
