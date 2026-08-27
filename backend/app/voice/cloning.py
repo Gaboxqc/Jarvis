@@ -81,11 +81,11 @@ def _engine_installed() -> bool:
     return engines.xtts_installed()
 
 
-def is_installed() -> bool:
-    """Whether the XTTS package is importable, without importing it for real.
+def _package_importable() -> bool:
+    """Whether XTTS is importable in this process.
 
-    importlib.util.find_spec avoids paying the several-second import cost just
-    to answer a status question the settings screen asks on every render.
+    Only true in a checkout that installed it deliberately. A frozen build never
+    has it -- that is the whole reason the sidecar exists.
     """
     from importlib.util import find_spec
 
@@ -93,6 +93,17 @@ def is_installed() -> bool:
         return find_spec("TTS") is not None
     except (ImportError, ValueError):  # pragma: no cover - malformed install
         return False
+
+
+def is_installed() -> bool:
+    """Whether cloning can actually run, by either route.
+
+    Two of them: the package imported into this process, which only a checkout
+    has, and the downloaded sidecar, which is how a packaged build gets there.
+    Answered without importing anything -- find_spec and a stat, because the
+    settings screen asks this on every render and importing XTTS costs seconds.
+    """
+    return _package_importable() or _engine_installed()
 
 
 def is_loaded() -> bool:
@@ -178,6 +189,11 @@ def synthesize(text: str, language: str = "en") -> tuple[bytes, int]:
     """Render text in the cloned voice. Returns (PCM16 mono, sample rate)."""
     global _last_used
 
+    # The sidecar first: in a packaged build it is the only route, and where
+    # both exist it is the one that was deliberately installed.
+    if not _package_importable() and _engine_installed():
+        return _synthesize_via_sidecar(text, language)
+
     model = load()
     try:
         import numpy as np
@@ -197,6 +213,33 @@ def synthesize(text: str, language: str = "en") -> tuple[bytes, int]:
         _last_used = time.monotonic()
 
     return pcm, 24_000  # XTTS-v2 outputs at 24kHz
+
+
+def _synthesize_via_sidecar(text: str, language: str) -> tuple[bytes, int]:
+    """Ask the separate engine, and read back what it wrote.
+
+    It renders to a file rather than returning audio down the pipe: seconds of
+    24kHz speech are megabytes, and a reply that large has to be drained
+    perfectly or it blocks the writer.
+    """
+    import tempfile
+
+    from . import xtts_client
+
+    if not has_reference():
+        raise CloningUnavailable(
+            "There's no reference recording yet. Upload a short sample first."
+        )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "cloned.wav"
+        try:
+            xtts_client.synthesize_to_file(text, reference_path(), language, out)
+            return pcm_from_wav(out.read_bytes())
+        except CloningUnavailable:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise CloningUnavailable(f"Cloned speech failed: {exc}") from exc
 
 
 def pcm_from_wav(raw: bytes) -> tuple[bytes, int]:
