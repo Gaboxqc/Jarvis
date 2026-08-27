@@ -86,6 +86,60 @@ def watch_parent() -> None:
     threading.Thread(target=wait, name="parent-watch", daemon=True).start()
 
 
+def sidecar_log_config(level: str) -> dict:
+    """Logging that cannot deadlock the process.
+
+    The desktop app spawns this with its pipes connected, and uvicorn writes one
+    line per request at info level. A pipe holds about 64KB; once it is full the
+    next write blocks, and because that write happens on the thread serving the
+    request, the whole backend stops. Not slows -- stops, permanently, while the
+    process stays alive and answers nothing. Reproduced by spawning with the
+    pipes undrained: wedged after 70 requests.
+
+    Relying on the parent to keep reading is the fragile part. It does read
+    today, but a consumer that pauses, crashes or applies backpressure would
+    silently kill the backend, and nothing about the symptom points at logging.
+
+    So the sidecar logs to a file instead. Rotating, because an assistant that
+    runs for weeks should not fill a disk with its own access log, and in the
+    data directory because that is the one place the user already knows to look
+    -- and where there was previously nothing at all to look at.
+    """
+    # Imported here rather than at module scope: this file is also the frozen
+    # entry point, and pulling the settings package in before argument parsing
+    # would pay for the whole config stack just to print --help.
+    from app.settings import data_dir
+
+    directory = data_dir() / "logs"
+    directory.mkdir(parents=True, exist_ok=True)
+    return {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "plain": {"format": "%(asctime)s %(levelname)s %(name)s: %(message)s"},
+        },
+        "handlers": {
+            "file": {
+                "class": "logging.handlers.RotatingFileHandler",
+                "formatter": "plain",
+                "filename": str(directory / "backend.log"),
+                "maxBytes": 1_000_000,
+                "backupCount": 3,
+                "encoding": "utf-8",
+            },
+        },
+        "root": {"handlers": ["file"], "level": level.upper()},
+        "loggers": {
+            "uvicorn": {"handlers": ["file"], "level": level.upper(), "propagate": False},
+            "uvicorn.error": {"handlers": ["file"], "level": level.upper(), "propagate": False},
+            # Off entirely rather than merely redirected: one line per request is
+            # the volume that filled the pipe, and it says nothing a file of
+            # timings would not say better.
+            "uvicorn.access": {"handlers": [], "level": "CRITICAL", "propagate": False},
+        },
+    }
+
+
 def port_is_free(host: str, port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
         probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -136,14 +190,24 @@ def main(argv: list[str] | None = None) -> int:
 
     # Armed before the server starts, so a parent that dies during startup is
     # noticed too.
-    if os.environ.get(PARENT_WATCH_ENV):
+    sidecar = bool(os.environ.get(PARENT_WATCH_ENV))
+    if sidecar:
         watch_parent()
 
     import uvicorn
 
     from app.main import app
 
-    uvicorn.run(app, host=args.host, port=args.port, log_level=args.log_level)
+    if sidecar:
+        uvicorn.run(
+            app,
+            host=args.host,
+            port=args.port,
+            log_config=sidecar_log_config(args.log_level),
+            access_log=False,
+        )
+    else:
+        uvicorn.run(app, host=args.host, port=args.port, log_level=args.log_level)
     return 0
 
 
