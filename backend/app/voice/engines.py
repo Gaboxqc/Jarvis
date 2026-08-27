@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import shutil
 import tempfile
 import threading
@@ -118,6 +119,32 @@ def _verify(path: Path, expected: str) -> None:
         )
 
 
+def _long_path(path: Path) -> str:
+    r"""A path Windows will still open past 260 characters.
+
+    The bundle contains files like
+
+        _internal/sklearn/datasets/tests/data/openml/id_292/
+        api-v1-jdl-dn-australian-l-2-dv-1-s-dact.json.gz
+
+    which is a hundred characters before the install directory is prepended.
+    Windows refuses anything over MAX_PATH with a FileNotFoundError naming the
+    file, which reads as a corrupt download rather than as a path length -- and
+    by then the archive has already been fetched and its checksum verified.
+
+    The \?\ prefix lifts the limit. It requires a fully resolved absolute
+    path, which is why this resolves rather than trusting the caller.
+    """
+    if os.name != "nt":
+        return str(path)
+    # Built from character codes rather than written as a literal: the
+    # value is backslash-backslash-question-backslash, and every layer
+    # between here and a shell has its own opinion about escaping it.
+    prefix = chr(92) * 2 + "?" + chr(92)
+    resolved = str(path.resolve())
+    return resolved if resolved.startswith(prefix) else prefix + resolved
+
+
 def _unpack(archive: Path, target: Path) -> None:
     """Unpack beside the target, then swap it in.
 
@@ -127,7 +154,7 @@ def _unpack(archive: Path, target: Path) -> None:
     """
     staging = target.parent / f".{target.name}.incoming"
     if staging.exists():
-        shutil.rmtree(staging, ignore_errors=True)
+        shutil.rmtree(_long_path(staging), ignore_errors=True)
     staging.mkdir(parents=True)
 
     root = staging.resolve()
@@ -137,15 +164,17 @@ def _unpack(archive: Path, target: Path) -> None:
             # anywhere the app can write.
             if not str((staging / member).resolve()).startswith(str(root)):
                 raise EngineError("The archive tried to write outside its folder.")
-        bundle.extractall(staging)
+        bundle.extractall(_long_path(staging))
 
     if not (staging / XTTS_ENTRY).exists():
         shutil.rmtree(staging, ignore_errors=True)
         raise EngineError(f"The archive contained no {XTTS_ENTRY}.")
 
     if target.exists():
-        shutil.rmtree(target, ignore_errors=True)
-    staging.replace(target)
+        shutil.rmtree(_long_path(target), ignore_errors=True)
+    # os.replace rather than Path.replace: the extended-length form is a string,
+    # and Path would normalise the prefix back off.
+    os.replace(_long_path(staging), _long_path(target))
 
 
 def _download(url: str, target: Path) -> None:

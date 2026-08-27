@@ -79,6 +79,9 @@ def _start() -> None:
     accepted = load_config().voice.xtts_licence_accepted
     environment = {
         "KAI_XTTS_LOG_DIR": str(data_dir() / "logs"),
+        # The weights are ~1.8GB. They belong with the rest of the app's data,
+        # not in a cache directory the user was never told about.
+        "KAI_XTTS_MODEL_DIR": str(data_dir() / "engines" / "xtts-models"),
         # Passed through rather than assumed. The engine refuses to load
         # without it, and this app has no business accepting Coqui's licence
         # on behalf of whoever is using it.

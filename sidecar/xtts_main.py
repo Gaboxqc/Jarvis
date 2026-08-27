@@ -50,6 +50,12 @@ MODEL_NAME = "tts_models/multilingual/multi-dataset/xtts_v2"
 # COQUI_TOS_AGREED; this refuses to set it on anyone's behalf.
 LICENCE_ENV = "KAI_XTTS_LICENCE_ACCEPTED"
 
+# Where the model weights are kept. Coqui reads TTS_HOME; pointing it at the
+# app's own data directory keeps the ~1.8GB download beside everything else the
+# app stores, so "delete this folder" remains one honest instruction rather than
+# leaving a couple of gigabytes in a cache nobody mentioned (REQ-26).
+MODEL_DIR_ENV = "KAI_XTTS_MODEL_DIR"
+
 
 def _split_stdout(log_path: Path):
     """Keep stdout for the protocol; send everything else to a file.
@@ -117,6 +123,10 @@ class Engine:
         self.require_licence()
         # Coqui reads this itself when fetching the model.
         os.environ["COQUI_TOS_AGREED"] = "1"
+
+        model_dir = os.environ.get(MODEL_DIR_ENV)
+        if model_dir:
+            os.environ["TTS_HOME"] = model_dir
 
         from TTS.api import TTS
 
