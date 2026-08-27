@@ -206,6 +206,13 @@ class VoiceSettings:
     # the person operating this app -- so cloning stays off until this is
     # recorded, and clearing it turns the feature off again.
     clone_consent: bool = False
+    # XTTS-v2's own licence, and deliberately not the same switch as above.
+    # One is about the ethics of copying somebody's voice; this is agreeing to
+    # a non-commercial software licence (Coqui CPML). Folding them together
+    # would mean accepting terms nobody was shown, on the strength of a
+    # sentence about something else.
+    xtts_licence_accepted: bool = False
+    xtts_licence_accepted_at: str = ""
     stt_model: str = "base"  # tiny | base | small | medium
     language: str = "en"
     # Wake word is opt-in on top of voice: it means an always-open microphone,
@@ -317,6 +324,8 @@ def _build(raw: dict[str, Any], source: Path | None) -> Config:
             voice_id=voice_raw.get("voice_id", "en_US-amy-medium"),
             tts_engine=str(voice_raw.get("tts_engine", VoiceSettings.tts_engine)).lower(),
             clone_consent=bool(voice_raw.get("clone_consent", False)),
+            xtts_licence_accepted=bool(voice_raw.get("xtts_licence_accepted", False)),
+            xtts_licence_accepted_at=str(voice_raw.get("xtts_licence_accepted_at") or ""),
             stt_model=voice_raw.get("stt_model", "base"),
             language=voice_raw.get("language", persona_raw.get("language", "en")),
             wake_enabled=bool(voice_raw.get("wake_enabled", False)),

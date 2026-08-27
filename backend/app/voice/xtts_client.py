@@ -73,13 +73,16 @@ def _start() -> None:
     if not executable.exists():
         raise RuntimeError("The voice engine is not installed.")
 
-    consented = load_config().voice.clone_consent
+    # The model licence, not the cloning-consent switch. The engine refuses
+    # without it, and this app has no business answering Coqui's terms on
+    # behalf of whoever is using it.
+    accepted = load_config().voice.xtts_licence_accepted
     environment = {
         "KAI_XTTS_LOG_DIR": str(data_dir() / "logs"),
         # Passed through rather than assumed. The engine refuses to load
         # without it, and this app has no business accepting Coqui's licence
         # on behalf of whoever is using it.
-        "KAI_XTTS_LICENCE_ACCEPTED": "1" if consented else "0",
+        "KAI_XTTS_LICENCE_ACCEPTED": "1" if accepted else "0",
     }
 
     import os

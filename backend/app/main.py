@@ -799,6 +799,54 @@ def remove_clone_engine() -> dict[str, Any]:
     return {"removed": removed, "installed": engines.xtts_installed()}
 
 
+XTTS_LICENCE_URL = "https://coqui.ai/cpml"
+XTTS_LICENCE_SUMMARY = (
+    "The cloning engine uses XTTS-v2, a model from Coqui released under the "
+    "Coqui Public Model License. It permits personal and other non-commercial "
+    "use, and not selling what it produces or building a paid service on it. "
+    "Accepting records that you agree to those terms; declining leaves cloning "
+    "off and changes nothing else."
+)
+
+
+class XttsLicenceRequest(BaseModel):
+    accepted: bool
+
+
+@app.post("/voice/clone/licence")
+def xtts_licence(request: XttsLicenceRequest) -> dict[str, Any]:
+    """Record — or withdraw — acceptance of XTTS-v2's licence.
+
+    Kept separate from `clone_consent` on purpose. That switch is about the
+    ethics of copying somebody's voice; this is agreeing to a non-commercial
+    software licence. They are different questions with different answers, and
+    one switch meaning both would be an acceptance nobody was shown.
+
+    Withdrawing clears the date, for the same reason the Live2D gate does: a
+    config reading "not accepted, accepted on the 3rd" contradicts itself.
+    """
+    from .voice import cloning
+
+    changes: dict[str, Any] = {
+        "xtts_licence_accepted": bool(request.accepted),
+        "xtts_licence_accepted_at": (
+            datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+            if request.accepted
+            else ""
+        ),
+    }
+    try:
+        preferences.update({"voice": changes})
+    except preferences.NotWritable as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+    log.warning(
+        "XTTS-v2 model licence %s",
+        "accepted" if request.accepted else "withdrawn",
+    )
+    return cloning.status()
+
+
 @app.post("/voice/clone/reference")
 async def upload_clone_reference(file: UploadFile = File(...)) -> dict[str, Any]:
     """Take the reference sample as an uploaded audio file.

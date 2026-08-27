@@ -1,0 +1,32 @@
+Third-party components in the Kai voice engine
+==============================================
+
+This bundle is a frozen Python program. It redistributes the libraries below.
+Each is used unmodified; their own licence texts ship inside the bundle, under
+_internal/, in the metadata directories the packages carry.
+
+  coqui-tts (a maintained fork of Coqui TTS)   Mozilla Public License 2.0
+  PyTorch (torch, torchaudio, torchcodec)      BSD 3-Clause
+  Transformers, tokenizers, huggingface-hub    Apache License 2.0
+  librosa, scikit-learn, scipy, numpy, numba   BSD 3-Clause
+  soundfile, soxr                              BSD 3-Clause / LGPL-2.1 (libsndfile)
+  einops, inflect, num2words, pysbd, anyascii  MIT / Apache 2.0
+
+MPL-2.0 (coqui-tts) requires that the source of covered files be made
+available. It is unmodified and published by its authors at
+https://github.com/idiap/coqui-ai-TTS — nothing in this bundle patches it.
+
+
+What is NOT in this bundle
+--------------------------
+
+The XTTS-v2 model weights.
+
+They are licensed under the Coqui Public Model License, which permits
+non-commercial use only, and they are not redistributed here. The engine
+downloads them from Coqui on first use, and refuses to do so until the person
+using the app has accepted that licence in Kai's settings.
+
+That distinction is the reason this bundle can be published at all: everything
+inside it is under a licence that permits redistribution. The one component
+that is not, is not included.

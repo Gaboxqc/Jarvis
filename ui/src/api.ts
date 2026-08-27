@@ -242,6 +242,9 @@ export interface CloneStatus {
   packaged?: boolean;
   /** The downloadable sidecar is on disk. Not the same as being usable yet. */
   engine_installed?: boolean;
+  /** XTTS-v2's own licence, separate from the consent switch. */
+  licence_accepted?: boolean;
+  licence_accepted_at?: string;
   enabled: boolean;
   consented: boolean;
   has_reference: boolean;
@@ -579,6 +582,12 @@ export const api = {
     }),
 
   cloneStatus: () => request<CloneStatus>("/voice/clone"),
+
+  acceptXttsLicence: (accepted: boolean) =>
+    request<CloneStatus>("/voice/clone/licence", {
+      method: "POST",
+      body: JSON.stringify({ accepted }),
+    }),
 
   engineProgress: () => request<EngineProgress>("/voice/clone/engine"),
 

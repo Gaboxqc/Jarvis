@@ -47,16 +47,17 @@ log = logging.getLogger(__name__)
 # than tracking "latest": a sidecar has to match the backend that speaks to it,
 # and an app silently pulling a newer protocol is a bug that only shows up in
 # the field.
-XTTS_VERSION = "0.3.1"
+XTTS_VERSION = "0.3.4"
 XTTS_ASSET = f"kai-xtts-{XTTS_VERSION}-x64.zip"
 XTTS_URL = (
     "https://github.com/Gaboxqc/Jarvis/releases/download/"
     f"v{XTTS_VERSION}/{XTTS_ASSET}"
 )
 
-# Filled in by the release step; see docs/RELEASING.md. Empty means "not
-# published yet", and that is refused.
-XTTS_SHA256 = ""
+# The published bundle's checksum, compared before anything is unpacked. Empty
+# would mean "not published yet", and that is refused rather than skipped --
+# comparing against an empty string is a check that always passes.
+XTTS_SHA256 = "7d70bd86f150a9094f3881d602ae7678a87b92961c692161306d2e8d2a160e12"
 
 # The executable inside the archive, and what it is called once installed.
 XTTS_ENTRY = "kai-xtts.exe"

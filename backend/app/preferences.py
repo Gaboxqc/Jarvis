@@ -81,6 +81,9 @@ WRITABLE: dict[str, dict[str, Any]] = {
         "tts_engine": {"piper", "xtts"},
         # Writable so it can be withdrawn, which must be as easy as granting it.
         "clone_consent": bool,
+        # Written by the endpoint that stamps the date; see main.py.
+        "xtts_licence_accepted": bool,
+        "xtts_licence_accepted_at": str,
     },
     "persona": {
         "name": str,

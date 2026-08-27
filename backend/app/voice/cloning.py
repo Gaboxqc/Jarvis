@@ -351,6 +351,9 @@ def status() -> dict[str, Any]:
         "min_seconds": MIN_REFERENCE_SECONDS,
         # Said plainly rather than buried: the licence rules out selling this.
         "licence": "XTTS-v2 is licensed for non-commercial use (Coqui CPML).",
+        # Its own acceptance, separate from clone_consent above.
+        "licence_accepted": config.xtts_licence_accepted,
+        "licence_accepted_at": config.xtts_licence_accepted_at,
     }
 
 

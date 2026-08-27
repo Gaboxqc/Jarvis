@@ -227,6 +227,11 @@ const STRINGS = {
       "Voice cloning couldn't be checked — the backend didn't answer. Nothing else is affected.",
     "clone.notShipped":
       "Voice cloning isn't included in this build. It needs the XTTS engine, which is about 2GB with its dependencies and ships separately.",
+    "clone.licenceSummary":
+      "The engine uses XTTS-v2 from Coqui, under the Coqui Public Model License: personal and other non-commercial use only, so nothing you make with it can be sold or built into a paid service.",
+    "clone.licenceTerms": "Read the full licence",
+    "clone.licenceAccept": "Accept and continue",
+    "clone.licenceAcceptedOn": "Licence accepted on {date}",
     "clone.engineSize":
       "The engine is a separate download of roughly 2GB. Nothing is fetched until you ask, and you can remove it again afterwards.",
     "clone.engineInstall": "Download the voice engine",
@@ -539,6 +544,11 @@ const STRINGS = {
       "No se pudo comprobar la clonación de voz: el backend no respondió. Nada más se ve afectado.",
     "clone.notShipped":
       "La clonación de voz no viene en esta versión. Necesita el motor XTTS, que ocupa unos 2GB con sus dependencias y se distribuye aparte.",
+    "clone.licenceSummary":
+      "El motor usa XTTS-v2 de Coqui, bajo la Coqui Public Model License: solo uso personal y no comercial, así que nada de lo que generes puede venderse ni formar parte de un servicio de pago.",
+    "clone.licenceTerms": "Leer la licencia completa",
+    "clone.licenceAccept": "Aceptar y continuar",
+    "clone.licenceAcceptedOn": "Licencia aceptada el {date}",
     "clone.engineSize":
       "El motor es una descarga aparte de unos 2GB. No se descarga nada hasta que lo pidas, y puedes eliminarlo después.",
     "clone.engineInstall": "Descargar el motor de voz",

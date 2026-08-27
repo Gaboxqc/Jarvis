@@ -148,10 +148,34 @@ export function VoiceCloning({ t }: Props) {
             </p>
           )}
 
+          {/* Asked before the engine is fetched, not after. Downloading 300MB
+              and then discovering the terms are unacceptable wastes the one
+              thing the person cannot get back. */}
+          {status.packaged && !status.licence_accepted && (
+            <>
+              <p className="small">{t("clone.licenceSummary")}</p>
+              <a
+                className="small"
+                href="https://coqui.ai/cpml"
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                {t("clone.licenceTerms")}
+              </a>
+              <button
+                className="primary"
+                onClick={() => void run(() => api.acceptXttsLicence(true))}
+                disabled={busy}
+              >
+                {t("clone.licenceAccept")}
+              </button>
+            </>
+          )}
+
           {/* The download only exists for packaged builds. A checkout installs
               the package itself, and offering both would be two ways to get one
               thing, differing in which one the code then uses. */}
-          {status.packaged && (
+          {status.packaged && status.licence_accepted && (
             <>
               <p className="small muted">{t("clone.engineSize")}</p>
               {engine?.state === "downloading" || engine?.state === "verifying" ||
