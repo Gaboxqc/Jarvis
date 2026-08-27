@@ -34,6 +34,10 @@ log = logging.getLogger(__name__)
 READY_TIMEOUT = 30.0
 PING_TIMEOUT = 15.0
 SYNTHESIS_TIMEOUT = 300.0
+# The first load downloads the model. On a slow connection that is a long wait
+# for something that is working, so it gets its own generous ceiling rather than
+# failing a synthesis that had not started.
+LOAD_TIMEOUT = 3600.0
 
 _lock = threading.RLock()
 _process: subprocess.Popen | None = None
@@ -150,6 +154,15 @@ def request(payload: dict[str, Any], timeout: float) -> dict[str, Any]:
 
 def ping() -> dict[str, Any]:
     return request({"op": "ping"}, PING_TIMEOUT)
+
+
+def warm_up() -> dict[str, Any]:
+    """Load the model, downloading it the first time.
+
+    Called before synthesising rather than as part of it, so a first use on a
+    slow connection is a long wait rather than a timeout.
+    """
+    return request({"op": "load"}, LOAD_TIMEOUT)
 
 
 def synthesize_to_file(text: str, reference: Path, language: str, out: Path) -> dict[str, Any]:

@@ -40,6 +40,7 @@ import json
 import os
 import sys
 import time
+import traceback
 from pathlib import Path
 
 ENGINE = "xtts-v2"
@@ -81,6 +82,24 @@ def _split_stdout(log_path: Path):
     sys.stdout = log
     sys.stderr = log
     return protocol
+
+
+def _describe(exc: BaseException) -> str:
+    """The whole chain, not just the outermost message.
+
+    transformers raises ModuleNotFoundError("Could not import module 'X'. Are
+    this object's requirements defined correctly?") from the real error, so
+    reporting `str(exc)` alone throws away the only sentence that says what is
+    actually missing. Reading that message and guessing cost two rebuilds.
+    """
+    parts: list[str] = []
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        parts.append(f"{type(current).__name__}: {current}")
+        current = current.__cause__ or current.__context__
+    return "  <-  ".join(parts)
 
 
 def _reply(stream, payload: dict) -> None:
@@ -173,6 +192,14 @@ def handle(engine: Engine, request: dict) -> dict:
         # the process is alive, and loading takes tens of seconds.
         return {"ok": True, "engine": ENGINE, "device": engine.device}
 
+    if op == "load":
+        # Separated from synthesize on purpose. The first load fetches ~1.8GB of
+        # weights, and burying that inside a synthesis request means the request
+        # times out on a first use that was working perfectly -- and the caller
+        # cannot tell a slow download from a hung engine.
+        engine.load()
+        return {"ok": True, "loaded": True, "device": engine.device}
+
     if op == "synthesize":
         return engine.synthesize(
             text=request.get("text", ""),
@@ -207,7 +234,12 @@ def main() -> int:
         try:
             response = handle(engine, request)
         except Exception as exc:  # noqa: BLE001 - every failure is a reply
-            response = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+            # The full traceback goes to the log; the chain goes back over the
+            # pipe, because a caller that can only see "something failed" is
+            # how three separate bugs stayed hidden in this project.
+            traceback.print_exc()
+            sys.stdout.flush()
+            response = {"ok": False, "error": _describe(exc)}
 
         _reply(protocol, response)
         if request.get("op") == "shutdown":

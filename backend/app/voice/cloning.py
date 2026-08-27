@@ -234,6 +234,11 @@ def _synthesize_via_sidecar(text: str, language: str) -> tuple[bytes, int]:
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "cloned.wav"
         try:
+            # Ensures the model is resident before the clock that guards
+            # synthesis starts. On the first ever call this is the 1.8GB
+            # download; afterwards it returns immediately.
+            if not xtts_client.is_running():
+                xtts_client.warm_up()
             xtts_client.synthesize_to_file(text, reference_path(), language, out)
             return pcm_from_wav(out.read_bytes())
         except CloningUnavailable:
