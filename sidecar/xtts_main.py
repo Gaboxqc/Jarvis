@@ -94,15 +94,27 @@ class Engine:
 
         return "cuda" if torch.cuda.is_available() else "cpu"
 
-    def load(self):
-        if self._tts is not None:
-            return self._tts
+    @staticmethod
+    def require_licence() -> None:
+        """Refuse before doing anything else.
 
+        Checked at the top of a request rather than only inside load(), because
+        the order the answers come in is the difference between "you have not
+        accepted the licence" and "no reference recording at nope.wav" -- the
+        second is true, unhelpful, and sends someone looking for the wrong
+        problem.
+        """
         if os.environ.get(LICENCE_ENV) != "1":
             raise RuntimeError(
                 "XTTS-v2 is licensed for non-commercial use under the Coqui "
                 "Public Model License, and that has not been accepted."
             )
+
+    def load(self):
+        if self._tts is not None:
+            return self._tts
+
+        self.require_licence()
         # Coqui reads this itself when fetching the model.
         os.environ["COQUI_TOS_AGREED"] = "1"
 
@@ -112,6 +124,7 @@ class Engine:
         return self._tts
 
     def synthesize(self, text: str, reference: str, language: str, out: str) -> dict:
+        self.require_licence()
         if not text.strip():
             raise ValueError("nothing to say")
         if not Path(reference).exists():
