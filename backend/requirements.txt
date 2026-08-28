@@ -18,6 +18,21 @@ PyYAML==6.0.3
 # setting, add an account, or record a licence acceptance, and a frozen build
 # from that environment would have shipped the same way.
 ruamel.yaml==0.19.1
+
+# Declared because the app imports them, not because pip would otherwise miss
+# them. All three arrive today as transitive dependencies -- anyio and starlette
+# under FastAPI, numpy under onnxruntime, ctranslate2 and rapidocr -- so nothing
+# is broken as things stand. That is exactly the position ruamel.yaml was in
+# until it wasn't: an import with no declaration behind it is a bug waiting for
+# somebody's dependency tree to shift, and `pip install -r` should install what
+# the code actually uses.
+#
+#   anyio      events.py, for the sampling that must not block the event loop
+#   numpy      voice/audio, screen/capture, voice/cloning, index/embeddings
+#   starlette  main.py, for Headers in the credentials middleware
+anyio==4.14.2
+numpy==2.5.1
+starlette==0.49.3
 python-dateutil==2.9.0.post0
 Pint==0.25
 send2trash==1.8.3

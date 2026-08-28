@@ -212,6 +212,82 @@ def test_importing_the_app_does_not_pull_in_numpy():
     )
 
 
+def test_every_third_party_import_is_declared():
+    """The bug CI found on its first run, made impossible to reach CI again.
+
+    ruamel.yaml was imported by preferences.py and connectors/setup.py and
+    declared nowhere. It sat in the developer's virtualenv by hand, so a fresh
+    `pip install -r requirements.txt` produced an app that could not save a
+    setting, add an account or record a licence acceptance -- and a frozen build
+    from that environment shipped the same hole. Thirty-seven tests failed the
+    first time a clean machine ran them.
+
+    Nothing local could have caught it, because "is it installed here" is the
+    wrong question. This asks the right one: does every module the code imports
+    map to a distribution the requirements file names.
+
+    `packages_distributions()` does the module-name-to-pip-name mapping, so this
+    is a lookup rather than a guess about `ruamel.yaml` versus `ruamel-yaml`.
+    """
+    import ast
+    import re
+    from importlib.metadata import packages_distributions
+
+    backend = PROJECT / "backend"
+    first_party = {"app", "server", "tests", "generate_manifest"}
+    # Imported on purpose without being installed alongside the backend.
+    deliberately_absent = {
+        # The cloning engine's own environment -- sidecar/requirements.txt, built
+        # separately because torch is a couple of gigabytes.
+        "TTS", "torch",
+        # The fallback import for ddgs under its older package name.
+        "duckduckgo_search",
+    }
+
+    def normalise(name: str) -> str:
+        return re.sub(r"[-_.]+", "-", name).lower()
+
+    declared = set()
+    for line in (backend / "requirements.txt").read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith(("#", "-")):
+            continue
+        declared.add(normalise(re.split(r"[<>=!\[;]", line)[0].strip()))
+
+    imported: dict[str, str] = {}
+    for path in [backend / "server.py", *sorted((backend / "app").rglob("*.py"))]:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    imported.setdefault(alias.name.split(".")[0], path.name)
+            elif isinstance(node, ast.ImportFrom) and not node.level and node.module:
+                imported.setdefault(node.module.split(".")[0], path.name)
+
+    provides = packages_distributions()
+    missing = []
+    for module, where in sorted(imported.items()):
+        if (
+            module in sys.stdlib_module_names
+            or module in first_party
+            or module in deliberately_absent
+            or module.startswith("_")
+        ):
+            continue
+        distributions = provides.get(module)
+        # Not installed here and not on the deliberate list: this test cannot
+        # say what provides it, and guessing would make it a source of false
+        # failures rather than a guard.
+        if not distributions:
+            continue
+        if not any(normalise(d) in declared for d in distributions):
+            missing.append(f"{module} (from {'/'.join(sorted(distributions))}, in {where})")
+
+    assert not missing, (
+        "imported but not in backend/requirements.txt: " + "; ".join(missing)
+    )
+
+
 # -- health reporting -----------------------------------------------------
 
 
