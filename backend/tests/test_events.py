@@ -38,13 +38,28 @@ async def take(stream, count: int, *, timeout: float = 10.0) -> list[dict]:
     return collected
 
 
+IDLE = {"state": "idle", "emotion": None, "recording": False, "focus": False}
+
+
 @pytest.fixture
 def fast(monkeypatch):
-    """Real cadence compressed. The intervals are the thing being tested, so
-    they are scaled rather than stubbed away."""
+    """Real cadence compressed, and both samplers stubbed.
+
+    The intervals are the thing being tested, so they are scaled rather than
+    stubbed away. The samplers are not: `presence()` imports the capture and
+    speech modules, which pull in sounddevice and PortAudio, and this file calls
+    it a few hundred times across a few dozen worker threads. That is a lot of
+    audio-stack initialisation to pay for in tests about when a frame is sent,
+    and this project's own capture/recorder.py is a written record of what
+    happens when audio libraries meet threads they did not expect.
+
+    `test_the_stream_matches_what_state_reports` is the one that runs the real
+    thing, once, which is where that claim belongs.
+    """
     monkeypatch.setattr(events, "PRESENCE_INTERVAL", 0.01)
     monkeypatch.setattr(events, "HEALTH_INTERVAL", 0.05)
     monkeypatch.setattr(events, "HEARTBEAT_INTERVAL", 0.1)
+    monkeypatch.setattr(events, "presence", lambda: dict(IDLE))
     monkeypatch.setattr(events, "brain_health", lambda: {"ok": True, "error": None})
 
 
@@ -96,11 +111,9 @@ def test_nothing_is_sent_while_nothing_changes(workspace, fast):
 
 
 def test_a_change_in_presence_is_sent(workspace, fast, monkeypatch):
-    readings = iter([
-        {"state": "idle", "emotion": None, "recording": False, "focus": False},
-        {"state": "recording", "emotion": None, "recording": True, "focus": False},
-    ])
-    last = {"state": "recording", "emotion": None, "recording": True, "focus": False}
+    recording = {"state": "recording", "emotion": None, "recording": True, "focus": False}
+    readings = iter([dict(IDLE), dict(recording)])
+    last = recording
     monkeypatch.setattr(events, "presence", lambda: next(readings, last))
 
     # Four, not two: the opening `hello` and the first `health` sample both land
