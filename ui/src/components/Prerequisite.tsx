@@ -12,7 +12,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { api } from "../api";
+import { subscribe, subscribeConnection } from "../events";
 import type { Key } from "../i18n";
 
 type Problem = "none" | "starting" | "backend" | "model";
@@ -39,34 +39,42 @@ export function Prerequisite({ t }: { t: (key: Key) => string }) {
   const [detail, setDetail] = useState("");
   const firstSeen = useRef(Date.now());
 
+  // Two signals, from one connection rather than a ten-second poll (REQ-31).
+  //
+  // Whether the backend is there at all is now the stream itself: it either
+  // stays open or it does not, which is both faster than a failing request and
+  // one fewer request. Whether the *model* is there still has to be sampled,
+  // because it is an outbound call to Ollama, so the backend does that on its
+  // own cadence and pushes the answer only when it changes.
+  //
+  // The banner still clears itself once the user has followed the instructions,
+  // for the same reason it always did: nobody should have to restart the app to
+  // find out that they fixed it.
   useEffect(() => {
-    let alive = true;
-
-    async function check() {
-      try {
-        const health = await api.health();
-        if (!alive) return;
-        if (!health.brain.ok) {
-          setProblem("model");
-          setDetail(health.brain.error ?? "");
-        } else {
-          setProblem("none");
-        }
-      } catch {
-        if (!alive) return;
-        // Within the grace window this is almost certainly a cold start.
-        const waited = Date.now() - firstSeen.current;
-        setProblem(waited < STARTUP_GRACE_MS ? "starting" : "backend");
+    const unwatch = subscribeConnection((status) => {
+      if (status === "open") {
+        setProblem((current) => (current === "backend" || current === "starting" ? "none" : current));
+        return;
       }
-    }
+      // Within the grace window a silent backend is almost certainly a cold
+      // start rather than a dead one.
+      const waited = Date.now() - firstSeen.current;
+      setProblem(waited < STARTUP_GRACE_MS ? "starting" : "backend");
+    });
 
-    check();
-    // Re-check periodically so the banner clears itself once the user has
-    // followed the instructions, without needing a restart.
-    const timer = setInterval(check, 10_000);
+    const unsubscribe = subscribe((event) => {
+      if (event.type !== "health") return;
+      if (event.ok) {
+        setProblem("none");
+      } else {
+        setProblem("model");
+        setDetail(event.error ?? "");
+      }
+    });
+
     return () => {
-      alive = false;
-      clearInterval(timer);
+      unwatch();
+      unsubscribe();
     };
   }, []);
 

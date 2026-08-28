@@ -10,7 +10,9 @@
  * file that could approve something the user was not shown.
  */
 
-const BASE =
+// Exported so events.ts can open the same origin with the same credentials
+// rather than keeping a second copy of either.
+export const BASE =
   (import.meta.env.VITE_KAI_API as string | undefined) ?? "http://127.0.0.1:8756";
 
 export class ApiError extends Error {
@@ -51,7 +53,7 @@ function readToken(): Promise<string> {
   return Promise.resolve((import.meta.env.VITE_KAI_TOKEN as string | undefined) ?? "");
 }
 
-async function authHeaders(): Promise<Record<string, string>> {
+export async function authHeaders(): Promise<Record<string, string>> {
   if (!pendingToken) {
     pendingToken = readToken().catch(() => "");
   }

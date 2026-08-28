@@ -21,7 +21,16 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.datastructures import Headers
 
-from . import __version__, diagnostics, focus, notifications, preferences, retention, security
+from . import (
+    __version__,
+    diagnostics,
+    events,
+    focus,
+    notifications,
+    preferences,
+    retention,
+    security,
+)
 from .actions import gate, journal, undo
 from .brain import llm, orchestrator
 from .connectors import setup as connector_setup
@@ -217,7 +226,7 @@ def turn_stream(request: TurnRequest) -> StreamingResponse:
     then settles on `done`.
     """
 
-    def events() -> Iterator[str]:
+    def frames() -> Iterator[str]:
         try:
             for event in orchestrator.run_turn(
                 request.text,
@@ -246,7 +255,7 @@ def turn_stream(request: TurnRequest) -> StreamingResponse:
             yield f"data: {json.dumps(failed)}\n\n"
 
     return StreamingResponse(
-        events(),
+        frames(),
         media_type="text/event-stream",
         # Without this a proxy or the WebView can hold the whole response back
         # to buffer it, which produces exactly the all-at-once delivery
@@ -1103,6 +1112,29 @@ def start_focus(request: FocusRequest) -> dict[str, Any]:
 def end_focus() -> dict[str, Any]:
     state = focus.end()
     return {"active": state.active}
+
+
+@app.get("/events")
+async def event_stream() -> StreamingResponse:
+    """Everything the shell used to poll for, pushed instead — REQ-31, REQ-32.
+
+    Presence, notifications and brain health arrived through three timers
+    running for the life of the window: roughly 48 requests a minute with the
+    app idle, to establish forty-seven times out of forty-eight that nothing had
+    changed. See app/events.py for what is sampled and how often.
+
+    /state and /notifications stay. The CLI uses them, they are what this is
+    tested against, and an endpoint that answers one question once is the right
+    shape for a script.
+    """
+    return StreamingResponse(
+        events.stream(),
+        media_type="text/event-stream",
+        # Same reasoning as /turn/stream: without these a proxy or the WebView
+        # holds the response back to buffer it, which turns a live stream into
+        # a very slow poll.
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.get("/state")
