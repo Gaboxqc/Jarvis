@@ -212,6 +212,10 @@ const STRINGS = {
       "On — {embedded} of {chunks} passage(s) so far. The rest are indexed in the background.",
     "documents.semanticInstall": "Download and turn on",
     "documents.semanticInstalling": "Downloading…",
+    "planner.shortcuts": "Shortcuts",
+    "planner.noShortcuts":
+      "No shortcuts yet. Ask in chat — “make a shortcut called work setup that opens Slack and VS Code”.",
+    "planner.shortcutRun": "Run",
     "planner.routines": "Routines",
     "planner.noRoutines": "No routines yet. Ask in chat — “every weekday at 9, give me the briefing”.",
     "planner.routineSteps": "{count} step(s)",
@@ -567,6 +571,10 @@ const STRINGS = {
       "Activada — {embedded} de {chunks} fragmento(s) por ahora. El resto se indexa en segundo plano.",
     "documents.semanticInstall": "Descargar y activar",
     "documents.semanticInstalling": "Descargando…",
+    "planner.shortcuts": "Atajos",
+    "planner.noShortcuts":
+      "Todavía no hay atajos. Pídelo en el chat: “crea un atajo llamado configuración de trabajo que abra Slack y VS Code”.",
+    "planner.shortcutRun": "Ejecutar",
     "planner.routines": "Rutinas",
     "planner.noRoutines": "Todavía no hay rutinas. Pídelo en el chat: “cada día laborable a las 9, dame el resumen”.",
     "planner.routineSteps": "{count} paso(s)",

@@ -486,6 +486,56 @@ def delete_routine(routine_id: str) -> dict[str, Any]:
     return {"deleted": routine_id}
 
 
+# -- shortcuts (REQ-22) ----------------------------------------------------
+
+
+@app.get("/shortcuts")
+def list_shortcuts() -> dict[str, Any]:
+    from .scheduler import sequences, shortcuts
+
+    return {
+        "shortcuts": [
+            {
+                "id": item.id,
+                "label": item.label,
+                "steps": sequences.describe(item.payload.get("steps") or []),
+                "needs_approval": shortcuts.needs_approval(item),
+            }
+            for item in shortcuts.all_shortcuts()
+        ]
+    }
+
+
+@app.post("/shortcuts/{shortcut_id}/run")
+def run_shortcut(shortcut_id: str) -> dict[str, Any]:
+    from .scheduler import shortcuts
+
+    item = shortcuts.get(shortcut_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="No such shortcut")
+    return shortcuts.run(item)
+
+
+@app.post("/shortcuts/{shortcut_id}/approve")
+def approve_shortcut(shortcut_id: str) -> dict[str, Any]:
+    """Re-approve a shortcut whose steps changed — REQ-22, REQ-24."""
+    from .scheduler import shortcuts
+
+    item = shortcuts.approve(shortcut_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="No such shortcut")
+    return {"approved": True, "shortcut": item.to_dict()}
+
+
+@app.delete("/shortcuts/{shortcut_id}")
+def delete_shortcut(shortcut_id: str) -> dict[str, Any]:
+    from .scheduler import shortcuts
+
+    if not shortcuts.cancel(shortcut_id):
+        raise HTTPException(status_code=404, detail="No such shortcut")
+    return {"deleted": shortcut_id}
+
+
 @app.get("/tasks")
 def list_tasks(include_done: bool = True) -> dict[str, Any]:
     from .skills.planning import tasks as task_store

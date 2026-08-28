@@ -18,6 +18,7 @@ All eleven phases of `tasks.md`:
 | Knowledge | Web search with sources, exact arithmetic, units, currency, time zones |
 | Documents | Q&A over your own PDFs, Word files and notes, with file + page citations |
 | Routines | A trigger and a list of actions, approved once and re-approved when edited |
+| Shortcuts | The same, run by name instead of by time — "run work setup" |
 | Files | Search by name, date or content; safe folder organization, full batch undo |
 | System | Launch/close apps, volume, lock, sleep, focus sessions |
 | Voice | Local speech in and out, wake word, confidence-gated so it asks rather than guesses |
@@ -139,6 +140,20 @@ you approve it again.
 
 When it fires, every step goes through the same Action Gate everything else
 does, lands in the same action history, and is undoable as one batch.
+
+## Shortcuts
+
+`"make a shortcut called work setup that opens Slack, VS Code and Spotify"`, then
+`"run work setup"`.
+
+A shortcut is a routine with a name where its trigger time would be, and it
+shares everything else with one — including the approval. You agree once, from a
+preview naming every action, and editing it revokes that until you approve it
+again.
+
+Two names cannot collide, and an ambiguous one asks rather than guesses:
+running the wrong multi-step sequence is exactly the mistake the Action Gate
+exists to prevent, and picking one for you would be making it on your behalf.
 
 ## Recording a meeting
 

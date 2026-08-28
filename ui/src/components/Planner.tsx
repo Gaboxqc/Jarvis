@@ -19,7 +19,14 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, type Reminder, type RoutineSummary, type Task } from "../api";
+import {
+  api,
+  ApiError,
+  type Reminder,
+  type RoutineSummary,
+  type ShortcutSummary,
+  type Task,
+} from "../api";
 import type { Key } from "../i18n";
 
 interface Props {
@@ -35,15 +42,18 @@ export function Planner({ t }: Props) {
   const [showDone, setShowDone] = useState(false);
   const [routines, setRoutines] = useState<RoutineSummary[]>([]);
   const [routineNote, setRoutineNote] = useState<string | null>(null);
+  const [shortcuts, setShortcuts] = useState<ShortcutSummary[]>([]);
 
   const load = useCallback(async () => {
     try {
-      const [taskList, reminderList, routineList] = await Promise.all([
+      const [taskList, reminderList, routineList, shortcutList] = await Promise.all([
         api.tasks(),
         api.reminders(),
         api.routines().catch(() => ({ routines: [] })),
+        api.shortcuts().catch(() => ({ shortcuts: [] })),
       ]);
       setRoutines(routineList.routines);
+      setShortcuts(shortcutList.shortcuts);
       setTasks(taskList.tasks);
       setReminders(reminderList.reminders);
       setError(null);
@@ -211,6 +221,73 @@ export function Planner({ t }: Props) {
           <p className="small" role="status">
             {routineNote}
           </p>
+        )}
+      </section>
+
+      <section className="card">
+        <h2 className="small muted">{t("planner.shortcuts")}</h2>
+        {shortcuts.length === 0 ? (
+          <p className="small muted">{t("planner.noShortcuts")}</p>
+        ) : (
+          <ul className="plain">
+            {shortcuts.map((shortcut) => (
+              <li key={shortcut.id}>
+                <div className="spread">
+                  <div>
+                    <div>{shortcut.label}</div>
+                    <div className="small muted">
+                      {t("planner.routineSteps", { count: shortcut.steps.length })}
+                    </div>
+                    {shortcut.needs_approval && (
+                      <div className="small" role="status">
+                        {t("planner.routineNeedsApproval")}
+                      </div>
+                    )}
+                  </div>
+                  <div className="row">
+                    {shortcut.needs_approval && (
+                      <button
+                        className="primary"
+                        disabled={busy}
+                        onClick={() => {
+                          setRoutineNote(null);
+                          void api.approveShortcut(shortcut.id).then(load).catch(() => undefined);
+                        }}
+                      >
+                        {t("planner.routineApprove")}
+                      </button>
+                    )}
+                    <button
+                      disabled={busy}
+                      onClick={() => {
+                        setRoutineNote(null);
+                        void api
+                          .runShortcut(shortcut.id)
+                          .then((r) =>
+                            setRoutineNote(
+                              t("planner.routineRan", { ran: r.ran, skipped: r.skipped }),
+                            ),
+                          )
+                          .catch(() => undefined);
+                      }}
+                    >
+                      {t("planner.shortcutRun")}
+                    </button>
+                    <button
+                      className="ghost"
+                      disabled={busy}
+                      onClick={() => {
+                        if (!window.confirm(t("planner.routineDeleteConfirm"))) return;
+                        void api.deleteShortcut(shortcut.id).then(load).catch(() => undefined);
+                      }}
+                    >
+                      {t("planner.cancel")}
+                    </button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 

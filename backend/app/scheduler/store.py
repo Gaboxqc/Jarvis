@@ -18,6 +18,17 @@ from .. import db
 KIND_REMINDER = "reminder"
 KIND_TIMER = "timer"
 KIND_ROUTINE = "routine"
+# A named sequence with no trigger time — REQ-22. It lives here rather than in
+# a table of its own because it is the same thing as a routine in every respect
+# except what starts it, and `due_items()` already refuses rows with no
+# `next_fire_at`, so one can never fire by accident.
+KIND_SHORTCUT = "shortcut"
+
+# The kinds that are a reminder as far as the user is concerned. Positive rather
+# than a list of exclusions: routines and shortcuts were both filtered out of
+# the reminder list one at a time, and the second one was only remembered
+# because the first had already been forgotten once.
+REMINDER_KINDS = (KIND_REMINDER, KIND_TIMER)
 
 
 @dataclass
@@ -78,7 +89,10 @@ def add(
     *,
     kind: str,
     label: str,
-    fire_at: datetime,
+    # None for a shortcut, which is triggered by name rather than by time.
+    # due_items() requires a non-null time, so such a row is stored, listed and
+    # never fires.
+    fire_at: datetime | None = None,
     recurrence: dict[str, Any] | None = None,
     payload: dict[str, Any] | None = None,
 ) -> ScheduledItem:
@@ -94,7 +108,7 @@ def add(
             kind,
             label,
             db.dumps(payload or {}),
-            _iso(fire_at),
+            _iso(fire_at) if fire_at is not None else None,
             db.dumps(recurrence) if recurrence else None,
             db.now(),
         ),

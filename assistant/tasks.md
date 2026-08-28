@@ -52,8 +52,8 @@ instead of WASAPI loopback. Each has its reasoning in the source beside the code
 - [x] **T4.3** Implement `launch_app` / `close_app`, with closest-match suggestion on miss and confirmation when closing an app with unsaved state. — *Requirements: REQ-22, REQ-24, REQ-27*
 - [~] **T4.4** Implement system control: volume, audio output device, lock, sleep, screenshot, Wi-Fi toggle. — *Requirements: REQ-22*
   - Volume, lock, sleep and list-running shipped. Wi-Fi toggle, audio output device and screenshot did not.
-- [ ] **T4.5** Implement user-defined named shortcuts for multi-step sequences. — *Requirements: REQ-22*
-  - Not built. T5.5 has since landed and is the same machinery: a shortcut is a routine with a name for a trigger instead of a time.
+- [x] **T4.5** Implement user-defined named shortcuts for multi-step sequences. — *Requirements: REQ-22*
+  - A shortcut is a routine with a name where its trigger time would be, so the two share scheduler/sequences.py -- the validation, the approval bound to a fingerprint of the steps, the revocation on edit, and the execution through the Action Gate. That sharing is the point rather than a convenience: the approval is the one place in the app where a yes outlives the moment it was given, and a second copy of it would be the one that gets the fix late. Nothing new is stored; `due_items()` already refuses rows with no trigger time, so a shortcut sits in the same table as the reminders and can never fire on its own.
 - [x] **T4.6** Implement `focus_session`: close/minimize configured apps, suppress notifications and the assistant's own proactive output, interval (work/break) patterns, early exit, end-of-session notification and restore. — *Requirements: REQ-23*
 
 ## Phase 5 — Scheduling, tasks, routines

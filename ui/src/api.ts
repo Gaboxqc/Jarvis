@@ -282,6 +282,13 @@ export interface RoutineSummary {
   needs_approval: boolean;
 }
 
+export interface ShortcutSummary {
+  id: string;
+  label: string;
+  steps: string[];
+  needs_approval: boolean;
+}
+
 export interface RetentionStatus {
   conversation_days: number;
   history_days: number;
@@ -639,6 +646,22 @@ export const api = {
 
   deleteRoutine: (id: string) =>
     request<{ deleted: string }>(`/routines/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  shortcuts: () => request<{ shortcuts: ShortcutSummary[] }>("/shortcuts"),
+
+  runShortcut: (id: string) =>
+    request<{ ran: number; skipped: number }>(`/shortcuts/${encodeURIComponent(id)}/run`, {
+      method: "POST",
+    }),
+
+  /** Re-approve a shortcut whose steps changed — REQ-22, REQ-24. */
+  approveShortcut: (id: string) =>
+    request<{ approved: boolean }>(`/shortcuts/${encodeURIComponent(id)}/approve`, {
+      method: "POST",
+    }),
+
+  deleteShortcut: (id: string) =>
+    request<{ deleted: string }>(`/shortcuts/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   /** The retention window, and what is inside it right now. */
   retention: () => request<RetentionStatus>("/privacy/retention"),

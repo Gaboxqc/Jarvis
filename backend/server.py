@@ -22,7 +22,14 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8756
 
 # Below this, packaging has silently dropped capabilities (see _selftest).
-MIN_EXPECTED_SKILLS = 40
+#
+# Raised from 40 with the skill count at 55. It is not a floor that should be
+# left behind: the point is to catch a *package* going missing, and the smallest
+# one is four skills, so a threshold far below the real count would let the
+# whole comms or system package vanish and still call the build good.
+# test_the_selftest_has_a_meaningful_threshold keeps it honest from both ends --
+# reachable by the real set, and within 75% of it.
+MIN_EXPECTED_SKILLS = 50
 
 
 def ensure_standard_streams() -> None:

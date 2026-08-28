@@ -71,7 +71,7 @@ class AddRoutineSkill(Skill):
 
         try:
             steps = routines.validate(_steps_from(args.get("actions")))
-        except routines.RoutineError as exc:
+        except routines.SequenceError as exc:
             raise SkillError(str(exc)) from exc
         return label, parsed, steps
 
