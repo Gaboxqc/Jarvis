@@ -111,8 +111,46 @@ nav.tabs button[aria-current="page"] {
   border-color: var(--line);
 }
 
-main { flex: 1; overflow: auto; padding: 1rem; }
-.view { max-width: 52rem; margin: 0 auto; }
+/* The one scrolling region for ordinary tabs, and a column so that the chat
+   pane can be told to fill what is left of it.
+
+   `min-height: 0` is not decoration. A flex item's default minimum is its
+   content size, so without this `main` refuses to shrink below the height of a
+   long conversation, grows the page instead, and every "scroll the log" rule
+   below silently does nothing. */
+main {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Ordinary tabs keep their natural height and let `main` do the scrolling.
+   Without this they are flex items in a column and would be squashed to fit
+   rather than overflowing, which is the opposite of what a long list wants. */
+main > * { flex-shrink: 0; }
+
+.view { max-width: 52rem; margin: 0 auto; width: 100%; }
+
+/* Chat is the exception: it fills the remaining height and scrolls its own log,
+   so the composer stays where the user left it.
+
+   Before this, the composer lived inside the page scroller. Measured at 25
+   exchanges in a 700px window, it sat 4,676px below the fold -- you had to
+   scroll to the bottom of the whole conversation to reach the input box. */
+main > .pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+main > .pane > .view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 
 h1 { font-size: 1.15rem; margin: 0 0 0.75rem; }
 
@@ -152,7 +190,16 @@ h1 { font-size: 1.15rem; margin: 0 0 0.75rem; }
 
 /* -- chat -- */
 
-.log { display: flex; flex-direction: column; gap: 0.6rem; }
+.log {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  /* Scrolls itself rather than scrolling the page, which is what keeps the
+     composer and the toasts on screen. */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
 
 .msg { padding: 0.65rem 0.85rem; border-radius: var(--radius); max-width: 46rem; }
 .msg.user { background: var(--panel-2); align-self: flex-end; }
@@ -359,11 +406,21 @@ button.mic svg, button.speaker svg { display: block; }
 
 /* -- reminder toasts (REQ-9) -- */
 
+/* Outside `main`, so a reminder cannot scroll out of view.
+   It used to live inside the page scroller: with a conversation open and the
+   view scrolled to the latest reply, a due reminder sat 4,724px above the
+   viewport. This module's own note says a reminder you can miss is the failure
+   it exists to prevent -- it just had the mechanism wrong. It was never a
+   timer; it was the scrollbar. */
 .toasts {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  padding: 0.75rem 1rem 0;
+  max-width: 52rem;
+  margin: 0 auto;
+  width: 100%;
+  flex: none;
 }
 .toast {
   display: flex;

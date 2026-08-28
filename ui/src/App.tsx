@@ -56,6 +56,14 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Every tab shares one scrolling region, so switching to a shorter one used to
+  // land you wherever the previous tab's scrollbar happened to be -- and coming
+  // back put you at the top of a conversation you had been reading the end of.
+  // Chat keeps its own scroll now; the rest start where they should.
+  useEffect(() => {
+    document.getElementById("main")?.scrollTo({ top: 0 });
+  }, [tab]);
+
   const onBusyChange = useCallback((value: boolean) => setBusy(value), []);
 
   return (
@@ -94,16 +102,21 @@ export function App() {
         </nav>
       </header>
 
+      {/* Above `main`, deliberately. A reminder is chrome, not content: inside
+          the page scroller it scrolled out of view the moment anyone read a
+          conversation, which is the failure Notifications exists to prevent. */}
+      <Notifications t={t} />
+
       <main id="main" tabIndex={-1}>
         {/* The one prerequisite the installer cannot bundle (REQ-29). */}
         <div className="view">
           <Prerequisite t={t} />
         </div>
 
-        {/* Kept mounted: navigating away must not discard a pending confirmation. */}
-        <Notifications t={t} />
-
-        <div hidden={tab !== "chat"}>
+        {/* Kept mounted: navigating away must not discard a pending confirmation.
+            `pane` makes it fill the remaining height and scroll its own log, so
+            the composer does not ride the page scrollbar out of reach. */}
+        <div className="pane" hidden={tab !== "chat"}>
           <Chat lang={lang} t={t} onBusyChange={onBusyChange} voice={voice} />
         </div>
         {tab === "today" && <Today t={t} />}
