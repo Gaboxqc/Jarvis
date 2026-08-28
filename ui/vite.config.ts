@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, type Plugin } from "vitest/config";
 import pkg from "./package.json";
 import react from "@vitejs/plugin-react";
 
@@ -40,6 +40,10 @@ function devApiToken(): Plugin {
     name: "kai-dev-api-token",
     apply: "serve",
     config() {
+      // Vitest loads this config in serve mode, and the tests stub the token
+      // themselves. Warning there would mean every `npm test` on a machine that
+      // has never run the backend opens with an irrelevant complaint.
+      if (process.env.VITEST) return {};
       const path = tokenFile();
       const token = existsSync(path) ? readFileSync(path, "utf-8").trim() : "";
       if (!token) {
@@ -83,4 +87,13 @@ export default defineConfig({
   envPrefix: ["VITE_", "TAURI_"],
 
   build: { outDir: "dist", target: "es2022" },
+
+  test: {
+    environment: "jsdom",
+    globals: true,
+    setupFiles: ["./src/test/setup.ts"],
+    // Only our own tests. Without this, `npm test` walks node_modules and runs
+    // whatever the dependencies ship.
+    include: ["src/**/*.test.{ts,tsx}"],
+  },
 });
