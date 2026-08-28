@@ -7,6 +7,17 @@ uvicorn[standard]==0.41.0
 pydantic==2.12.4
 httpx==0.28.1
 PyYAML==6.0.3
+# Reading the config is PyYAML; *writing* it is ruamel, because a PyYAML
+# round-trip drops all 74 comments and would quietly delete the config's own
+# documentation the first time anyone flipped a switch in the UI.
+#
+# Undeclared until CI ran for the first time and 37 tests failed on a clean
+# machine with "ruamel.yaml isn't installed". It was present in the developer's
+# virtualenv by hand -- nothing depends on it transitively -- so a fresh
+# `pip install -r requirements.txt` produced an app that could not save a
+# setting, add an account, or record a licence acceptance, and a frozen build
+# from that environment would have shipped the same way.
+ruamel.yaml==0.19.1
 python-dateutil==2.9.0.post0
 Pint==0.25
 send2trash==1.8.3

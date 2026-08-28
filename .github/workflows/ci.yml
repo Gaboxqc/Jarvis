@@ -110,6 +110,16 @@ jobs:
           key: cargo-${{ runner.os }}-${{ hashFiles('ui/src-tauri/Cargo.lock') }}
           restore-keys: cargo-${{ runner.os }}-
 
+      - name: Stand in for the frozen backend
+        # tauri.conf.json declares `resources/kai-backend/**/*`, which is the
+        # PyInstaller output -- 550MB, gitignored, produced by build.ps1. Absent
+        # from a checkout, tauri-build fails the glob before rustc is reached.
+        # This job asks whether the Rust compiles, so a placeholder is the
+        # honest stand-in; the real bundling is build.ps1's job.
+        run: |
+          New-Item -ItemType Directory -Force ui/src-tauri/resources/kai-backend | Out-Null
+          Set-Content ui/src-tauri/resources/kai-backend/placeholder.txt "not the real backend"
+
       - name: Check
         working-directory: ui/src-tauri
         # `cargo check`, not `tauri build`: this is about whether the Rust

@@ -174,8 +174,16 @@ def test_the_ocr_engine_is_not_loaded_until_used(workspace):
 
 
 def test_an_idle_ocr_engine_is_released(workspace, monkeypatch):
+    import time
+
     monkeypatch.setattr(capture, "_engine", object())
-    monkeypatch.setattr(capture, "_last_used", 0.0)  # long ago on the monotonic clock
+    # Relative to now, not 0.0. `time.monotonic()` counts from boot on Windows,
+    # so 0.0 is only "long ago" on a machine that has been up longer than the
+    # 600-second idle window -- true of a development box, false of a CI runner
+    # that started two minutes ago, where this failed on its first run.
+    monkeypatch.setattr(
+        capture, "_last_used", time.monotonic() - capture.UNLOAD_AFTER_SECONDS - 1
+    )
 
     assert capture.unload_if_idle() is True
     assert capture._engine is None
