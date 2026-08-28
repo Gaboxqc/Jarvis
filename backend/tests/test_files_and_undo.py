@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 
 import pytest
 
 from app.actions import gate, journal, undo
 from app.skills.base import SkillContext, SkillError
 from app.skills.system import paths
-from app.skills.system.files import OrganizeFolderSkill
 
 from .conftest import make_files
 

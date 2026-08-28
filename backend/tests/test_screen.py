@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import inspect
 
-import pytest
 
 from app.actions import gate
 from app.screen import capture, clipboard

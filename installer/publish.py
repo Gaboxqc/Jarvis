@@ -145,7 +145,7 @@ def publish(notes: str, prerelease: bool, replace: bool, extra: list[Path]) -> i
 
     print(f"version    : {version}")
     print(f"installer  : {installer.name} ({installer.stat().st_size / 1e6:.0f} MB)")
-    print(f"signature  : present")
+    print("signature  : present")
     print(f"manifest   : {manifest_path}")
 
     if release_exists(tag):

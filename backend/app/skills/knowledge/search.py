@@ -61,7 +61,7 @@ def _search(query: str, limit: int) -> list[dict[str, str]]:
         from ddgs import DDGS
     except ImportError:
         try:
-            from duckduckgo_search import DDGS  # older package name
+            from duckduckgo_search import DDGS  # type: ignore[no-redef]  # older package name
         except ImportError as exc:
             raise SkillError(
                 "Web search isn't installed on this machine (missing the 'ddgs' package)."

@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import ast
 import operator
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any
 
 from ..base import Skill, SkillContext, SkillError, SkillParam, SkillResult
 
-_OPERATORS = {
+_OPERATORS: dict[type[ast.AST], Any] = {
     ast.Add: operator.add,
     ast.Sub: operator.sub,
     ast.Mult: operator.mul,

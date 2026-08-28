@@ -17,10 +17,9 @@ import yaml
 
 from app.actions import gate
 from app.connectors import base as connectors
-from app.connectors import calendar as cal
 from app.connectors import credentials
 from app.connectors import mail
-from app.settings import load_config, reset_config_cache
+from app.settings import reset_config_cache
 from app.skills.base import SkillContext
 
 ICS_TEMPLATE = """BEGIN:VCALENDAR

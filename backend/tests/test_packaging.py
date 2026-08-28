@@ -331,7 +331,6 @@ def test_a_corrupt_database_is_quarantined_and_replaced(tmp_path, monkeypatch):
     storage returns 500, and the app is wedged with no way out from inside it.
     Seen for real after a force-kill during a write.
     """
-    import sqlite3
 
     from app import db
 

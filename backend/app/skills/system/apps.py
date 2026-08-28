@@ -15,7 +15,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from ..base import Skill, SkillContext, SkillError, SkillParam, SkillResult
+from ..base import Severity, Skill, SkillContext, SkillError, SkillParam, SkillResult
 
 IS_WINDOWS = os.name == "nt"
 
@@ -87,8 +87,8 @@ def _resolve_target(name: str) -> str | None:
 def _running_processes() -> list[Any]:
     try:
         import psutil
-    except ImportError:  # pragma: no cover
-        raise SkillError("Process control isn't available (psutil not installed).")
+    except ImportError as exc:  # pragma: no cover
+        raise SkillError("Process control isn't available (psutil not installed).") from exc
     return list(psutil.process_iter(["pid", "name", "exe"]))
 
 
@@ -190,7 +190,7 @@ class SystemControlSkill(Skill):
 
     _GATED = {"lock", "sleep"}
 
-    def severity(self, args: dict[str, Any]) -> str:
+    def severity(self, args: dict[str, Any]) -> Severity:
         return "consequential" if str(args.get("action", "")) in self._GATED else "routine"
 
     def preview(self, args: dict[str, Any]) -> str:

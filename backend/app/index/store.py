@@ -15,7 +15,6 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -147,6 +146,10 @@ def stats() -> dict[str, Any]:
           FROM indexed_documents
         """
     )
+    # An aggregate with no GROUP BY returns exactly one row, empty table or
+    # not. The assert is for the type checker, and would fire only if that
+    # query stopped being an aggregate.
+    assert row is not None
     return {
         "documents": int(row["documents"] or 0),
         "chunks": int(row["chunks"] or 0),

@@ -18,7 +18,6 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-import pytest
 import yaml
 
 from app import db
@@ -194,7 +193,6 @@ def test_missing_required_argument_fails_before_anything_runs(workspace):
 
 
 def test_disabled_skill_is_not_reachable(workspace, config_file):
-    from app.skills import registry
 
     raw = yaml.safe_load(config_file.read_text(encoding="utf-8"))
     raw["skills"]["disabled"] = ["utils.calculate"]

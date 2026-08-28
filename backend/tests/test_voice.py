@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from app.settings import load_config, reset_config_cache
+from app.settings import reset_config_cache
 from app.voice import audio, models, session, stt, tts, wake
 
 

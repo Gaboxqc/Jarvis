@@ -77,7 +77,6 @@ class CaptureSession:
     # -- lifecycle --------------------------------------------------------
 
     def start(self) -> SessionStatus:
-        from ..voice import stt
 
         status = self._recorder.start()
         self.note = status.note

@@ -354,7 +354,6 @@ def test_status_tells_the_screen_it_is_recording(workspace, monkeypatch):
     """
     from fastapi.testclient import TestClient
 
-    from app.capture import session as capture
     from app.main import app
 
     with TestClient(app) as client:

@@ -419,9 +419,9 @@ def test_a_trailing_comment_moves_to_the_end_when_the_list_grows(workspace, conf
     })
 
     lines = config_file.read_text(encoding="utf-8").splitlines()
-    comment_at = next(i for i, l in enumerate(lines) if "Apps closed when" in l)
-    apps_at = next(i for i, l in enumerate(lines) if "distracting_apps" in l)
-    last_root_at = max(i for i, l in enumerate(lines) if str(extra) in l)
+    comment_at = next(i for i, line in enumerate(lines) if "Apps closed when" in line)
+    apps_at = next(i for i, line in enumerate(lines) if "distracting_apps" in line)
+    last_root_at = max(i for i, line in enumerate(lines) if str(extra) in line)
 
     # It has to sit after every folder and immediately before what it documents.
     assert last_root_at < comment_at < apps_at

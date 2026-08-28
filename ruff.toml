@@ -1,0 +1,54 @@
+# Lint configuration for every Python file in the project.
+#
+# The selection below is deliberately about *errors*, not style. This codebase
+# has a voice -- long explanatory comments, import order chosen by hand, lines
+# that run to 110 characters when breaking them would break a sentence -- and a
+# linter that reformats prose is a linter that gets switched off. So the
+# stylistic families are off, and each one is off for a stated reason rather
+# than because nobody looked:
+#
+#   I    (isort)        would reorder imports across the whole tree for style
+#   E501 (line length)  would reflow comment paragraphs to hit a column
+#   UP   (pyupgrade)    suggestions, not defects, on code that already targets 3.13
+#   SIM  (simplify)     ditto; `contextlib.suppress` is not clearer than try/pass here
+#
+# What is left catches things that are wrong rather than things that are
+# different: undefined names, unused imports and variables, mutable default
+# arguments, except-clauses that swallow the cause. All of it was clean when
+# this file was added, so a finding means something changed.
+
+target-version = "py313"
+line-length = 100          # reported by the formatter only; E501 is not selected
+
+extend-exclude = [
+    ".venv",
+    # 1.4GB of PyTorch. Not ours, and walking it is how the signing-key test
+    # used to hang the entire suite (see tests/test_packaging.py).
+    ".venv-xtts",
+    "installer/build",
+    "installer/dist",
+    "ui/node_modules",
+    # Generated at build time from the filesystem.
+    "backend/app/skills/_manifest.py",
+]
+
+[lint]
+select = ["E4", "E7", "E9", "F", "B"]
+
+[lint.flake8-bugbear]
+# FastAPI's whole dependency system is function calls in argument defaults.
+# `file: UploadFile = File(...)` is the documented spelling, not a mistake.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.File",
+    "fastapi.Form",
+    "fastapi.Query",
+    "fastapi.Body",
+    "fastapi.Header",
+]
+
+[lint.per-file-ignores]
+# PyInstaller spec files are executed with Analysis, EXE and friends injected
+# into the namespace by PyInstaller itself, so every one of them reads as
+# undefined here.
+"installer/*.spec" = ["F821"]

@@ -15,7 +15,7 @@ from typing import Any
 
 from ...connectors import base as connectors
 from ...connectors import mail
-from ..base import Skill, SkillContext, SkillError, SkillParam, SkillResult
+from ..base import Severity, Skill, SkillContext, SkillError, SkillParam, SkillResult
 
 BULK_THRESHOLD = 3
 
@@ -122,7 +122,7 @@ class FlagMailSkill(Skill):
         found = mail.search_messages(config, str(args.get("query", "")), limit=50)
         return config, found
 
-    def severity(self, args: dict[str, Any]) -> str:
+    def severity(self, args: dict[str, Any]) -> Severity:
         # Changing a couple of flags is trivially reversible and not worth a
         # prompt; doing it to forty messages is a bulk change to the user's mail.
         try:

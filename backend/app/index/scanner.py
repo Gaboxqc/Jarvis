@@ -21,7 +21,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Iterator
+from typing import Any, Iterator
 
 from ..settings import load_config
 from . import extract, store
@@ -241,7 +241,7 @@ def maybe_scan() -> None:
     scan_in_background()
 
 
-def status() -> dict[str, object]:
+def status() -> dict[str, Any]:
     config = load_config()
     return {
         "folders": [str(f) for f in config.documents.indexed_folders],

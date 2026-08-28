@@ -74,7 +74,10 @@ def _split_stdout(log_path: Path):
         # than run a service that cannot reply.
         with open(log_path, "a", encoding="utf-8") as handle:
             handle.write("no stdout to speak on; spawn this with pipes\n")
-        raise SystemExit(2)
+        # `from None`: the OSError is the reason, and it is already in the log
+        # file above. Chaining it onto an exit code only makes the traceback
+        # longer for whoever is reading the exit status.
+        raise SystemExit(2) from None
 
     log = open(log_path, "a", encoding="utf-8")
     os.dup2(log.fileno(), 1)   # anything writing to fd 1 now lands in the file
