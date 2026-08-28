@@ -57,6 +57,23 @@ cd backend && ../.venv/Scripts/python.exe -m uvicorn app.main:app --port 8756
 cd ui && npm install && npm run dev
 ```
 
+**Start them in that order.** The API refuses unauthenticated calls, and the dev
+server reads the token from `%LOCALAPPDATA%\Kai\api-token` once, when it starts.
+The backend writes that file as it comes up, so a dev server started first sees
+nothing and spends the session getting 401s — it says so on the console. Same
+file if you want to drive the API by hand:
+
+```bash
+curl -H "Authorization: Bearer $(cat "$LOCALAPPDATA/Kai/api-token")" http://127.0.0.1:8756/health
+```
+
+The token exists because loopback is not a trust boundary and CORS is not a
+lock: CORS decides whether a page may *read* a reply, never whether the request
+is delivered, and a plain HTML form on any site is a request no browser
+preflights. Without a token, any page you visited while Kai was running could
+wipe your data or strike a skill off the Action Gate. The reasoning is written
+up in `backend/app/security.py`.
+
 Then open http://127.0.0.1:5173. Four sections — chat, memory, history,
 settings — switchable with Ctrl+1…4.
 

@@ -194,6 +194,18 @@ def main(argv: list[str] | None = None) -> int:
     if sidecar:
         watch_parent()
 
+    # Before the port opens, so that anything which finds the port listening can
+    # rely on the token file already being there. The desktop shell and the Vite
+    # dev server both read it, and both would otherwise race a backend that had
+    # bound the socket but not yet written the file.
+    from app import security
+
+    security.token()
+    if not sidecar:
+        # A terminal is the one place this is worth saying out loud: whoever
+        # started it by hand is the person who will want to curl it.
+        print(f"API token: {security.token_file()}", file=sys.stderr)
+
     import uvicorn
 
     from app.main import app

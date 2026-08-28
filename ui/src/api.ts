@@ -19,27 +19,83 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The bearer token every call carries.
+ *
+ * The backend refuses anything without it, because loopback and CORS are not
+ * access control — a form on any web page can POST to 127.0.0.1 with no
+ * preflight, and CORS only hides the reply. See backend/app/security.py.
+ *
+ * Two ways to get it, and neither of them is "bundle it":
+ *
+ *   in the desktop shell, from the Rust side, which reads the file the backend
+ *       wrote and hands it over on request
+ *   in the browser during development, from VITE_KAI_TOKEN, which vite.config.ts
+ *       fills in from the same file — and only when serving, never when
+ *       building, so a developer's token can never be compiled into a release
+ *
+ * Resolved once, and only a success is kept. A failure returns the empty string
+ * rather than throwing — the call then comes back 401, which is a message about
+ * the backend rather than an exception raised before any request was made — and
+ * it is not cached, so a backend that was still starting up gets asked again on
+ * the next call instead of leaving the window unauthenticated until it reloads.
+ */
+let pendingToken: Promise<string> | null = null;
+
+function readToken(): Promise<string> {
+  if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+    return import("@tauri-apps/api/core").then(({ invoke }) =>
+      invoke<string>("api_token"),
+    );
+  }
+  return Promise.resolve((import.meta.env.VITE_KAI_TOKEN as string | undefined) ?? "");
+}
+
+async function authHeaders(): Promise<Record<string, string>> {
+  if (!pendingToken) {
+    pendingToken = readToken().catch(() => "");
+  }
+  const value = await pendingToken;
+  if (!value) pendingToken = null;
+  return value ? { Authorization: `Bearer ${value}` } : {};
+}
+
 async function request<T>(
   path: string,
   init?: RequestInit & { timeoutMs?: number },
 ): Promise<T> {
   let response: Response;
-  const { timeoutMs, ...rest } = init ?? {};
+  const { timeoutMs, headers, ...rest } = init ?? {};
   // Capturing an utterance blocks until the speaker stops, then transcribes.
   // The default fetch has no timeout at all, so a wedged microphone would hang
   // the button forever with no way back.
   const abort = timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined;
   try {
     response = await fetch(`${BASE}${path}`, {
-      headers: { "Content-Type": "application/json" },
       signal: abort,
       ...rest,
+      // After the spread, not before: a caller's headers should add to these,
+      // and the credentials are not a caller's to drop.
+      headers: {
+        "Content-Type": "application/json",
+        ...(headers as Record<string, string> | undefined),
+        ...(await authHeaders()),
+      },
     });
   } catch {
     // A dead backend is the common case while developing, and the message the
     // user sees should say what to do about it (REQ-27).
     throw new ApiError(
       "Can't reach Kai. Is the backend running on port 8756?",
+    );
+  }
+  if (response.status === 401 || response.status === 403) {
+    // Distinguished from a dead backend on purpose: the port answered, so
+    // "is it running" is the wrong question and sends people the wrong way.
+    throw new ApiError(
+      "Kai's backend refused this window. Restart the app so it can hand over " +
+        "its access token again.",
+      response.status,
     );
   }
   if (!response.ok) {
@@ -404,7 +460,7 @@ export const api = {
     try {
       response = await fetch(`${BASE}/turn/stream`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({
           text,
           session_id: sessionId,
@@ -615,7 +671,14 @@ export const api = {
   uploadCloneReference: async (file: File) => {
     const body = new FormData();
     body.append("file", file);
-    const response = await fetch(`${BASE}/voice/clone/reference`, { method: "POST", body });
+    const response = await fetch(`${BASE}/voice/clone/reference`, {
+      method: "POST",
+      // Authorization only. Setting Content-Type here would override the
+      // multipart boundary the browser generates and the server could not
+      // parse the body.
+      headers: await authHeaders(),
+      body,
+    });
     if (!response.ok) {
       let detail = `${response.status} ${response.statusText}`;
       try {

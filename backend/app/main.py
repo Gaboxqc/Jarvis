@@ -17,10 +17,11 @@ from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
+from starlette.datastructures import Headers
 
-from . import focus, notifications, preferences
+from . import focus, notifications, preferences, security
 from .actions import gate, journal, undo
 from .brain import llm, orchestrator
 from .connectors import setup as connector_setup
@@ -39,6 +40,13 @@ log = logging.getLogger("kai")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # First, and before the port is serving. The desktop shell and the Vite dev
+    # server both read this file, and both read it once at their own startup --
+    # so creating it lazily on the first request means whichever of them started
+    # first found nothing and spent the whole session unauthenticated. Doing it
+    # here rather than in server.py covers `uvicorn app.main:app` too, which is
+    # how the README says to run it in development.
+    security.token()
     load_skills()
     log.info("loaded %d skills", len(catalog()))
     # Without this the API process has no subscriber and a due reminder is
@@ -71,22 +79,81 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Kai", version="0.1.0", lifespan=lifespan)
 
+
+class LocalCredentials:
+    """Nothing reaches a handler without the token — see app/security.py.
+
+    Loopback and CORS are not access control. A form on any web page can POST
+    here with no preflight and no JavaScript, and before this existed that was
+    enough to wipe every local record, strike a skill off the Action Gate, or
+    start the microphone. The Action Gate cannot help with any of it: it governs
+    what the assistant does with a request, not who was allowed to make one.
+
+    Written as a plain ASGI middleware rather than with `@app.middleware("http")`,
+    which would wrap every response in Starlette's BaseHTTPMiddleware. That class
+    pumps the body through a memory stream, and `/turn/stream` is a server-sent
+    event stream whose entire point is that each token arrives when it is
+    produced. Authentication is a header check; it has no business standing
+    between the generator and the socket.
+    """
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        # The preflight carries no Authorization header -- that is the thing it
+        # is asking permission to send -- so it cannot be judged by one. CORS
+        # sits outside this and has already answered it; this is for whoever
+        # changes the ordering below without reading why it is that way.
+        if scope.get("method") == "OPTIONS":
+            return await self.app(scope, receive, send)
+
+        headers = Headers(scope=scope)
+        rejection: JSONResponse | None = None
+
+        if not security.origin_allowed(headers.get("origin")):
+            rejection = JSONResponse(
+                status_code=403,
+                content={"detail": "Kai only answers its own windows."},
+            )
+        elif not security.authorizes(headers.get("authorization")):
+            rejection = JSONResponse(
+                status_code=401,
+                content={
+                    "detail": (
+                        "Not authorised. Kai's API needs the token in "
+                        f"{security.token_file()}."
+                    )
+                },
+            )
+
+        if rejection is not None:
+            return await rejection(scope, receive, send)
+        await self.app(scope, receive, send)
+
+
+# Added before the CORS middleware on purpose. Starlette builds the stack so the
+# last one added sits outermost, which leaves CORS on the outside where it can
+# answer a preflight without an answer to the question this one asks. Reversed,
+# every preflight would be refused for carrying no credentials and the packaged
+# app would never complete a single call.
+app.add_middleware(LocalCredentials)
+
 # The desktop UI runs from a local dev server, and inside Tauri from a
 # platform-specific origin. Localhost only -- this API reaches the user's files,
 # mail and calendar, so it must never accept a page served from anywhere else
 # (REQ-26).
 #
-# `tauri.localhost` is not optional. Windows WebView2 serves the packaged app
-# from http://tauri.localhost, while tauri:// is the macOS and Linux scheme.
-# Allowing only the latter meant the installed Windows app was CORS-blocked from
+# Allowing only tauri:// meant the installed Windows app was CORS-blocked from
 # its own backend on every request -- it reported "backend unreachable" against a
-# backend that was running and healthy.
+# backend that was running and healthy. The pattern lives in security.py so the
+# middleware above and this policy cannot disagree about what "local" means.
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=(
-        r"^(https?://(localhost|127\.0\.0\.1|tauri\.localhost)(:\d+)?"
-        r"|tauri://localhost)$"
-    ),
+    allow_origin_regex=security.ALLOWED_ORIGIN_PATTERN,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

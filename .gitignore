@@ -71,6 +71,11 @@ backend/app/skills/_manifest.py
 !*.key.pub
 .tauri/
 
+# The API token. It normally lives in the data directory and never comes near
+# the repository -- but KAI_DATA_DIR can point anywhere, including here, and a
+# committed token is a committed key to the user's mail, files and calendar.
+api-token
+
 # The Live2D runtime is proprietary and licensed per-user from live2d.com.
 # It is dropped in locally, never committed.
 ui/public/live2d/live2dcubismcore.min.js

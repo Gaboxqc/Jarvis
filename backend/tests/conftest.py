@@ -6,12 +6,42 @@ from pathlib import Path
 
 import pytest
 import yaml
+from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app import db, settings  # noqa: E402
+from app import db, security, settings  # noqa: E402
 from app.skills import registry  # noqa: E402
 from app.skills.base import Skill, SkillParam, SkillResult  # noqa: E402
+
+# -- API credentials for every TestClient in the suite --------------------
+#
+# The API refuses anything without a bearer token (app/security.py). Fifteen
+# test modules build their own `TestClient(app)` inline, and threading a header
+# through every call site would bury the thing each of those tests is actually
+# about under plumbing.
+#
+# So the token is pinned to a known value here and attached once, at the client
+# rather than at the call. `setdefault` rather than assignment, so a test that
+# wants to say something about authentication can still say it -- either by
+# passing its own header, or by deleting this one:
+#
+#     client.headers.pop("Authorization")   # now an anonymous caller
+#
+# which is exactly what test_api_auth.py does.
+TEST_API_TOKEN = "test-token-not-a-secret"
+os.environ[security.API_TOKEN_ENV] = TEST_API_TOKEN
+security.reset()
+
+_unauthenticated_client_init = TestClient.__init__
+
+
+def _authenticated_client_init(self, *args, **kwargs):
+    _unauthenticated_client_init(self, *args, **kwargs)
+    self.headers.setdefault("Authorization", f"Bearer {TEST_API_TOKEN}")
+
+
+TestClient.__init__ = _authenticated_client_init
 
 # What the gated test double has actually done. Assertions read this instead of
 # a real store, so the gate's invariants stay independent of any product
