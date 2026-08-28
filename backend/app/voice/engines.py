@@ -58,7 +58,7 @@ XTTS_URL = (
 # The published bundle's checksum, compared before anything is unpacked. Empty
 # would mean "not published yet", and that is refused rather than skipped --
 # comparing against an empty string is a check that always passes.
-XTTS_SHA256 = "7d70bd86f150a9094f3881d602ae7678a87b92961c692161306d2e8d2a160e12"
+XTTS_SHA256 = "07186003a601bf52595e9b730ced415c6d572c7427bbeeb45205f5e53a8576ba"
 
 # The executable inside the archive, and what it is called once installed.
 XTTS_ENTRY = "kai-xtts.exe"
