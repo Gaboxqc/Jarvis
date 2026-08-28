@@ -9,4 +9,4 @@ installer/publish.py refuses to publish when the version files disagree, and
 this is one of them now.
 """
 
-__version__ = "0.3.5"
+__version__ = "0.4.0"
