@@ -93,6 +93,13 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
             "rescan_minutes": 15,
             # Tests must not depend on whether the laptop happens to be plugged in.
             "pause_on_battery": False,
+            # Or on whether the developer happens to have pulled the embedding
+            # model. With it present, every test that indexes a document or
+            # remembers a fact would make real HTTP calls to Ollama -- slow, and
+            # a different suite on two machines. test_semantic_search.py opts
+            # back in with a fake, and test_semantic_search_slow.py with the
+            # real one.
+            "semantic_search": False,
         },
         "persona": {"name": "Kai", "verbosity": "terse", "idle_timeout_minutes": 30},
         "brain": {"provider": "ollama", "model": "llama3"},
@@ -110,6 +117,9 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("KAI_DATA_DIR", str(data))
     monkeypatch.setenv("KAI_CONFIG", str(config_file))
     settings.reset_config_cache()
+    from app.index import embeddings
+
+    embeddings.reset_cache()
     db.set_db_path(data / "test.db")
     registry.reset()
     registry.load_skills()[GatedTestSkill.name] = GatedTestSkill()
@@ -128,6 +138,7 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     db.close_connection()
     db.set_db_path(None)
     settings.reset_config_cache()
+    embeddings.reset_cache()
     registry.reset()
     scanner.reset_state()
     focus.reset()

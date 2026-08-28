@@ -198,6 +198,13 @@ class DocumentSettings:
     max_file_mb: int = 25
     rescan_minutes: int = 15
     pause_on_battery: bool = True
+    # Semantic retrieval, alongside the keyword index rather than instead of it.
+    # On by default and inert until the model is pulled: `available()` is false
+    # without it, and search is exactly what it was before. The switch is here so
+    # it can be turned off by someone who does not want a second model running,
+    # not because the default is in doubt.
+    semantic_search: bool = True
+    embedding_model: str = "nomic-embed-text"
 
 
 @dataclass(frozen=True)
@@ -392,6 +399,10 @@ def _build(raw: dict[str, Any], source: Path | None) -> Config:
             max_file_mb=int(documents_raw.get("max_file_mb", 25)),
             rescan_minutes=int(documents_raw.get("rescan_minutes", 15)),
             pause_on_battery=bool(documents_raw.get("pause_on_battery", True)),
+            semantic_search=bool(documents_raw.get("semantic_search", True)),
+            embedding_model=str(
+                documents_raw.get("embedding_model", DocumentSettings.embedding_model)
+            ),
         ),
         avatar=AvatarSettings(
             licence_accepted=bool(avatar_raw.get("licence_accepted", False)),

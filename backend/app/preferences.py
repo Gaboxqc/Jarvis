@@ -109,6 +109,10 @@ WRITABLE: dict[str, dict[str, Any]] = {
         "indexed_folders": Folders,
         "max_file_mb": int,
         "pause_on_battery": bool,
+        # Not Sensitive: the embedding model runs in the same local Ollama the
+        # language model already uses, so turning it on sends nothing anywhere
+        # that was not already being sent.
+        "semantic_search": bool,
     },
     "system": {
         # The files the assistant may read and organise. Guarded harder than the

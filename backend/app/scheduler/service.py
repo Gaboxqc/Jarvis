@@ -115,6 +115,36 @@ def collect_due() -> list[Delivery]:
     return deliveries
 
 
+def _run_routines(deliveries: list[Delivery]) -> None:
+    """Execute routines that have come due, and say what happened.
+
+    Imported here rather than at module scope: routines reach into the Action
+    Gate, the gate reaches into the skill registry, and the registry is loaded
+    by the app that starts this thread. A scheduler that could not be imported
+    without the whole skill layer would be a scheduler nothing could test.
+    """
+    from . import routines as routines_module
+
+    for delivery in deliveries:
+        item = store.get(delivery.item_id)
+        if item is None:
+            continue
+        try:
+            outcome = routines_module.run(item)
+        except Exception:  # noqa: BLE001 — one bad routine must not stop the thread
+            log.exception("routine %s failed", delivery.label)
+            continue
+
+        from .. import notifications
+
+        notifications.publish(
+            kind="routine",
+            title=delivery.label,
+            body=routines_module.summarise(outcome),
+            identifier=delivery.item_id,
+        )
+
+
 def _dispatch(deliveries: list[Delivery]) -> None:
     with _lock:
         targets = list(_subscribers)
@@ -128,8 +158,15 @@ def _dispatch(deliveries: list[Delivery]) -> None:
 
 def tick() -> list[Delivery]:
     deliveries = collect_due()
-    if deliveries:
-        _dispatch(deliveries)
+    # A routine is not a reminder. Announcing "Reminder: morning start" and then
+    # doing nothing would be exactly backwards: the point of a routine is that
+    # it acts, and what the user wants told is what it did.
+    routines_due = [d for d in deliveries if d.kind == store.KIND_ROUTINE]
+    if routines_due:
+        _run_routines(routines_due)
+    rest = [d for d in deliveries if d.kind != store.KIND_ROUTINE]
+    if rest:
+        _dispatch(rest)
 
     # The scheduler thread is already the "something happens periodically"
     # thread, so the indexer rides along rather than starting a second one.

@@ -161,6 +161,57 @@ def test_continuous_integration_runs_everything_the_build_script_does():
         assert command in workflow, f"CI does not run {command}"
 
 
+def test_the_watchdog_warms_numpy_before_it_starts_its_thread():
+    """The ordering that keeps the packaged backend able to start.
+
+    Once a thread is blocked reading stdin -- which is how the sidecar notices
+    its parent dying -- `import numpy` never returns. Measured in a child
+    process with a 180-second ceiling:
+
+        no thread, then import numpy               ->  completes
+        import numpy, then start the thread        ->  completes
+        start the thread, then import numpy        ->  never completes
+        start the thread, wait, then import numpy  ->  never completes
+
+    So the backend would never bind its port, or -- with numpy imported lazily,
+    which was the first attempt at a fix -- would start healthy and then wedge
+    on the first semantic search, which is worse.
+
+    Ordering is the fix, and it belongs in watch_parent() because that is the
+    function that creates the hazard.
+    """
+    server_source = SERVER.read_text(encoding="utf-8")
+
+    warm = server_source.index("_warm_imports_that_deadlock_against_this_thread()")
+    thread = server_source.index('threading.Thread(target=wait, name="parent-watch"')
+    assert warm < thread, "numpy must be warmed before the watchdog thread exists"
+
+
+def test_importing_the_app_does_not_pull_in_numpy():
+    """Defence in depth for the deadlock above, and a lean startup besides.
+
+    watch_parent() warming numpy is what makes the backend correct; this keeps
+    numpy off `app.main`'s import graph anyway, so the CLI and the tests do not
+    pay for it and so a future module-scope import is a conversation rather than
+    a surprise. voice/tts.py and screen/capture.py already import it inside
+    functions; index/embeddings.py now does too.
+    """
+    result = subprocess.run(
+        [sys.executable, "-c",
+         "import sys; import app.main; "
+         "sys.exit(1 if 'numpy' in sys.modules else 0)"],
+        cwd=str(PROJECT / "backend"),
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+
+    assert result.returncode == 0, (
+        "importing app.main pulled numpy into sys.modules. Something now imports "
+        "it at module scope, and the packaged backend will hang on startup."
+    )
+
+
 # -- health reporting -----------------------------------------------------
 
 

@@ -9,10 +9,9 @@ reason on the line, and an empty box means not built. Every state was set by
 reading the code rather than by trusting the README; where the two disagree,
 this file is the one that was checked.
 
-The `~` rows are decisions, not backlog. Four of them are the interesting
-reading in this document: FTS5 instead of embeddings, a thread instead of
-APScheduler, polling instead of a filesystem watcher, and a microphone instead
-of WASAPI loopback. Each has its reasoning in the source beside the code.
+The `~` rows are decisions, not backlog. The interesting ones: a thread instead
+of APScheduler, polling instead of a filesystem watcher, and a microphone
+instead of WASAPI loopback. Each has its reasoning in the source beside the code.
 
 ## Phase 0 — Project setup
 
@@ -54,7 +53,7 @@ of WASAPI loopback. Each has its reasoning in the source beside the code.
 - [~] **T4.4** Implement system control: volume, audio output device, lock, sleep, screenshot, Wi-Fi toggle. — *Requirements: REQ-22*
   - Volume, lock, sleep and list-running shipped. Wi-Fi toggle, audio output device and screenshot did not.
 - [ ] **T4.5** Implement user-defined named shortcuts for multi-step sequences. — *Requirements: REQ-22*
-  - Not built. Depends on T5.5, which is the same machinery.
+  - Not built. T5.5 has since landed and is the same machinery: a shortcut is a routine with a name for a trigger instead of a time.
 - [x] **T4.6** Implement `focus_session`: close/minimize configured apps, suppress notifications and the assistant's own proactive output, interval (work/break) patterns, early exit, end-of-session notification and restore. — *Requirements: REQ-23*
 
 ## Phase 5 — Scheduling, tasks, routines
@@ -64,13 +63,13 @@ of WASAPI loopback. Each has its reasoning in the source beside the code.
 - [x] **T5.2** Implement reminders/timers/alarms with natural-language time parsing, resolved-time confirmation, recurrence, list/edit/cancel. — *Requirements: REQ-9*
 - [x] **T5.3** Deliver due items as desktop notifications (plus speech once Phase 7 lands); replay missed items on next launch stating their original due time. — *Requirements: REQ-9*
 - [x] **T5.4** Implement the task/note store with tags, search, complete, delete — SQLite plus a mirrored plain-Markdown file. — *Requirements: REQ-10*
-- [ ] **T5.5** Implement routines: trigger + action list, approval of consequential actions at creation time, re-prompt on edit, list/disable/delete, outcomes written to action history. — *Requirements: REQ-12, REQ-24, REQ-25*
-  - **Not built.** `KIND_ROUTINE` is reserved in scheduler/store.py and filtered out of reminder listings; nothing creates one. The largest unbuilt requirement, and the design work for the hard part -- approving a routine's consequential actions at creation time -- is already done.
+- [x] **T5.5** Implement routines: trigger + action list, approval of consequential actions at creation time, re-prompt on edit, list/disable/delete, outcomes written to action history. — *Requirements: REQ-12, REQ-24, REQ-25*
+  - Approval at creation time is the Action Gate doing its ordinary job: `planning.add_routine` is consequential exactly when the routine it builds contains a step that would be, and its preview names the trigger and every action. Saying yes stamps a fingerprint of those steps; editing any of them revokes it and the consequential steps are skipped until it is approved again. At fire time each step goes through `gate.submit` and a consequential one is answered with `gate.confirm(id)` -- the same call the UI makes -- so there is no second execution path for the gate's rules to be missing from. See scheduler/routines.py.
 
 ## Phase 6 — Document index and screen context
 
-- [~] **T6.1** Implement text extraction for PDF, DOCX, TXT, MD; chunking; embedding via Ollama `nomic-embed-text`; storage in SQLite FTS5 + `sqlite-vec`. — *Requirements: REQ-16*
-  - SQLite FTS5, no embeddings and no sqlite-vec. Retrieval works on a fresh install with no model download; the trade is that search is lexical, so a question that shares no words with the document finds nothing. Semantic retrieval layers in behind index/search.py without touching anything above it.
+- [x] **T6.1** Implement text extraction for PDF, DOCX, TXT, MD; chunking; embedding via Ollama `nomic-embed-text`; storage in SQLite FTS5 + `sqlite-vec`. — *Requirements: REQ-16*
+  - Embeddings via Ollama's `nomic-embed-text`, as designed. Not sqlite-vec: the vectors live in an ordinary table and numpy does the arithmetic in one matrix multiply, which is single-digit milliseconds at this scale and avoids a native extension in a frozen bundle. FTS5 stays and the two rankings are merged by reciprocal rank fusion -- keyword search is better at "invoice 2024-118" and semantic is better at "how much was the deposit", and an assistant gets both. Off until the model is pulled, and identical to the old behaviour until then.
 - [~] **T6.2** Implement `watchdog`-based incremental re-indexing at low process priority; pause during focus sessions and on battery. — *Requirements: REQ-16, REQ-31*
   - Polled rather than watchdog-driven: size+mtime per file makes a rescan cheap, and a filesystem watcher over a Documents folder is a second thing to keep alive. Pausing on battery and during focus sessions shipped.
 - [x] **T6.3** Implement the `documents` skill: retrieve, answer, and cite source file + page/section. — *Requirements: REQ-16*

@@ -18,7 +18,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, type DocumentHit, type IndexStatus } from "../api";
+import { api, ApiError, type SemanticStatus, type DocumentHit, type IndexStatus } from "../api";
 import type { Key } from "../i18n";
 
 interface Props {
@@ -34,10 +34,13 @@ export function Documents({ t }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [showFiles, setShowFiles] = useState(false);
   const [files, setFiles] = useState<string[]>([]);
+  const [semantic, setSemantic] = useState<SemanticStatus | null>(null);
+  const [installing, setInstalling] = useState(false);
 
   const loadStatus = useCallback(async () => {
     try {
       setStatus(await api.documentStatus());
+      setSemantic(await api.semanticStatus().catch(() => null));
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : t("common.error"));
     }
@@ -113,6 +116,50 @@ export function Documents({ t }: Props) {
     <div className="view">
       <h1>{t("documents.title")}</h1>
       {error && <div className="banner">{error}</div>}
+
+      {semantic?.enabled && (
+        <section className="card">
+          <h2 className="small muted">{t("documents.semantic")}</h2>
+          <p className="small muted">{t("documents.semanticNote")}</p>
+          {semantic.model_installed ? (
+            <p className="small">
+              {t(
+                semantic.embedded < semantic.chunks
+                  ? "documents.semanticCatchUp"
+                  : "documents.semanticOn",
+                { embedded: semantic.embedded, chunks: semantic.chunks },
+              )}
+            </p>
+          ) : (
+            <>
+              <p className="small muted">
+                {t("documents.semanticOff", {
+                  size: semantic.download_mb,
+                  model: semantic.model,
+                })}
+              </p>
+              <button
+                disabled={installing}
+                onClick={() => {
+                  setInstalling(true);
+                  setError(null);
+                  void api
+                    .installEmbeddingModel()
+                    .then(setSemantic)
+                    .catch((caught) =>
+                      setError(caught instanceof ApiError ? caught.message : t("common.error")),
+                    )
+                    .finally(() => setInstalling(false));
+                }}
+              >
+                {installing
+                  ? t("documents.semanticInstalling")
+                  : t("documents.semanticInstall")}
+              </button>
+            </>
+          )}
+        </section>
+      )}
 
       <section className="card">
         <form className="row" onSubmit={search}>

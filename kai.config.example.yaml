@@ -181,8 +181,8 @@ connectors:
 
 documents:
   # Folders indexed for document search (REQ-16). Text is extracted and indexed
-  # locally with SQLite full-text search — nothing is uploaded, and no embedding
-  # model is downloaded. Empty means document search is off.
+  # locally with SQLite full-text search — nothing is uploaded. Empty means
+  # document search is off.
   indexed_folders:
     - ~/Documents
   # Files larger than this are skipped rather than stalling a scan.
@@ -191,6 +191,24 @@ documents:
   rescan_minutes: 15
   # Back off while unplugged, so indexing never eats battery (REQ-31).
   pause_on_battery: true
+
+  # Search by meaning as well as by word.
+  #
+  # Keyword search cannot answer "how much was the deposit" about a lease that
+  # says "security payment" -- the words the user reaches for and the words the
+  # document used are frequently not the same words. With this on, both
+  # rankings are produced and merged, so an exact match still wins where there
+  # is one and a paraphrase is found where there is not.
+  #
+  # Inert until the model is pulled, and it is not pulled for you: until then
+  # search is exactly what it was. Turn it on from the Documents screen, or:
+  #
+  #     ollama pull nomic-embed-text
+  #
+  # 274MB, into the Ollama that is already running the language model. Nothing
+  # leaves the machine either way.
+  semantic_search: true
+  embedding_model: nomic-embed-text
 
 system:
   # Folders organize_folder and find_files are allowed to touch (REQ-21, REQ-26).

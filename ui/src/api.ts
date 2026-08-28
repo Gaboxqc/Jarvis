@@ -263,6 +263,25 @@ export interface AccountFields {
   // No password. Not omitted for brevity — it must not exist. See addAccount.
 }
 
+export interface SemanticStatus {
+  enabled: boolean;
+  model: string;
+  model_installed: boolean;
+  download_mb: number;
+  chunks: number;
+  embedded: number;
+}
+
+export interface RoutineSummary {
+  id: string;
+  label: string;
+  next_fire_at: string | null;
+  recurring: boolean;
+  active: boolean;
+  steps: string[];
+  needs_approval: boolean;
+}
+
 export interface RetentionStatus {
   conversation_days: number;
   history_days: number;
@@ -591,6 +610,35 @@ export const api = {
     ),
 
   memory: () => request<{ facts: MemoryFact[] }>("/memory"),
+
+  /** Whether search by meaning is on, and how much of the index has it. */
+  semanticStatus: () => request<SemanticStatus>("/documents/semantic"),
+
+  /**
+   * Pull the embedding model. 274MB, so the timeout is generous and the caller
+   * has to show that something is happening.
+   */
+  installEmbeddingModel: () =>
+    request<SemanticStatus>("/documents/semantic/model", {
+      method: "POST",
+      timeoutMs: 30 * 60_000,
+    }),
+
+  routines: () => request<{ routines: RoutineSummary[] }>("/routines"),
+
+  /** Re-approve a routine whose steps changed — the second half of REQ-12. */
+  approveRoutine: (id: string) =>
+    request<{ approved: boolean }>(`/routines/${encodeURIComponent(id)}/approve`, {
+      method: "POST",
+    }),
+
+  runRoutine: (id: string) =>
+    request<{ ran: number; skipped: number }>(`/routines/${encodeURIComponent(id)}/run`, {
+      method: "POST",
+    }),
+
+  deleteRoutine: (id: string) =>
+    request<{ deleted: string }>(`/routines/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   /** The retention window, and what is inside it right now. */
   retention: () => request<RetentionStatus>("/privacy/retention"),

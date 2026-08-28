@@ -202,6 +202,24 @@ const STRINGS = {
     "startup.note":
       "Opens minimised to the tray. Without this, the Ctrl+Alt+K hotkey does nothing until you launch Kai yourself.",
     "settings.language": "Language",
+    "documents.semantic": "Search by meaning",
+    "documents.semanticNote":
+      "Keyword search can't answer “how much was the deposit” about a lease that says “security payment”. This adds meaning-based search alongside it — an exact match still wins where there is one.",
+    "documents.semanticOff":
+      "Needs a {size} MB model ({model}), into the Ollama you already run. Nothing leaves your machine.",
+    "documents.semanticOn": "On — {embedded} of {chunks} passage(s) indexed by meaning.",
+    "documents.semanticCatchUp":
+      "On — {embedded} of {chunks} passage(s) so far. The rest are indexed in the background.",
+    "documents.semanticInstall": "Download and turn on",
+    "documents.semanticInstalling": "Downloading…",
+    "planner.routines": "Routines",
+    "planner.noRoutines": "No routines yet. Ask in chat — “every weekday at 9, give me the briefing”.",
+    "planner.routineSteps": "{count} step(s)",
+    "planner.routineNeedsApproval": "Changed since you approved it — its gated steps are being skipped.",
+    "planner.routineApprove": "Approve",
+    "planner.routineRun": "Run now",
+    "planner.routineRan": "{ran} step(s) ran, {skipped} skipped.",
+    "planner.routineDeleteConfirm": "Delete this routine?",
     "settings.retention": "How long Kai keeps the record",
     "settings.retentionNote":
       "Conversations and action history older than this are removed when Kai starts and stops. Memories, tasks, notes and recordings are never removed on a timer — you asked for those, and each one is deletable on its own.",
@@ -539,6 +557,24 @@ const STRINGS = {
     "startup.note":
       "Se abre minimizado en la bandeja. Sin esto, el atajo Ctrl+Alt+K no hace nada hasta que abras Kai tú mismo.",
     "settings.language": "Idioma",
+    "documents.semantic": "Buscar por significado",
+    "documents.semanticNote":
+      "La búsqueda por palabras no puede responder “cuánto era el depósito” si el contrato dice “fianza”. Esto añade búsqueda por significado junto a la otra — una coincidencia exacta sigue ganando cuando la hay.",
+    "documents.semanticOff":
+      "Necesita un modelo de {size} MB ({model}), dentro del Ollama que ya usas. Nada sale de tu equipo.",
+    "documents.semanticOn": "Activada — {embedded} de {chunks} fragmento(s) indexados por significado.",
+    "documents.semanticCatchUp":
+      "Activada — {embedded} de {chunks} fragmento(s) por ahora. El resto se indexa en segundo plano.",
+    "documents.semanticInstall": "Descargar y activar",
+    "documents.semanticInstalling": "Descargando…",
+    "planner.routines": "Rutinas",
+    "planner.noRoutines": "Todavía no hay rutinas. Pídelo en el chat: “cada día laborable a las 9, dame el resumen”.",
+    "planner.routineSteps": "{count} paso(s)",
+    "planner.routineNeedsApproval": "Cambió desde que la aprobaste — sus pasos con confirmación se están omitiendo.",
+    "planner.routineApprove": "Aprobar",
+    "planner.routineRun": "Ejecutar ahora",
+    "planner.routineRan": "{ran} paso(s) ejecutados, {skipped} omitidos.",
+    "planner.routineDeleteConfirm": "¿Eliminar esta rutina?",
     "settings.retention": "Cuánto tiempo guarda Kai el registro",
     "settings.retentionNote":
       "Las conversaciones y el historial de acciones más antiguos se eliminan cuando Kai arranca y se cierra. Los recuerdos, tareas, notas y grabaciones nunca se eliminan por tiempo: los pediste tú, y cada uno se puede borrar por separado.",

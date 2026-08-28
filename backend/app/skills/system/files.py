@@ -222,9 +222,9 @@ class FindFilesSkill(Skill):
         # a real Documents folder.
         content_paths: set[str] | None = None
         if contains:
-            from ...index import store as index_store
+            from ...index import search as index_search
 
-            content_paths = {hit.path for hit in index_store.search(contains, limit=50)}
+            content_paths = {hit.path for hit in index_search.search(contains, limit=50)}
             if not content_paths:
                 return SkillResult(
                     ok=True,

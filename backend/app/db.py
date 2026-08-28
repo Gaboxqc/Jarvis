@@ -18,7 +18,7 @@ from .settings import data_dir
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # How an existing database is brought up to SCHEMA_VERSION.
 #
@@ -42,9 +42,32 @@ SCHEMA_VERSION = 1
 # is the mistake that produces two different schemas depending on when the user
 # installed.
 MIGRATIONS: dict[int, tuple[str, ...]] = {
-    # 2: (
-    #     "ALTER TABLE tasks ADD COLUMN priority INTEGER NOT NULL DEFAULT 0",
-    # ),
+    # Semantic retrieval. The vectors sit beside the FTS5 chunks rather than
+    # replacing them -- see index/search.py for why both are kept.
+    #
+    # No backfill here. An existing install has thousands of chunks and no
+    # embedding model pulled yet, so a migration that tried to embed them would
+    # either do nothing or hold the app shut for minutes. The scanner fills the
+    # table in the background once the model exists.
+    2: (
+        """
+        CREATE TABLE IF NOT EXISTS chunk_vectors (
+            path     TEXT NOT NULL,
+            ordinal  INTEGER NOT NULL,
+            model    TEXT NOT NULL,
+            vector   BLOB NOT NULL,
+            PRIMARY KEY (path, ordinal)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_chunk_vectors_path ON chunk_vectors(path)",
+        """
+        CREATE TABLE IF NOT EXISTS fact_vectors (
+            fact_id  TEXT PRIMARY KEY,
+            model    TEXT NOT NULL,
+            vector   BLOB NOT NULL
+        )
+        """,
+    ),
 }
 
 
@@ -187,6 +210,30 @@ CREATE TABLE IF NOT EXISTS transcripts (
     duration_seconds REAL NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_transcripts_started ON transcripts(started_at DESC);
+
+-- REQ-16: one vector per chunk, beside the FTS5 row rather than instead of it.
+-- Keyed on (path, ordinal) rather than the FTS5 rowid, which is reassigned
+-- every time a document is reindexed.
+--
+-- `model` is stored so a vector written by one embedding model is recognisable
+-- when the setting names another. Comparing across models is not wrong in a way
+-- that raises; it is wrong in a way that ranks confidently and badly.
+CREATE TABLE IF NOT EXISTS chunk_vectors (
+    path     TEXT NOT NULL,
+    ordinal  INTEGER NOT NULL,
+    model    TEXT NOT NULL,
+    vector   BLOB NOT NULL,
+    PRIMARY KEY (path, ordinal)
+);
+CREATE INDEX IF NOT EXISTS idx_chunk_vectors_path ON chunk_vectors(path);
+
+-- REQ-7: the same, for durable facts. Recall was token overlap, which cannot
+-- connect "peanuts" to a question about allergies.
+CREATE TABLE IF NOT EXISTS fact_vectors (
+    fact_id  TEXT PRIMARY KEY,
+    model    TEXT NOT NULL,
+    vector   BLOB NOT NULL
+);
 
 -- REQ-10: tasks and notes
 CREATE TABLE IF NOT EXISTS tasks (
@@ -480,6 +527,8 @@ def wipe_all_local_data() -> dict[str, int]:
         "scheduled_items",
         "tasks",
         "document_chunks",
+        "chunk_vectors",
+        "fact_vectors",
         "indexed_documents",
         "transcripts",
     ]

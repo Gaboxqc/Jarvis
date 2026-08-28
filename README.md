@@ -17,6 +17,7 @@ All eleven phases of `tasks.md`:
 | Planning | Reminders, timers, recurrence, missed-reminder replay, tasks/notes |
 | Knowledge | Web search with sources, exact arithmetic, units, currency, time zones |
 | Documents | Q&A over your own PDFs, Word files and notes, with file + page citations |
+| Routines | A trigger and a list of actions, approved once and re-approved when edited |
 | Files | Search by name, date or content; safe folder organization, full batch undo |
 | System | Launch/close apps, volume, lock, sleep, focus sessions |
 | Voice | Local speech in and out, wake word, confidence-gated so it asks rather than guesses |
@@ -100,6 +101,44 @@ runs local OCR and takes several seconds, which is the cost of not sending your
 display to a cloud vision API. Both happen only when asked — there is no
 watcher, no polling — the capture is announced in the reply, and the image is
 never written anywhere.
+
+## Searching by meaning
+
+Document search and memory recall are keyword-based out of the box: SQLite FTS5
+over the text, token overlap over remembered facts. That is enough for "the
+lease" and not enough for "how much was the deposit" when the lease says
+*security payment*.
+
+Turning on semantic search closes that gap and costs one model:
+
+```bash
+ollama pull nomic-embed-text
+```
+
+274MB, into the Ollama that is already running the language model. Nothing new
+is installed, nothing leaves the machine, and there is a button for it on the
+Documents screen if you would rather not use the terminal.
+
+Both rankings are then produced and merged, rather than one replacing the
+other — keyword search is the better answer for "invoice 2024-118" and semantic
+is the better answer for a paraphrase, and an assistant is asked both kinds of
+question. **Until the model is pulled, search behaves exactly as it did before**;
+that is a tested property, not an intention.
+
+## Routines
+
+`"every weekday at 9, start a focus session and give me the briefing"`.
+
+A routine is a trigger and a list of actions, and the interesting part is what
+happens when one of those actions is something Kai would normally ask about.
+You approve it once, when the routine is created, from a preview that names the
+trigger and every step. That approval is stamped with a fingerprint of exactly
+those steps — so it is narrower than a pre-approval (these arguments, in this
+routine, not "this skill, forever"), and editing the routine revokes it until
+you approve it again.
+
+When it fires, every step goes through the same Action Gate everything else
+does, lands in the same action history, and is undoable as one batch.
 
 ## Recording a meeting
 

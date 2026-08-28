@@ -72,6 +72,8 @@ def watch_parent() -> None:
     precisely so an abrupt stop is recoverable. Hanging around to close sockets
     tidily is how the orphan gets created in the first place.
     """
+    _warm_imports_that_deadlock_against_this_thread()
+
     stream = getattr(sys, "stdin", None)
     if stream is None:
         return
@@ -84,6 +86,40 @@ def watch_parent() -> None:
         os._exit(0)
 
     threading.Thread(target=wait, name="parent-watch", daemon=True).start()
+
+
+def _warm_imports_that_deadlock_against_this_thread() -> None:
+    """Import numpy before the watchdog thread exists, because afterwards it
+    cannot be imported at all.
+
+    Measured, not guessed. In a child process with its stdin a pipe, on this
+    machine, with a 180-second ceiling:
+
+        no watchdog thread, then import numpy      ->  completes (11s, loaded)
+        import numpy, then start the thread        ->  completes (21s, loaded)
+        start the thread, then import numpy        ->  never completes
+        start the thread, wait, then import numpy  ->  never completes
+
+    The ordering is the whole of it. Once a thread is blocked reading stdin,
+    `import numpy` does not return -- so a backend that reaches numpy after this
+    point never binds its port, and the desktop app reports an unreachable
+    backend forever. It is not specific to how the thread reads: `sys.stdin.read()`
+    and a raw `os.read(0, 1)` loop behave identically.
+
+    This got in through semantic search, which added numpy to the retrieval path.
+    Importing it lazily was not enough on its own -- that only moves the hang from
+    startup to the first search, which is worse, because the app looks healthy
+    until someone uses it.
+
+    Cheap when it works out: a quarter of a second on an idle machine, once, and
+    every later use is a `sys.modules` hit. Tolerant of numpy being absent,
+    because nothing here requires it -- semantic search is optional and the rest
+    of the app has never needed it.
+    """
+    try:
+        import numpy  # noqa: F401
+    except Exception:  # noqa: BLE001 - an assistant that starts beats a fast import
+        pass
 
 
 def sidecar_log_config(level: str) -> dict:

@@ -266,3 +266,46 @@ def test_a_failed_migration_does_not_quarantine_the_database(database, monkeypat
     finally:
         conn.close()
     assert row is not None and row[0] == "buy milk", "the user's data was thrown away"
+
+
+# -- the first real migration ---------------------------------------------
+
+
+def test_a_version_one_database_gains_the_vector_tables(database):
+    """Schema 2, and the first time this machinery carried a real change rather
+    than a synthetic one. An install from before semantic retrieval has to end
+    up with the same tables a fresh one does, or search behaves differently
+    depending on when you installed -- which is the whole failure the version
+    read exists to prevent.
+    """
+    _v1_database(database)
+
+    db.connect()
+
+    assert _version_in(database) == db.SCHEMA_VERSION
+    tables = {
+        row["name"]
+        for row in db.query("SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    assert {"chunk_vectors", "fact_vectors"} <= tables
+    # And the rows that were there before are still there.
+    assert db.query_one("SELECT text FROM tasks WHERE id = 'keep'")["text"] == "buy milk"
+
+
+def test_a_fresh_database_has_the_same_tables_as_a_migrated_one(database, tmp_path):
+    """SCHEMA and MIGRATIONS have to agree. They are edited in different places
+    and nothing but this notices when they drift."""
+    _v1_database(database)
+    db.connect()
+    migrated = {
+        row["name"] for row in db.query("SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    db.close_connection()
+
+    db.set_db_path(tmp_path / "fresh.db")
+    db.connect()
+    fresh = {
+        row["name"] for row in db.query("SELECT name FROM sqlite_master WHERE type='table'")
+    }
+
+    assert fresh == migrated

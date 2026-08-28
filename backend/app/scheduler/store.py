@@ -164,6 +164,13 @@ def mark_fired(item_id: str, next_fire_at: datetime | None) -> None:
         )
 
 
+def set_payload(item_id: str, payload: dict[str, Any]) -> None:
+    """Replace an item's payload. Used by routines when their steps change."""
+    db.execute(
+        "UPDATE scheduled_items SET payload = ? WHERE id = ?", (db.dumps(payload), item_id)
+    )
+
+
 def cancel(item_id: str) -> ScheduledItem | None:
     item = get(item_id)
     if item is None:

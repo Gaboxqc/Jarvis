@@ -35,6 +35,7 @@ from .actions import gate, journal, undo
 from .brain import llm, orchestrator
 from .connectors import setup as connector_setup
 from .index import scanner as index_scanner
+from .index import search as index_search
 from .index import store as index_store
 from .memory import long_term, short_term
 from .scheduler import service as scheduler
@@ -430,6 +431,61 @@ class TaskRequest(BaseModel):
     due: str | None = None
 
 
+# -- routines (REQ-12) -----------------------------------------------------
+
+
+@app.get("/routines")
+def list_routines() -> dict[str, Any]:
+    from .scheduler import routines
+
+    return {
+        "routines": [
+            {
+                **item.to_dict(),
+                "steps": routines.describe(item.payload.get("steps") or []),
+                "needs_approval": routines.needs_approval(item),
+            }
+            for item in routines.all_routines()
+        ]
+    }
+
+
+@app.post("/routines/{routine_id}/approve")
+def approve_routine(routine_id: str) -> dict[str, Any]:
+    """Re-approve a routine whose steps changed — REQ-12, REQ-24.
+
+    The other half of "re-prompt if the routine is later edited". Editing
+    revokes the approval; this is where the user gives it again, having seen the
+    steps listed on the screen that offers this button.
+    """
+    from .scheduler import routines
+
+    item = routines.approve(routine_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="No such routine")
+    return {"approved": True, "routine": item.to_dict()}
+
+
+@app.post("/routines/{routine_id}/run")
+def run_routine(routine_id: str) -> dict[str, Any]:
+    """Run a routine now. Useful for checking one does what you meant."""
+    from .scheduler import routines
+
+    item = routines.get(routine_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="No such routine")
+    return routines.run(item)
+
+
+@app.delete("/routines/{routine_id}")
+def delete_routine(routine_id: str) -> dict[str, Any]:
+    from .scheduler import routines
+
+    if not routines.cancel(routine_id):
+        raise HTTPException(status_code=404, detail="No such routine")
+    return {"deleted": routine_id}
+
+
 @app.get("/tasks")
 def list_tasks(include_done: bool = True) -> dict[str, Any]:
     from .skills.planning import tasks as task_store
@@ -505,9 +561,49 @@ def reindex_documents(force: bool = True) -> dict[str, Any]:
     return index_scanner.scan(force=force).to_dict()
 
 
+@app.get("/documents/semantic")
+def semantic_status() -> dict[str, Any]:
+    """Whether meaning-based search is on, and how much of the index has it.
+
+    "Semantic search is enabled" is not a useful claim on its own: the setting
+    can be on, the model absent, and every query still purely lexical. So the
+    answer carries the model, whether it is actually pulled, and the count.
+    """
+    from .index import embeddings
+
+    coverage = index_search.coverage()
+    return {
+        "enabled": load_config().documents.semantic_search,
+        "model": embeddings.model_name(),
+        "model_installed": embeddings.available(),
+        "download_mb": 274,
+        **coverage,
+    }
+
+
+@app.post("/documents/semantic/model")
+def install_embedding_model() -> dict[str, Any]:
+    """Pull the embedding model. Explicit, and never on startup.
+
+    274MB, which is small next to the language model already required but is
+    still hundreds of megabytes that must not move because somebody opened
+    Settings. Same rule the voice models follow.
+    """
+    from .index import embeddings
+
+    result = embeddings.install()
+    if not result["ok"]:
+        raise HTTPException(status_code=503, detail=result["error"])
+    # Anything already indexed has no vectors yet, and a half-covered index
+    # ranks worse than an uncovered one.
+    index_scanner.scan_in_background(force=True)
+    long_term.embed_missing()
+    return semantic_status()
+
+
 @app.get("/documents/search")
 def search_documents(q: str, limit: int = 5) -> dict[str, Any]:
-    return {"results": [hit.to_dict() for hit in index_store.search(q, limit=limit)]}
+    return {"results": [hit.to_dict() for hit in index_search.search(q, limit=limit)]}
 
 
 @app.delete("/documents/index")

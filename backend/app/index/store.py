@@ -89,6 +89,14 @@ def replace_document(
     )
     conn.commit()
 
+    # After the commit, and tolerant of failing. Embedding is a network call to
+    # Ollama; holding the chunk write open across it would mean a slow or absent
+    # daemon could leave a document half-indexed. Keyword search works the
+    # moment the commit above lands, and the vectors catch up or do not.
+    from . import search as search_module
+
+    search_module.index_chunks(key, chunks)
+
 
 def record_failure(path: Path, *, size: int, mtime: float, error: str) -> None:
     """Remember that a file could not be read, so it isn't retried every scan.
@@ -99,6 +107,7 @@ def record_failure(path: Path, *, size: int, mtime: float, error: str) -> None:
     key = str(path)
     conn = db.connect()
     conn.execute("DELETE FROM document_chunks WHERE path = ?", (key,))
+    conn.execute("DELETE FROM chunk_vectors WHERE path = ?", (key,))
     conn.execute(
         """
         INSERT INTO indexed_documents(path, title, size, mtime, chunk_count, indexed_at, error)
@@ -115,6 +124,7 @@ def record_failure(path: Path, *, size: int, mtime: float, error: str) -> None:
 def forget_document(path: str) -> None:
     conn = db.connect()
     conn.execute("DELETE FROM document_chunks WHERE path = ?", (path,))
+    conn.execute("DELETE FROM chunk_vectors WHERE path = ?", (path,))
     conn.execute("DELETE FROM indexed_documents WHERE path = ?", (path,))
     conn.commit()
 
@@ -131,6 +141,7 @@ def clear() -> int:
     count = len(known_state())
     conn = db.connect()
     conn.execute("DELETE FROM document_chunks")
+    conn.execute("DELETE FROM chunk_vectors")
     conn.execute("DELETE FROM indexed_documents")
     conn.commit()
     return count
