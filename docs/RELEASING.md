@@ -91,6 +91,76 @@ the app that is indistinguishable from "you are up to date", so nothing ever
 reported it. `publish.py` marks releases latest unless told otherwise, and says
 what `--prerelease` costs.
 
+## Signing the installer for Windows
+
+There are two signatures in this project and they do different jobs. Confusing
+them wastes money.
+
+**The updater key** (minisign, `~/.tauri/kai-updater.key`) proves to an already
+installed Kai that an update came from you. It is free, it is already working,
+and Windows has never heard of it.
+
+**Authenticode** proves to *Windows* that the installer came from you. It is the
+only one SmartScreen and Smart App Control read, and it needs a certificate from
+a certificate authority. Nothing about signing the updater helps here.
+
+Right now no build is Authenticode signed, which has two consequences:
+
+- SmartScreen shows "Windows protected your PC" on install, and the button to
+  proceed is deliberately hidden behind "More info"
+- **Smart App Control blocks the app outright**, and it is on by default on
+  clean Windows 11 installs. It also blocks the build's own self-test on this
+  machine, which is why `-SkipSelfTest` exists
+
+### Getting a certificate
+
+Two kinds, and the difference matters more than the price:
+
+| | OV (organisation validation) | EV (extended validation) |
+|---|---|---|
+| Cost | ~£200-400/year | ~£350-600/year |
+| Identity check | Business registration | Stricter, plus a hardware token or cloud HSM |
+| SmartScreen | Warns until reputation builds | Trusted immediately |
+| Smart App Control | Usually still blocked at first | Best chance of running |
+
+Reputation is per-certificate and builds with downloads over weeks. An OV
+certificate does not make the warning disappear on day one; it makes it
+disappear eventually. If people other than you are going to install this, EV is
+the one that works on the first try.
+
+Individual developers can get OV certificates; EV generally requires a
+registered business.
+
+### Once you have one
+
+Install it, then either let the build find it or name it explicitly:
+
+```powershell
+# Uses the newest code signing certificate in your user store automatically.
+powershell -ExecutionPolicy Bypass -File installer\build.ps1
+
+# Or pin one, which is what you want with more than one installed.
+$env:KAI_SIGN_THUMBPRINT = "the thumbprint with no spaces"
+powershell -ExecutionPolicy Bypass -File installer\build.ps1
+```
+
+The build says which it used, or says loudly that it signed nothing. Nothing
+about the certificate is committed.
+
+For an EV certificate on a hardware token, the token's PIN is prompted for by
+its own driver during signing; do not attempt to script it into the build.
+
+### Checking
+
+```powershell
+Get-AuthenticodeSignature "ui\src-tauri\target\release\bundle\nsis\Kai Assistant_0.3.5_x64-setup.exe" |
+  Format-List Status, SignerCertificate, TimeStamperCertificate
+```
+
+`Status` must be `Valid`, and `TimeStamperCertificate` must not be empty. A
+signature without a timestamp stops verifying the day the certificate expires,
+taking every installer you ever shipped with it.
+
 ## If a release goes wrong
 
 Un-mark it as latest on GitHub. The endpoint follows whatever is marked latest,

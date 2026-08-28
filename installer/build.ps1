@@ -111,9 +111,50 @@ if (Test-Path $keyFile) {
     Write-Host "    the installer will work, but cannot be published as an update" -ForegroundColor Yellow
 }
 
+# Authenticode signing — separate from the updater key above, and often confused
+# with it. The updater key is minisign: it proves to an *already installed* Kai
+# that an update came from you. Authenticode proves to *Windows* that the
+# installer did, and it is the only one SmartScreen and Smart App Control read.
+# Signing one does nothing for the other.
+#
+# Driven by a thumbprint in the environment rather than anything in the repo, so
+# no certificate reference is committed and an unsigned build stays possible.
+#
+#     $env:KAI_SIGN_THUMBPRINT = "the thumbprint, no spaces"
+#
+# The timestamp matters as much as the signature: without one, everything you
+# ever shipped stops verifying the day the certificate expires. With one, old
+# installers keep working because the countersignature records that the
+# signature existed while the certificate was valid.
+$signArgs = @()
+$thumbprint = $env:KAI_SIGN_THUMBPRINT
+if (-not $thumbprint) {
+    $found = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert -ErrorAction SilentlyContinue |
+        Sort-Object NotAfter -Descending | Select-Object -First 1
+    if ($found) { $thumbprint = $found.Thumbprint }
+}
+
+if ($thumbprint) {
+    $config = @{
+        bundle = @{
+            windows = @{
+                certificateThumbprint = $thumbprint
+                digestAlgorithm       = "sha256"
+                timestampUrl          = "http://timestamp.digicert.com"
+            }
+        }
+    } | ConvertTo-Json -Depth 6 -Compress
+    $signArgs = @("--config", $config)
+    Write-Host "    signing with certificate $($thumbprint.Substring(0,8))..." -ForegroundColor Green
+} else {
+    Write-Host "    NOT Authenticode signed - no code signing certificate found" -ForegroundColor Yellow
+    Write-Host "    Windows will warn on install, and Smart App Control will refuse" -ForegroundColor Yellow
+    Write-Host "    to run it at all. See docs/RELEASING.md." -ForegroundColor Yellow
+}
+
 Push-Location (Join-Path $root "ui")
 try {
-    npm run tauri build
+    npm run tauri build -- @signArgs
     if ($LASTEXITCODE -ne 0) { throw "Tauri bundle failed" }
 } finally {
     Pop-Location
