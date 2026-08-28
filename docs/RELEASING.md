@@ -31,62 +31,65 @@ actually fires, and only then trusted.
 
 ## Cutting a release
 
-1. **Bump the version in three files.** They must match, or the updater compares
-   the wrong numbers:
+Every build ships as a release. Not a habit -- the app checks
+`releases/latest/download/latest.json` and nothing else, so a build that is not
+published there does not exist as far as any installed copy is concerned.
+
+1. **Bump the version in five files.** The first three must match or the updater
+   compares the wrong numbers; the two lockfiles carry it as well, and leaving
+   them behind means the next `npm install` or `cargo build` quietly rewrites
+   them and dirties the tree:
 
    ```
    ui/package.json
+   ui/package-lock.json          <- twice: the top level and the "" package
    ui/src-tauri/Cargo.toml
+   ui/src-tauri/Cargo.lock       <- the [[package]] entry named "kai"
    ui/src-tauri/tauri.conf.json
    ```
 
 2. **Build.** The script picks up the signing key automatically:
 
    ```powershell
-   powershell -ExecutionPolicy Bypass -File installer\build.ps1
+   powershell -ExecutionPolicy Bypass -File installeruild.ps1
    ```
 
-   It refuses to package a bundle whose self-test fails, which is the guard
-   that catches a build shipping one skill out of forty-eight.
+   It refuses to package a bundle whose self-test fails. Where an Application
+   Control policy blocks running a freshly built unsigned binary, the self-test
+   cannot run at all; `-SkipSelfTest` says so loudly and the static check on
+   skill collection still runs.
 
-3. **Collect the artifacts** from `ui/src-tauri/target/release/bundle/nsis/`:
+3. **Publish.**
 
-   ```
-   Kai Assistant_<version>_x64-setup.exe
-   Kai Assistant_<version>_x64-setup.exe.sig
-   ```
-
-   No `.sig` means the key was not found and the build printed a warning. That
-   installer works, but no existing install will accept it as an update.
-
-4. **Write `latest.json`.** `signature` is the *contents* of the `.sig` file,
-   not a path:
-
-   ```json
-   {
-     "version": "0.3.0",
-     "notes": "What changed, in a sentence someone would want to read.",
-     "pub_date": "2026-08-14T12:00:00Z",
-     "platforms": {
-       "windows-x86_64": {
-         "signature": "<contents of the .sig file>",
-         "url": "https://github.com/Gaboxqc/Jarvis/releases/download/v0.3.0/Kai.Assistant_0.3.0_x64-setup.exe"
-       }
-     }
-   }
+   ```powershell
+   .venv\Scripts\python installer\publish.py --notes "what changed"
    ```
 
-   The `url` must be the direct download for *that* release tag, not the
-   `latest` alias — the manifest is version-specific even though the endpoint
-   that serves it is not.
+   It writes `latest.json`, creates the tag, uploads the installer, the `.sig`
+   and the manifest, and marks the release latest. It refuses when the version
+   files disagree, when the `.sig` is missing, or when the tag already exists
+   without `--replace` -- each of those produces a release that looks complete
+   and cannot update anybody.
 
-5. **Publish the release** with the tag `v<version>`, attaching the installer,
-   the `.sig`, and `latest.json`. Mark it as the latest release; the endpoint
-   resolves through that.
+   To attach the voice engine: `--asset path	o\kai-xtts-<version>-x64.zip`.
 
-6. **Check it from an older install** before telling anyone. Settings →
-   Updates → Check now. An update that silently fails to verify looks identical
-   to no update being available.
+4. **Check it from outside.**
+
+   ```bash
+   curl -sIL https://github.com/Gaboxqc/Jarvis/releases/latest/download/latest.json
+   ```
+
+   200 means installed copies can see it. This is worth doing every time: the
+   first three releases of this app returned 404 here for months.
+
+### Do not mark a release as a pre-release
+
+GitHub excludes pre-releases from `releases/latest`, which is the exact URL the
+updater reads. v0.1-beta, v0.2-beta and v0.3-beta were all pre-releases, none
+carried a `.sig` or a manifest, and the endpoint 404'd throughout. From inside
+the app that is indistinguishable from "you are up to date", so nothing ever
+reported it. `publish.py` marks releases latest unless told otherwise, and says
+what `--prerelease` costs.
 
 ## If a release goes wrong
 

@@ -12,6 +12,7 @@ import logging
 import os
 from collections.abc import Iterator
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -61,6 +62,10 @@ async def lifespan(app: FastAPI):
     finally:
         scheduler.stop()
         scheduler.unsubscribe(notifications.on_scheduler_delivery)
+        # Before closing, and after the scheduler has stopped writing: a
+        # checkpoint needs the file to itself, and shutdown is the one moment
+        # that is guaranteed.
+        db.checkpoint()
         db.close_connection()
 
 
@@ -647,6 +652,77 @@ def speak(request: SpeakRequest) -> dict[str, Any]:
     }
 
 
+# -- the avatar's runtime licence (REQ-32) --------------------------------
+
+# Live2D's own summary, kept short on purpose. The full terms are a document
+# nobody reads inside a settings panel, so this states the part that decides
+# whether someone wants to say yes, and links the rest.
+LIVE2D_LICENCE_URL = "https://www.live2d.com/en/sdk/license/"
+LIVE2D_LICENCE_SUMMARY = (
+    "The avatar is drawn by Live2D Cubism Core, a proprietary runtime from "
+    "Live2D Inc. It is bundled with this app but licensed separately, under "
+    "Live2D's Proprietary Software Licence. Accepting records that you agree "
+    "to those terms; declining leaves the avatar off and changes nothing else."
+)
+
+
+class AvatarLicenceRequest(BaseModel):
+    accepted: bool
+
+
+def _avatar_state() -> dict[str, Any]:
+    avatar = load_config().avatar
+    return {
+        "licence_accepted": avatar.licence_accepted,
+        "licence_accepted_at": avatar.licence_accepted_at,
+        "licence_summary": LIVE2D_LICENCE_SUMMARY,
+        "licence_url": LIVE2D_LICENCE_URL,
+    }
+
+
+@app.get("/avatar")
+def avatar_status() -> dict[str, Any]:
+    """Whether the avatar's runtime may load.
+
+    Says nothing about whether the Core file is actually present: it is a
+    front-end asset compiled into the desktop binary, which this process cannot
+    see. The window checks for it directly and reports that itself.
+    """
+    return _avatar_state()
+
+
+@app.post("/avatar/licence")
+def avatar_licence(request: AvatarLicenceRequest) -> dict[str, Any]:
+    """Record — or withdraw — acceptance of the Live2D runtime licence.
+
+    Stamped with the date so the record can be shown back rather than asserted.
+    Withdrawing clears the date too: keeping "accepted on the 3rd" next to
+    "accepted: false" is a config that contradicts itself.
+
+    Logged at WARNING like the egress switches. This is not a privacy decision,
+    but it is a legal one made on this machine, and the point of writing it down
+    is that it can be found later.
+    """
+    changes: dict[str, Any] = {
+        "licence_accepted": bool(request.accepted),
+        "licence_accepted_at": (
+            datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+            if request.accepted
+            else ""
+        ),
+    }
+    try:
+        preferences.update({"avatar": changes})
+    except preferences.NotWritable as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+    log.warning(
+        "Live2D runtime licence %s",
+        "accepted" if request.accepted else "withdrawn",
+    )
+    return _avatar_state()
+
+
 class CloneConsentRequest(BaseModel):
     consent: bool
     enable: bool = False
@@ -680,6 +756,98 @@ def clone_consent(request: CloneConsentRequest) -> dict[str, Any]:
         preferences.update({"voice": changes})
     except preferences.NotWritable as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return cloning.status()
+
+
+@app.get("/voice/clone/engine")
+def clone_engine_progress() -> dict[str, Any]:
+    from .voice import engines
+
+    return {"installed": engines.xtts_installed(), **engines.progress()}
+
+
+@app.post("/voice/clone/engine")
+def install_clone_engine() -> dict[str, Any]:
+    """Start fetching the cloning engine. Explicit, and never on startup.
+
+    Returns immediately rather than holding the request open for a download
+    measured in hundreds of megabytes: the settings screen polls the GET above.
+    A second call while one is running is refused by the installer's own lock
+    rather than starting a competing download.
+    """
+    import threading
+
+    from .voice import engines
+
+    if engines.xtts_installed():
+        return {"installed": True, **engines.progress()}
+
+    def run() -> None:
+        try:
+            engines.install_xtts()
+        except engines.EngineError:
+            # Recorded in the progress snapshot the UI is already polling, and
+            # logged by the installer. Nothing here to raise into.
+            log.warning("voice engine install failed", exc_info=True)
+
+    threading.Thread(target=run, name="xtts-install", daemon=True).start()
+    return {"installed": False, **engines.progress()}
+
+
+@app.delete("/voice/clone/engine")
+def remove_clone_engine() -> dict[str, Any]:
+    """Give the disk space back. As easy as spending it."""
+    from .voice import engines
+
+    removed = engines.remove_xtts()
+    return {"removed": removed, "installed": engines.xtts_installed()}
+
+
+XTTS_LICENCE_URL = "https://coqui.ai/cpml"
+XTTS_LICENCE_SUMMARY = (
+    "The cloning engine uses XTTS-v2, a model from Coqui released under the "
+    "Coqui Public Model License. It permits personal and other non-commercial "
+    "use, and not selling what it produces or building a paid service on it. "
+    "Accepting records that you agree to those terms; declining leaves cloning "
+    "off and changes nothing else."
+)
+
+
+class XttsLicenceRequest(BaseModel):
+    accepted: bool
+
+
+@app.post("/voice/clone/licence")
+def xtts_licence(request: XttsLicenceRequest) -> dict[str, Any]:
+    """Record — or withdraw — acceptance of XTTS-v2's licence.
+
+    Kept separate from `clone_consent` on purpose. That switch is about the
+    ethics of copying somebody's voice; this is agreeing to a non-commercial
+    software licence. They are different questions with different answers, and
+    one switch meaning both would be an acceptance nobody was shown.
+
+    Withdrawing clears the date, for the same reason the Live2D gate does: a
+    config reading "not accepted, accepted on the 3rd" contradicts itself.
+    """
+    from .voice import cloning
+
+    changes: dict[str, Any] = {
+        "xtts_licence_accepted": bool(request.accepted),
+        "xtts_licence_accepted_at": (
+            datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+            if request.accepted
+            else ""
+        ),
+    }
+    try:
+        preferences.update({"voice": changes})
+    except preferences.NotWritable as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+    log.warning(
+        "XTTS-v2 model licence %s",
+        "accepted" if request.accepted else "withdrawn",
+    )
     return cloning.status()
 
 

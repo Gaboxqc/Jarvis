@@ -24,6 +24,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { api, type AvatarLicence } from "../api";
 import type { Key } from "../i18n";
 import { subscribe } from "../speechLevel";
 
@@ -197,24 +198,46 @@ function headBox(coreModel: any): { x: number; y: number; width: number; height:
   };
 }
 
-async function loadCore(): Promise<boolean> {
-  if ("Live2DCubismCore" in window) return true;
-  try {
-    // A HEAD first: injecting a <script> for a missing file gives an error
-    // event with no detail, and "it didn't work" is not a useful thing to show.
-    const probe = await fetch(CORE, { method: "HEAD" });
-    if (!probe.ok) return false;
-  } catch {
-    return false;
-  }
+/**
+ * Why the avatar is not showing, when it is not showing.
+ *
+ * One message for every cause is what let a broken release out: the packaged
+ * app said "needs Cubism Core" while the Core was sitting inside the binary,
+ * because the real fault was the content security policy refusing to compile
+ * its WebAssembly. Those need different answers from whoever reads them, so
+ * they are different values here.
+ */
+type CoreProblem = "missing" | "blocked" | "failed";
 
-  return new Promise((resolve) => {
+async function loadCore(): Promise<CoreProblem | null> {
+  if ("Live2DCubismCore" in window) return null;
+
+  // The script tag goes first, with no preflight. An earlier version sent a
+  // HEAD request to tell "missing" from "broken" before loading anything, which
+  // works against an ordinary web server and is a guess against whatever serves
+  // the app's own assets in a packaged build -- a protocol handler that answers
+  // only GET turns a present file into a missing one, and the panel then says
+  // the Core is absent while it sits inside the binary.
+  //
+  // So the happy path makes exactly one request, and the fallback below only
+  // runs once something has already gone wrong, where an extra round trip costs
+  // nothing and the answer has to be right.
+  const loaded = await new Promise<boolean>((resolve) => {
     const tag = document.createElement("script");
     tag.src = CORE;
     tag.onload = () => resolve("Live2DCubismCore" in window);
     tag.onerror = () => resolve(false);
     document.head.appendChild(tag);
   });
+  if (loaded) return null;
+
+  // It did not load. A GET rather than a HEAD, for the same reason.
+  try {
+    const probe = await fetch(CORE);
+    return probe.ok ? "failed" : "missing";
+  } catch {
+    return "missing";
+  }
 }
 
 export function Avatar({ state, t }: Props) {
@@ -223,25 +246,90 @@ export function Avatar({ state, t }: Props) {
   const app = useRef<any>(null);
   const levelRef = useRef(0);
   const [ready, setReady] = useState<boolean | null>(null);
+  const [problem, setProblem] = useState<CoreProblem | null>(null);
+  // The exception text, when there is one. "It failed" without saying how is
+  // what turned one bug into several rounds of guessing.
+  const [detail, setDetail] = useState<string | null>(null);
+  // null while unknown. The panel must not flash a licence prompt at someone
+  // who accepted months ago just because the answer has not arrived yet.
+  const [licence, setLicence] = useState<AvatarLicence | null>(null);
+  const [accepting, setAccepting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api
+      .avatarLicence()
+      .then((value) => {
+        if (!cancelled) setLicence(value);
+      })
+      .catch(() => {
+        // Without an answer the gate can never open, so the panel would sit
+        // empty forever waiting for a permission it will not be granted. Say
+        // that it failed instead -- a blank rectangle is the failure mode this
+        // whole change exists to stop.
+        if (!cancelled) {
+          setProblem("failed");
+          setReady(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function accept() {
+    setAccepting(true);
+    try {
+      setLicence(await api.acceptAvatarLicence(true));
+    } catch {
+      setAccepting(false);
+    }
+  }
 
   // Straight into a ref: the ticker runs outside React's render cycle, and
   // re-rendering this component thirty times a second to move a mouth would be
   // absurd.
   useEffect(() => subscribe((value) => { levelRef.current = value; }), []);
 
+  const accepted = licence?.licence_accepted ?? false;
+
   useEffect(() => {
+    // Nothing is fetched, injected or instantiated before acceptance. A gate
+    // that loads the runtime and then hides it behind a dialog is not a gate.
+    if (!accepted) return;
+
     let cancelled = false;
     let ticker: (() => void) | null = null;
 
     void (async () => {
-      if (!(await loadCore())) {
-        if (!cancelled) setReady(false);
+      const blocker = await loadCore();
+      if (blocker) {
+        if (!cancelled) {
+          setProblem(blocker);
+          setReady(false);
+        }
         return;
       }
 
       try {
         const PIXI = await import("pixi.js");
+        const { install } = await import("@pixi/unsafe-eval");
         const { Live2DModel } = await import("pixi-live2d-display/cubism4");
+
+        // PIXI builds its shader and batch code with `new Function`, which the
+        // app's content security policy forbids -- deliberately, since this
+        // process reads mail, files and a calendar, and 'unsafe-eval' would let
+        // any injected string run as code. Without this the renderer throws
+        //
+        //     Current environment does not allow unsafe-eval
+        //
+        // the moment an Application is constructed. It never appeared in
+        // development because the Vite dev server sends no CSP at all, so the
+        // avatar worked in every test and failed in every installed build.
+        //
+        // This is PIXI's own answer: the same generated code, written out ahead
+        // of time instead of evaluated. It must run before any renderer exists.
+        install(PIXI);
         // pixi-live2d-display reaches for PIXI.Ticker on the window rather than
         // taking it as an argument.
         (window as any).PIXI = PIXI;
@@ -306,8 +394,15 @@ export function Avatar({ state, t }: Props) {
         application.ticker.add(ticker);
 
         setReady(true);
-      } catch {
-        if (!cancelled) setReady(false);
+      } catch (error) {
+        // Logged as well as shown: the panel has room for a sentence, the
+        // console has room for a stack.
+        console.error("[avatar] failed to start", error);
+        if (!cancelled) {
+          setDetail(error instanceof Error ? `${error.name}: ${error.message}` : String(error));
+          setProblem("failed");
+          setReady(false);
+        }
       }
     })();
 
@@ -320,7 +415,7 @@ export function Avatar({ state, t }: Props) {
       app.current?.destroy(true, { children: true, texture: true, baseTexture: true });
       app.current = null;
     };
-  }, []);
+  }, [accepted]);
 
   // Gaze and expression follow state. `ready` is a dependency because loading is
   // asynchronous: without it, whatever state the avatar was in while the model
@@ -377,11 +472,44 @@ export function Avatar({ state, t }: Props) {
     loaded.y = height / 2;
   }
 
-  if (ready === false) {
+  // Asked once, before the runtime is touched. Declining is a real option and
+  // costs nothing else in the app, so there is no second prompt and no nagging:
+  // the panel simply stays here until it is answered, and Settings can withdraw
+  // it later.
+  if (licence && !licence.licence_accepted) {
     return (
       <div className="avatar avatar-missing">
-        <p className="small muted">{t("avatar.needsCore")}</p>
-        <code className="small">live2dcubismcore.min.js</code>
+        <p className="small">{licence.licence_summary}</p>
+        <a
+          className="small"
+          href={licence.licence_url}
+          target="_blank"
+          rel="noreferrer noopener"
+        >
+          {t("avatar.licenceTerms")}
+        </a>
+        <button className="primary" onClick={() => void accept()} disabled={accepting}>
+          {t("avatar.licenceAccept")}
+        </button>
+      </div>
+    );
+  }
+
+  if (ready === false) {
+    // Each cause gets its own answer. They are not interchangeable: one is a
+    // missing download, one is this app's own security policy, and one is a
+    // bug. Showing the first message for all three is what shipped a release
+    // whose avatar could never have worked.
+    const message: Record<CoreProblem, Key> = {
+      missing: "avatar.needsCore",
+      blocked: "avatar.coreBlocked",
+      failed: "avatar.coreFailed",
+    };
+    return (
+      <div className="avatar avatar-missing">
+        <p className="small muted">{t(message[problem ?? "missing"])}</p>
+        {problem === "missing" && <code className="small">live2dcubismcore.min.js</code>}
+        {detail && <code className="small">{detail}</code>}
       </div>
     );
   }

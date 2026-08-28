@@ -81,6 +81,9 @@ WRITABLE: dict[str, dict[str, Any]] = {
         "tts_engine": {"piper", "xtts"},
         # Writable so it can be withdrawn, which must be as easy as granting it.
         "clone_consent": bool,
+        # Written by the endpoint that stamps the date; see main.py.
+        "xtts_licence_accepted": bool,
+        "xtts_licence_accepted_at": str,
     },
     "persona": {
         "name": str,
@@ -111,6 +114,13 @@ WRITABLE: dict[str, dict[str, Any]] = {
         # The files the assistant may read and organise. Guarded harder than the
         # rest: this is the blast radius of every file skill.
         "allowed_roots": Folders,
+    },
+    "avatar": {
+        # Live2D's runtime licence. Writable so it can be withdrawn, which has
+        # to be as easy as granting it, and written by the same endpoint that
+        # stamps the date -- see main.py.
+        "licence_accepted": bool,
+        "licence_accepted_at": str,
     },
     "brain": {
         "model": str,

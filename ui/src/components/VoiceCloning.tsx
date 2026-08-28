@@ -17,7 +17,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, ApiError, type CloneStatus } from "../api";
+import { api, ApiError, type CloneStatus, type EngineProgress } from "../api";
 import type { Key } from "../i18n";
 import { Icon } from "./Icon";
 
@@ -31,6 +31,7 @@ export function VoiceCloning({ t }: Props) {
   const [uploading, setUploading] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [engine, setEngine] = useState<EngineProgress | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -43,6 +44,45 @@ export function VoiceCloning({ t }: Props) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Polled rather than streamed: this is a progress number on a settings screen,
+  // and a second of latency on it costs nothing. Only while something is
+  // actually running, so an idle settings tab is not a timer.
+  useEffect(() => {
+    if (!status?.packaged || status.installed) return;
+    let live = true;
+
+    const tick = async () => {
+      try {
+        const next = await api.engineProgress();
+        if (!live) return;
+        setEngine(next);
+        // The engine landing changes what the whole card should show.
+        if (next.installed) void load();
+      } catch {
+        // A missed poll is not worth a message; the next one will do.
+      }
+    };
+
+    void tick();
+    const timer = window.setInterval(() => void tick(), 1000);
+    return () => {
+      live = false;
+      window.clearInterval(timer);
+    };
+  }, [status?.packaged, status?.installed, load]);
+
+  async function startInstall() {
+    setBusy(true);
+    setNote(null);
+    try {
+      setEngine(await api.installEngine());
+    } catch (caught) {
+      setNote(caught instanceof ApiError ? caught.message : t("common.error"));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function run(action: () => Promise<CloneStatus>) {
     setBusy(true);
@@ -78,7 +118,17 @@ export function VoiceCloning({ t }: Props) {
     void run(() => api.forgetCloneReference());
   }
 
-  if (!status) return null;
+  // Never nothing. A card that erases itself when its status call fails is
+  // indistinguishable from a feature that was never built -- which is exactly
+  // how this one was reported missing.
+  if (!status) {
+    return (
+      <section className="card">
+        <h2 className="small muted">{t("clone.title")}</h2>
+        <p className="small muted">{t("clone.unavailable")}</p>
+      </section>
+    );
+  }
 
   return (
     <section className="card">
@@ -86,10 +136,76 @@ export function VoiceCloning({ t }: Props) {
 
       {!status.installed ? (
         <>
-          <p className="small">{t("clone.notInstalled")}</p>
-          <p className="small muted">
-            <code>pip install TTS</code>
+          {/* `pip install TTS` is sound advice in a checkout and nonsense in an
+              installed app, where there is no environment to install into. The
+              backend knows which build this is, so the answer differs. */}
+          <p className="small">
+            {status.packaged ? t("clone.notShipped") : t("clone.notInstalled")}
           </p>
+          {!status.packaged && (
+            <p className="small muted">
+              <code>pip install TTS</code>
+            </p>
+          )}
+
+          {/* Asked before the engine is fetched, not after. Downloading 300MB
+              and then discovering the terms are unacceptable wastes the one
+              thing the person cannot get back. */}
+          {status.packaged && !status.licence_accepted && (
+            <>
+              <p className="small">{t("clone.licenceSummary")}</p>
+              <a
+                className="small"
+                href="https://coqui.ai/cpml"
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                {t("clone.licenceTerms")}
+              </a>
+              <button
+                className="primary"
+                onClick={() => void run(() => api.acceptXttsLicence(true))}
+                disabled={busy}
+              >
+                {t("clone.licenceAccept")}
+              </button>
+            </>
+          )}
+
+          {/* The download only exists for packaged builds. A checkout installs
+              the package itself, and offering both would be two ways to get one
+              thing, differing in which one the code then uses. */}
+          {status.packaged && status.licence_accepted && (
+            <>
+              <p className="small muted">{t("clone.engineSize")}</p>
+              <p className="small muted">{t("clone.firstUseNote")}</p>
+              {engine?.state === "downloading" || engine?.state === "verifying" ||
+               engine?.state === "installing" ? (
+                <p className="small" role="status">
+                  {engine.state === "downloading" && engine.total > 0
+                    ? t("clone.engineProgress", {
+                        percent: Math.floor((engine.received / engine.total) * 100),
+                      })
+                    : t(`clone.engine.${engine.state}` as Key)}
+                </p>
+              ) : (
+                <button
+                  className="primary"
+                  onClick={() => void startInstall()}
+                  disabled={busy}
+                >
+                  {t("clone.engineInstall")}
+                </button>
+              )}
+              {engine?.state === "failed" && engine.error && (
+                <p className="small" role="alert" style={{ color: "var(--danger)" }}>
+                  {engine.error}
+                </p>
+              )}
+            </>
+          )}
+
+          <p className="small muted">{status.licence}</p>
         </>
       ) : (
         <>
@@ -106,6 +222,7 @@ export function VoiceCloning({ t }: Props) {
             />
           </label>
           <p className="small muted">{t("clone.consentNote")}</p>
+          <p className="small muted">{t("clone.slowNote")}</p>
 
           {status.consented && (
             <>

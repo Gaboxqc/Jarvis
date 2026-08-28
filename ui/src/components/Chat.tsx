@@ -43,6 +43,8 @@ export function Chat({ t, onBusyChange, voice }: Props) {
   // Which slow phase is running. Routing and running a skill cannot stream, so
   // without this the window sits blank through the longest part of the turn.
   const [stage, setStage] = useState<string | null>(null);
+  // Shown only when speaking is slow enough to need explaining — see maybeSpeak.
+  const [preparingSpeech, setPreparingSpeech] = useState(false);
 
   const nextId = useRef(1);
   const logEnd = useRef<HTMLDivElement>(null);
@@ -87,12 +89,21 @@ export function Chat({ t, onBusyChange, voice }: Props) {
   /** Say a reply aloud, if speech is on and it wasn't spoken already. */
   async function maybeSpeak(text: string, alreadySpoken = false) {
     if (!text || alreadySpoken || !voice.speaks) return;
+
+    // Only announced if it is actually slow. The built-in voice answers in
+    // well under a second and a flicker of "preparing" would be noise; a cloned
+    // voice takes around thirty seconds on the processor, and silence for that
+    // long reads as the assistant having stopped working.
+    const announce = window.setTimeout(() => setPreparingSpeech(true), 1200);
     try {
       const shape = await api.speak(text);
       // The backend starts playing as this returns, so the envelope starts now.
       if (shape.spoke) playEnvelope(shape.envelope);
     } catch {
       // Losing the audio is a degradation; the reply is already on screen.
+    } finally {
+      window.clearTimeout(announce);
+      setPreparingSpeech(false);
     }
   }
 
@@ -306,6 +317,11 @@ export function Chat({ t, onBusyChange, voice }: Props) {
         )}
 
         {listening && <p className="listening small">{t("voice.listening")}…</p>}
+        {preparingSpeech && (
+          <p className="muted small" role="status">
+            {t("clone.preparing")}…
+          </p>
+        )}
         {busy && (
           <p className="muted small" role="status">
             {stage === "routing"

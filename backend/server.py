@@ -16,6 +16,7 @@ import multiprocessing
 import os
 import socket
 import sys
+import threading
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8756
@@ -42,6 +43,101 @@ def ensure_standard_streams() -> None:
     for name in ("stdout", "stderr"):
         if getattr(sys, name, None) is None:
             setattr(sys, name, open(os.devnull, "w", encoding="utf-8"))
+
+
+# Set by the desktop app when it spawns this as a sidecar. Absent when someone
+# runs the executable themselves, where exiting on a closed stdin would be
+# baffling rather than helpful.
+PARENT_WATCH_ENV = "KAI_PARENT_WATCH"
+
+
+def watch_parent() -> None:
+    """Exit when whoever launched this process goes away.
+
+    The desktop app already kills the sidecar on its own exit, and that covers
+    every path it can see: the tray menu, the taskbar, a logout. It cannot cover
+    the paths where it never runs -- a crash, a kill, an Application Control
+    policy stopping the binary mid-flight. Then the backend is orphaned: it
+    keeps port 8756, holds its own DLLs open so an upgrade cannot overwrite
+    them, and answers requests for an app that is no longer running. All three
+    happened, and the third is the worst, because nothing about it looks broken.
+
+    Reading the inherited stdin is how the child learns. The pipe stays open and
+    empty for as long as the parent lives, and reaches EOF the moment it dies,
+    whatever killed it -- so this needs no polling, no process handles and no
+    platform-specific code.
+
+    `os._exit` rather than a graceful shutdown: there is nothing left to be
+    graceful for, the parent is already gone, and the database is journalled
+    precisely so an abrupt stop is recoverable. Hanging around to close sockets
+    tidily is how the orphan gets created in the first place.
+    """
+    stream = getattr(sys, "stdin", None)
+    if stream is None:
+        return
+
+    def wait() -> None:
+        try:
+            stream.read()
+        except Exception:  # noqa: BLE001 - a broken pipe means the same thing
+            pass
+        os._exit(0)
+
+    threading.Thread(target=wait, name="parent-watch", daemon=True).start()
+
+
+def sidecar_log_config(level: str) -> dict:
+    """Logging that cannot deadlock the process.
+
+    The desktop app spawns this with its pipes connected, and uvicorn writes one
+    line per request at info level. A pipe holds about 64KB; once it is full the
+    next write blocks, and because that write happens on the thread serving the
+    request, the whole backend stops. Not slows -- stops, permanently, while the
+    process stays alive and answers nothing. Reproduced by spawning with the
+    pipes undrained: wedged after 70 requests.
+
+    Relying on the parent to keep reading is the fragile part. It does read
+    today, but a consumer that pauses, crashes or applies backpressure would
+    silently kill the backend, and nothing about the symptom points at logging.
+
+    So the sidecar logs to a file instead. Rotating, because an assistant that
+    runs for weeks should not fill a disk with its own access log, and in the
+    data directory because that is the one place the user already knows to look
+    -- and where there was previously nothing at all to look at.
+    """
+    # Imported here rather than at module scope: this file is also the frozen
+    # entry point, and pulling the settings package in before argument parsing
+    # would pay for the whole config stack just to print --help.
+    from app.settings import data_dir
+
+    directory = data_dir() / "logs"
+    directory.mkdir(parents=True, exist_ok=True)
+    return {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "plain": {"format": "%(asctime)s %(levelname)s %(name)s: %(message)s"},
+        },
+        "handlers": {
+            "file": {
+                "class": "logging.handlers.RotatingFileHandler",
+                "formatter": "plain",
+                "filename": str(directory / "backend.log"),
+                "maxBytes": 1_000_000,
+                "backupCount": 3,
+                "encoding": "utf-8",
+            },
+        },
+        "root": {"handlers": ["file"], "level": level.upper()},
+        "loggers": {
+            "uvicorn": {"handlers": ["file"], "level": level.upper(), "propagate": False},
+            "uvicorn.error": {"handlers": ["file"], "level": level.upper(), "propagate": False},
+            # Off entirely rather than merely redirected: one line per request is
+            # the volume that filled the pipe, and it says nothing a file of
+            # timings would not say better.
+            "uvicorn.access": {"handlers": [], "level": "CRITICAL", "propagate": False},
+        },
+    }
 
 
 def port_is_free(host: str, port: int) -> bool:
@@ -92,11 +188,26 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 3
 
+    # Armed before the server starts, so a parent that dies during startup is
+    # noticed too.
+    sidecar = bool(os.environ.get(PARENT_WATCH_ENV))
+    if sidecar:
+        watch_parent()
+
     import uvicorn
 
     from app.main import app
 
-    uvicorn.run(app, host=args.host, port=args.port, log_level=args.log_level)
+    if sidecar:
+        uvicorn.run(
+            app,
+            host=args.host,
+            port=args.port,
+            log_config=sidecar_log_config(args.log_level),
+            access_log=False,
+        )
+    else:
+        uvicorn.run(app, host=args.host, port=args.port, log_level=args.log_level)
     return 0
 
 

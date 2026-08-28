@@ -8,7 +8,7 @@
 # serves and answers questions -- a build that is broken in the only way that
 # matters and looks fine from the outside. It happened on the first attempt.
 
-param([switch]$SkipBackend)
+param([switch]$SkipBackend, [switch]$SkipSelfTest)
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
@@ -24,6 +24,35 @@ if (-not $SkipBackend) {
 }
 
 Write-Host "==> Checking the frozen build kept its skills" -ForegroundColor Cyan
+
+# Every module the manifest found must appear in PyInstaller's own record of
+# what it collected. Weaker than running the thing -- it proves the code was
+# packed, not that it imports -- but it checks the exact failure the self-test
+# exists to catch, and unlike the self-test it needs no freshly built unsigned
+# binary to execute.
+$toc = Join-Path $root "installer/build/kai-backend/Analysis-00.toc"
+$manifest = Join-Path $root "backend/app/skills/_manifest.py"
+if ((Test-Path $toc) -and (Test-Path $manifest)) {
+    $wanted = Select-String -Path $manifest -Pattern '"([^"]+)"' -AllMatches |
+        ForEach-Object { $_.Matches } | ForEach-Object { $_.Groups[1].Value }
+    $collected = Get-Content $toc -Raw
+    $missing = @($wanted | Where-Object { -not $collected.Contains($_) })
+    if ($missing.Count -gt 0) {
+        throw "The freeze dropped $($missing.Count) skill module(s): $($missing -join ', ')"
+    }
+    Write-Host "    all $($wanted.Count) skill modules were collected" -ForegroundColor Green
+}
+
+if ($SkipSelfTest) {
+    # An Application Control policy refuses to execute freshly built unsigned
+    # binaries, which makes the self-test impossible rather than optional. The
+    # static check above still ran; what is skipped is the proof that the packed
+    # code imports and answers.
+    Write-Host "    SELF-TEST SKIPPED - this build has never been run" -ForegroundColor Yellow
+    Write-Host "    Nothing here has verified that the backend starts." -ForegroundColor Yellow
+}
+else {
+
 # The sidecar is built windowed (no console flash on every launch), which makes
 # it a Windows-subsystem binary. PowerShell does not wait for those, so calling
 # it directly returns immediately with a meaningless $LASTEXITCODE -- the
@@ -40,6 +69,7 @@ if ($check.ExitCode -ne 0) {
     throw "Self-test failed - refusing to package a broken build"
 }
 Write-Host "    self-test passed" -ForegroundColor Green
+}
 
 Write-Host "==> Staging the backend for Tauri" -ForegroundColor Cyan
 # Shipped as a resource directory rather than an externalBin. PyInstaller's

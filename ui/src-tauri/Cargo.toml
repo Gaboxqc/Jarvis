@@ -1,6 +1,6 @@
 [package]
 name = "kai"
-version = "0.2.0"
+version = "0.3.5"
 edition = "2021"
 description = "Kai - personal desktop assistant"
 default-run = "kai"

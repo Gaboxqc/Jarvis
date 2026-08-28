@@ -150,9 +150,31 @@ export interface Settings {
   writable: Record<string, string[]>;
 }
 
+/** Live2D's runtime licence — the avatar stays inert until this is accepted. */
+export interface AvatarLicence {
+  licence_accepted: boolean;
+  licence_accepted_at: string;
+  licence_summary: string;
+  licence_url: string;
+}
+
 export interface Health {
   ok: boolean;
-  brain: { ok: boolean; model?: string; error?: string | null };
+  brain: {
+    ok: boolean;
+    model?: string;
+    error?: string | null;
+    /**
+     * What Ollama actually reports, tags included (`qwen2.5:latest`).
+     *
+     * The picker needs this rather than a fixed list: the only models worth
+     * offering are the ones already pulled, and offering one that is not
+     * installed produces an app that cannot answer anything.
+     */
+    models?: string[];
+    model_installed?: boolean;
+    host?: string;
+  };
   skills: number;
   persona: string;
   config_file: string | null;
@@ -216,6 +238,13 @@ export interface Reminder {
 export interface CloneStatus {
   /** Whether the XTTS package is present. It is a ~2GB optional dependency. */
   installed: boolean;
+  /** A frozen build. Decides what advice "not installed" should carry. */
+  packaged?: boolean;
+  /** The downloadable sidecar is on disk. Not the same as being usable yet. */
+  engine_installed?: boolean;
+  /** XTTS-v2's own licence, separate from the consent switch. */
+  licence_accepted?: boolean;
+  licence_accepted_at?: string;
   enabled: boolean;
   consented: boolean;
   has_reference: boolean;
@@ -223,6 +252,15 @@ export interface CloneStatus {
   loaded: boolean;
   min_seconds: number;
   licence: string;
+}
+
+/** A download in flight. `total` is 0 until the server reports a length. */
+export interface EngineProgress {
+  installed: boolean;
+  state: "idle" | "downloading" | "verifying" | "installing" | "installed" | "failed";
+  received: number;
+  total: number;
+  error: string | null;
 }
 
 export interface CaptureSummary {
@@ -535,7 +573,31 @@ export const api = {
       body: JSON.stringify({ changes }),
     }),
 
+  avatarLicence: () => request<AvatarLicence>("/avatar"),
+
+  acceptAvatarLicence: (accepted: boolean) =>
+    request<AvatarLicence>("/avatar/licence", {
+      method: "POST",
+      body: JSON.stringify({ accepted }),
+    }),
+
   cloneStatus: () => request<CloneStatus>("/voice/clone"),
+
+  acceptXttsLicence: (accepted: boolean) =>
+    request<CloneStatus>("/voice/clone/licence", {
+      method: "POST",
+      body: JSON.stringify({ accepted }),
+    }),
+
+  engineProgress: () => request<EngineProgress>("/voice/clone/engine"),
+
+  installEngine: () =>
+    request<EngineProgress>("/voice/clone/engine", { method: "POST" }),
+
+  removeEngine: () =>
+    request<{ removed: boolean; installed: boolean }>("/voice/clone/engine", {
+      method: "DELETE",
+    }),
 
   setCloneConsent: (consent: boolean, enable = false) =>
     request<CloneStatus>("/voice/clone/consent", {

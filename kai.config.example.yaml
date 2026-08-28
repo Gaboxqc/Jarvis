@@ -107,6 +107,17 @@ actions:
   # Minutes a pending confirmation stays valid before it expires.
   confirmation_ttl_minutes: 10
 
+avatar:
+  # The avatar is drawn by Live2D Cubism Core, a proprietary runtime from
+  # Live2D Inc. It ships with the app but is licensed separately, and nobody can
+  # accept a licence on someone else's behalf -- so the runtime stays inert
+  # until this is true. Set it from the avatar panel rather than here; that is
+  # where the terms are shown, and agreeing to terms you have not been shown is
+  # not agreement. Setting it back to false turns the avatar off again.
+  licence_accepted: false
+  # Stamped by the app when accepted, so the record can be shown back.
+  licence_accepted_at: ""
+
 skills:
   # Disable any skill by name (REQ-33).
   disabled: []

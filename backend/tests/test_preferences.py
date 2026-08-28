@@ -129,6 +129,32 @@ def test_the_model_host_is_not_writable():
     assert "ollama_host" not in preferences.WRITABLE.get("brain", {})
 
 
+def test_the_model_can_be_changed_from_the_ui(commented_config):
+    """The one setting that makes every other feature look broken when stale.
+
+    The config is seeded from the bundled example the first time an installed
+    build starts and is never re-seeded, so a machine that installed back when
+    the example said `llama3` still says `llama3` after upgrading to a build
+    whose default is `qwen2.5`. Nothing about an update can fix that, which is
+    why changing it has to be reachable from the settings screen.
+    """
+    preferences.update({"brain": {"model": "qwen2.5"}})
+    assert load_config().brain.model == "qwen2.5"
+
+
+def test_changing_the_model_keeps_the_config_comments(commented_config):
+    """The brain block carries the reasoning for the default model choice.
+
+    A PyYAML round-trip would drop it, and picking a model from a dropdown is
+    not a reason to delete the paragraph explaining what the models score on
+    the routing sweep.
+    """
+    before = commented_config.read_text(encoding="utf-8").count("#")
+    preferences.update({"brain": {"model": "qwen2.5"}})
+    after = commented_config.read_text(encoding="utf-8").count("#")
+    assert after == before
+
+
 def test_an_egress_switch_can_be_changed(commented_config):
     preferences.update({"privacy": {"allow_web_search": False}})
     assert load_config().privacy.allow_web_search is False

@@ -129,6 +129,14 @@ const STRINGS = {
 
     "avatar.needsCore":
       "The avatar needs Live2D's Cubism Core, which is licensed separately and isn't included. Drop it into the app's live2d folder to switch it on — everything else works without it.",
+    "avatar.coreBlocked":
+      "The avatar is installed but can't start: this app's security policy is blocking WebAssembly, which Cubism Core needs. That's a bug in the app, not something you can fix here — everything else works.",
+    "avatar.coreFailed":
+      "The avatar failed to start. Everything else works without it.",
+    "avatar.licenceTerms": "Read Live2D's licence terms",
+    "avatar.licenceAccept": "Accept and turn the avatar on",
+    "avatar.licenceAccepted": "Live2D runtime licence accepted on {date}",
+    "avatar.licenceWithdraw": "Withdraw and turn the avatar off",
     "state.idle": "Idle",
     "state.listening": "Listening",
     "state.thinking": "Thinking",
@@ -150,6 +158,10 @@ const STRINGS = {
 
     "settings.title": "Settings and privacy",
     "settings.brain": "Language model",
+    "settings.avatarLicence": "Avatar runtime licence",
+    "settings.brainMissingOption": "{model} (not installed)",
+    "settings.brainMismatch":
+      "Kai is set to use {model}, which isn't installed. Installed: {installed}. Pick one above — nothing else will work until the model matches.",
     "settings.skills": "Skills loaded",
     "settings.config": "Config file",
     "settings.data": "Your data lives in",
@@ -211,6 +223,27 @@ const STRINGS = {
     "voiceBlocked.failed": "Something went wrong while listening.",
 
     "clone.title": "Your own voice",
+    "clone.unavailable":
+      "Voice cloning couldn't be checked — the backend didn't answer. Nothing else is affected.",
+    "clone.notShipped":
+      "Voice cloning isn't included in this build. It needs the XTTS engine, which is about 2GB with its dependencies and ships separately.",
+    "clone.licenceSummary":
+      "The engine uses XTTS-v2 from Coqui, under the Coqui Public Model License: personal and other non-commercial use only, so nothing you make with it can be sold or built into a paid service.",
+    "clone.licenceTerms": "Read the full licence",
+    "clone.licenceAccept": "Accept and continue",
+    "clone.licenceAcceptedOn": "Licence accepted on {date}",
+    "clone.engineSize":
+      "The engine is a separate download of about 320MB, which took around seven minutes here. Nothing is fetched until you ask, and you can remove it again afterwards.",
+    "clone.slowNote":
+      "Worth knowing before you switch this on: the first reply after starting Kai takes about a minute while the voice loads, and every reply after that takes roughly 30 seconds to speak, because this runs on your processor rather than a server. The built-in voice is instant.",
+    "clone.firstUseNote":
+      "The first time it speaks it also downloads the voice model, which is another 1.8GB. It is kept in your data folder with everything else.",
+    "clone.preparing": "Preparing the voice — this takes about a minute the first time",
+    "clone.engineInstall": "Download the voice engine",
+    "clone.engineProgress": "Downloading… {percent}%",
+    "clone.engine.downloading": "Downloading…",
+    "clone.engine.verifying": "Checking the download…",
+    "clone.engine.installing": "Installing…",
     "clone.notInstalled":
       "Speaking in a cloned voice needs the XTTS engine, which isn't installed. It's about 2GB and optional — everything else works without it.",
     "clone.consent": "Let Kai speak in a cloned voice",
@@ -418,6 +451,14 @@ const STRINGS = {
 
     "avatar.needsCore":
       "El avatar necesita Cubism Core de Live2D, que tiene su propia licencia y no viene incluido. Colócalo en la carpeta live2d de la app para activarlo; todo lo demás funciona sin él.",
+    "avatar.coreBlocked":
+      "El avatar está instalado pero no puede arrancar: la política de seguridad de la app bloquea WebAssembly, que Cubism Core necesita. Es un fallo de la app, no algo que puedas arreglar aquí; todo lo demás funciona.",
+    "avatar.coreFailed":
+      "El avatar no pudo arrancar. Todo lo demás funciona sin él.",
+    "avatar.licenceTerms": "Leer los términos de licencia de Live2D",
+    "avatar.licenceAccept": "Aceptar y activar el avatar",
+    "avatar.licenceAccepted": "Licencia del runtime de Live2D aceptada el {date}",
+    "avatar.licenceWithdraw": "Retirar y desactivar el avatar",
     "state.idle": "En reposo",
     "state.listening": "Escuchando",
     "state.thinking": "Pensando",
@@ -439,6 +480,10 @@ const STRINGS = {
 
     "settings.title": "Ajustes y privacidad",
     "settings.brain": "Modelo de lenguaje",
+    "settings.avatarLicence": "Licencia del runtime del avatar",
+    "settings.brainMissingOption": "{model} (no instalado)",
+    "settings.brainMismatch":
+      "Kai está configurado para usar {model}, que no está instalado. Instalados: {installed}. Elige uno arriba: nada más funcionará hasta que el modelo coincida.",
     "settings.skills": "Habilidades cargadas",
     "settings.config": "Archivo de configuración",
     "settings.data": "Tus datos están en",
@@ -500,6 +545,27 @@ const STRINGS = {
     "voiceBlocked.failed": "Algo salió mal al escuchar.",
 
     "clone.title": "Tu propia voz",
+    "clone.unavailable":
+      "No se pudo comprobar la clonación de voz: el backend no respondió. Nada más se ve afectado.",
+    "clone.notShipped":
+      "La clonación de voz no viene en esta versión. Necesita el motor XTTS, que ocupa unos 2GB con sus dependencias y se distribuye aparte.",
+    "clone.licenceSummary":
+      "El motor usa XTTS-v2 de Coqui, bajo la Coqui Public Model License: solo uso personal y no comercial, así que nada de lo que generes puede venderse ni formar parte de un servicio de pago.",
+    "clone.licenceTerms": "Leer la licencia completa",
+    "clone.licenceAccept": "Aceptar y continuar",
+    "clone.licenceAcceptedOn": "Licencia aceptada el {date}",
+    "clone.engineSize":
+      "El motor es una descarga aparte de unos 320MB, que aquí tardó unos siete minutos. No se descarga nada hasta que lo pidas, y puedes eliminarlo después.",
+    "clone.slowNote":
+      "Conviene saberlo antes de activarlo: la primera respuesta después de abrir Kai tarda alrededor de un minuto mientras se carga la voz, y cada respuesta siguiente tarda unos 30 segundos en hablar, porque esto funciona en tu procesador y no en un servidor. La voz integrada es instantánea.",
+    "clone.firstUseNote":
+      "La primera vez que hable también descargará el modelo de voz: otros 1,8GB. Se guarda en tu carpeta de datos junto con todo lo demás.",
+    "clone.preparing": "Preparando la voz: la primera vez tarda alrededor de un minuto",
+    "clone.engineInstall": "Descargar el motor de voz",
+    "clone.engineProgress": "Descargando… {percent}%",
+    "clone.engine.downloading": "Descargando…",
+    "clone.engine.verifying": "Comprobando la descarga…",
+    "clone.engine.installing": "Instalando…",
     "clone.notInstalled":
       "Hablar con una voz clonada necesita el motor XTTS, que no está instalado. Ocupa unos 2GB y es opcional: todo lo demás funciona sin él.",
     "clone.consent": "Permitir que Kai hable con una voz clonada",

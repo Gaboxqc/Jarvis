@@ -2,6 +2,9 @@
 __pycache__/
 *.py[cod]
 .venv/
+# The XTTS build environment: a couple of gigabytes of torch, and rebuilt
+# from the spec rather than tracked.
+.venv-xtts/
 venv/
 *.egg-info/
 .pytest_cache/

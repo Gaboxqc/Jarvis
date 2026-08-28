@@ -1,0 +1,28 @@
+# The cloning engine's environment — built separately from the backend.
+#
+#   python -m venv .venv-xtts
+#   .venv-xtts\Scripts\python -m pip install -r sidecar\requirements.txt ^
+#       --extra-index-url https://download.pytorch.org/whl/cpu
+#
+# Every pin here is a failure that was hit rather than a preference.
+#
+# torch, CPU build. The CUDA wheels are ten times the size and tie the sidecar
+# to a driver version; the language model already has the GPU, and cloning a
+# sentence on CPU is slow but works anywhere.
+torch
+# Not pulled in by anything. coqui-tts imports torchaudio at module scope, and
+# without it `from TTS.api import TTS` fails on an import three levels down.
+torchaudio
+# 5.x removed `isin_mps_friendly`, which coqui-tts still imports, so the whole
+# package fails to load. coqui-tts asks for >=4.57 and does not exclude 5.
+transformers<5
+# The maintained fork. The original `TTS` package caps at Python <3.12 and
+# cannot be installed on 3.13 at all -- which is what made the app's old
+# "pip install TTS" advice impossible as well as unhelpful.
+#
+# [codec] pulls torchcodec, which PyTorch 2.9+ requires for audio IO. Without
+# it the model loads and then cannot read the reference recording.
+coqui-tts[codec]
+
+# Build tooling, so freezing needs no second environment.
+pyinstaller
