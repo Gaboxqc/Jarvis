@@ -127,6 +127,14 @@ WRITABLE: dict[str, dict[str, Any]] = {
         "temperature": float,
         "context_tokens": int,
     },
+    # How long the record of what was said and done is kept. Plain ints rather
+    # than Sensitive: nothing here changes what leaves the machine, and the
+    # direction that needs care is *shortening* the window, which destroys data
+    # -- reported in the reply and visible in the counts, not logged as egress.
+    "retention": {
+        "conversation_days": int,
+        "history_days": int,
+    },
 }
 
 

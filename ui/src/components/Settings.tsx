@@ -15,6 +15,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type Health, type Settings as SettingsData } from "../api";
 import type { Key, Lang } from "../i18n";
 import type { Voice } from "../useVoice";
+import type { LogSummary, RetentionStatus } from "../api";
 import { Accounts } from "./Accounts";
 import { FolderList } from "./FolderList";
 import { Startup } from "./Startup";
@@ -32,6 +33,13 @@ interface Props {
 // Injected by Vite from package.json, so it cannot drift from the build.
 const APP_VERSION = __APP_VERSION__;
 
+/** Bytes as something a person would say. */
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function Settings({ lang, setLang, t, voice }: Props) {
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +52,10 @@ export function Settings({ lang, setLang, t, voice }: Props) {
   const [downloading, setDownloading] = useState(false);
   const [config, setConfig] = useState<SettingsData["current"] | null>(null);
   const [saving, setSaving] = useState(false);
+  const [logs, setLogs] = useState<LogSummary | null>(null);
+  const [logNote, setLogNote] = useState<string | null>(null);
+  const [retention, setRetention] = useState<RetentionStatus | null>(null);
+  const [retentionNote, setRetentionNote] = useState<string | null>(null);
 
   async function downloadModels(includeWake = false) {
     setDownloading(true);
@@ -97,9 +109,13 @@ export function Settings({ lang, setLang, t, voice }: Props) {
 
   const load = useCallback(async () => {
     try {
-      const [h, s] = await Promise.all([api.health(), api.settings()]);
+      const [h, s, l, r] = await Promise.all([
+        api.health(), api.settings(), api.logs(), api.retention(),
+      ]);
       setHealth(h);
       setConfig(s.current);
+      setLogs(l);
+      setRetention(r);
       setError(null);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : t("common.error"));
@@ -145,6 +161,9 @@ export function Settings({ lang, setLang, t, voice }: Props) {
       const result = await api.wipe();
       const total = Object.values(result.removed).reduce((sum, n) => sum + n, 0);
       setNote(t("settings.wiped", { count: total }));
+      // The wipe clears the logs as well, so the card above must stop claiming
+      // there is a folder worth opening.
+      setLogs(await api.logs().catch(() => null));
     } catch (caught) {
       setNote(caught instanceof ApiError ? caught.message : t("common.error"));
     }
@@ -376,6 +395,75 @@ export function Settings({ lang, setLang, t, voice }: Props) {
             <p className="small muted">{t("settings.egressNote")}</p>
           </section>
 
+          <section className="card">
+            <h2 className="small muted">{t("settings.retention")}</h2>
+            <p className="small muted">{t("settings.retentionNote")}</p>
+            <label className="field">
+              <span>{t("settings.retentionDays")}</span>
+              <input
+                type="number"
+                min={0}
+                max={3650}
+                value={retention?.conversation_days ?? 90}
+                disabled={saving}
+                onChange={(e) => {
+                  const days = Math.max(0, Math.min(3650, Number(e.target.value) || 0));
+                  // Both windows move together. Two numbers where one would do
+                  // is a setting people have to think about rather than answer.
+                  setRetention((current) =>
+                    current
+                      ? { ...current, conversation_days: days, history_days: days }
+                      : current,
+                  );
+                }}
+                onBlur={() => {
+                  if (!retention) return;
+                  setRetentionNote(null);
+                  void save({
+                    retention: {
+                      conversation_days: retention.conversation_days,
+                      history_days: retention.conversation_days,
+                    },
+                  })
+                    .then(() => api.retention())
+                    .then(setRetention)
+                    .catch(() => undefined);
+                }}
+              />
+            </label>
+            <p className="small muted">{t("settings.retentionForever")}</p>
+            {retention && (
+              <p className="small">
+                {t("settings.retentionHolding", {
+                  turns: retention.conversation_turns,
+                  actions: retention.action_records,
+                })}
+              </p>
+            )}
+            <button
+              disabled={saving}
+              onClick={() => {
+                setRetentionNote(null);
+                void api
+                  .sweepRetention()
+                  .then((result) => {
+                    const total = Object.values(result.removed).reduce((a, b) => a + b, 0);
+                    setRetentionNote(t("settings.retentionSwept", { count: total }));
+                    return api.retention();
+                  })
+                  .then(setRetention)
+                  .catch(() => setRetentionNote(t("common.error")));
+              }}
+            >
+              {t("settings.retentionSweep")}
+            </button>
+            {retentionNote && (
+              <p className="small" role="status">
+                {retentionNote}
+              </p>
+            )}
+          </section>
+
           {config && (
             <section className="card">
               <h2 className="small muted">{t("settings.files")}</h2>
@@ -399,6 +487,44 @@ export function Settings({ lang, setLang, t, voice }: Props) {
           )}
         </>
       )}
+
+      <section className="card">
+        <h2 className="small muted">{t("settings.diagnostics")}</h2>
+        <p className="small muted">{t("settings.logsNote")}</p>
+        {logs?.exists ? (
+          <>
+            <p className="small">
+              {t("settings.logsWhere", {
+                count: logs.files.length,
+                size: formatBytes(logs.total_bytes),
+                path: logs.directory,
+              })}
+            </p>
+            <button
+              onClick={() => {
+                setLogNote(null);
+                void api
+                  .revealLogs()
+                  .then((opened) => {
+                    // In a browser there is no shell to ask, and the path above
+                    // is the answer. Saying nothing would look like a dead button.
+                    if (!opened) setLogNote(logs.directory);
+                  })
+                  .catch(() => setLogNote(t("settings.logsOpenFailed")));
+              }}
+            >
+              {t("settings.logsOpen")}
+            </button>
+            {logNote && (
+              <p className="small muted" role="status">
+                {logNote}
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="small muted">{t("settings.logsNone")}</p>
+        )}
+      </section>
 
       <section className="card danger-zone">
         <h2 className="small">{t("settings.danger")}</h2>

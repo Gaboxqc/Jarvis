@@ -180,6 +180,35 @@ def test_health_reports_not_ok_when_no_skills_loaded(workspace, monkeypatch):
     assert "No skills loaded" in (health["problem"] or "")
 
 
+def test_health_reports_which_backend_is_running(workspace):
+    """It used to report 0.1.0 forever, because that string was typed into the
+    FastAPI constructor and never touched again. After an update, "which build
+    is this" is the first question, and this endpoint could not answer it."""
+    from fastapi.testclient import TestClient
+
+    from app import __version__
+    from app import main as main_module
+
+    with TestClient(main_module.app) as client:
+        health = client.get("/health").json()
+
+    assert health["version"] == __version__
+    assert health["version"] != "0.1.0"
+
+
+def test_the_backend_version_is_one_publish_py_checks(workspace):
+    """Six files carry the version now. A seventh that nothing checks is how
+    they start disagreeing again."""
+    sys.path.insert(0, str(PROJECT / "installer"))
+    import publish
+
+    from app import __version__
+
+    checked = dict(publish.VERSION_FILES)
+    assert "backend/app/__init__.py" in checked
+    assert publish.agreed_version() == __version__
+
+
 def test_health_is_ok_with_a_real_skill_set(workspace):
     from fastapi.testclient import TestClient
 

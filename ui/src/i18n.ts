@@ -202,6 +202,21 @@ const STRINGS = {
     "startup.note":
       "Opens minimised to the tray. Without this, the Ctrl+Alt+K hotkey does nothing until you launch Kai yourself.",
     "settings.language": "Language",
+    "settings.retention": "How long Kai keeps the record",
+    "settings.retentionNote":
+      "Conversations and action history older than this are removed when Kai starts and stops. Memories, tasks, notes and recordings are never removed on a timer — you asked for those, and each one is deletable on its own.",
+    "settings.retentionDays": "Days to keep",
+    "settings.retentionForever": "0 keeps everything forever.",
+    "settings.retentionHolding": "Holding {turns} conversation turn(s) and {actions} action(s).",
+    "settings.retentionSweep": "Apply now",
+    "settings.retentionSwept": "Removed {count} record(s).",
+    "settings.diagnostics": "Diagnostics",
+    "settings.logsNote":
+      "Kai writes a log while it runs. Mail addresses and your home folder are masked before anything is written, so it is safe to attach to a bug report.",
+    "settings.logsWhere": "{count} file(s), {size} — {path}",
+    "settings.logsNone": "Nothing logged yet.",
+    "settings.logsOpen": "Open log folder",
+    "settings.logsOpenFailed": "Couldn't open the folder. The path is above.",
     "settings.danger": "Delete all local data",
     "settings.dangerNote":
       "Removes every conversation, memory, action record, reminder, task, transcript and document index. This cannot be undone.",
@@ -524,6 +539,21 @@ const STRINGS = {
     "startup.note":
       "Se abre minimizado en la bandeja. Sin esto, el atajo Ctrl+Alt+K no hace nada hasta que abras Kai tú mismo.",
     "settings.language": "Idioma",
+    "settings.retention": "Cuánto tiempo guarda Kai el registro",
+    "settings.retentionNote":
+      "Las conversaciones y el historial de acciones más antiguos se eliminan cuando Kai arranca y se cierra. Los recuerdos, tareas, notas y grabaciones nunca se eliminan por tiempo: los pediste tú, y cada uno se puede borrar por separado.",
+    "settings.retentionDays": "Días que se guardan",
+    "settings.retentionForever": "0 lo guarda todo para siempre.",
+    "settings.retentionHolding": "Guardando {turns} turno(s) de conversación y {actions} acción(es).",
+    "settings.retentionSweep": "Aplicar ahora",
+    "settings.retentionSwept": "Se eliminaron {count} registro(s).",
+    "settings.diagnostics": "Diagnóstico",
+    "settings.logsNote":
+      "Kai escribe un registro mientras funciona. Las direcciones de correo y tu carpeta personal se enmascaran antes de escribir nada, así que puedes adjuntarlo a un informe de error.",
+    "settings.logsWhere": "{count} archivo(s), {size} — {path}",
+    "settings.logsNone": "Todavía no hay nada registrado.",
+    "settings.logsOpen": "Abrir la carpeta del registro",
+    "settings.logsOpenFailed": "No se pudo abrir la carpeta. La ruta está arriba.",
     "settings.danger": "Borrar todos los datos locales",
     "settings.dangerNote":
       "Elimina cada conversación, recuerdo, acción, recordatorio, tarea, transcripción e índice. No se puede deshacer.",

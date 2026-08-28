@@ -35,10 +35,11 @@ Every build ships as a release. Not a habit -- the app checks
 `releases/latest/download/latest.json` and nothing else, so a build that is not
 published there does not exist as far as any installed copy is concerned.
 
-1. **Bump the version in five files.** The first three must match or the updater
+1. **Bump the version in six files.** The first three must match or the updater
    compares the wrong numbers; the two lockfiles carry it as well, and leaving
    them behind means the next `npm install` or `cargo build` quietly rewrites
-   them and dirties the tree:
+   them and dirties the tree. The backend carries it too, so `/health` can say
+   which one is running:
 
    ```
    ui/package.json
@@ -46,7 +47,11 @@ published there does not exist as far as any installed copy is concerned.
    ui/src-tauri/Cargo.toml
    ui/src-tauri/Cargo.lock       <- the [[package]] entry named "kai"
    ui/src-tauri/tauri.conf.json
+   backend/app/__init__.py       <- __version__
    ```
+
+   `publish.py` refuses when they disagree, so this is checked rather than
+   remembered.
 
 2. **Build.** The script picks up the signing key automatically:
 

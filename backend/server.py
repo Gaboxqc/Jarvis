@@ -118,10 +118,16 @@ def sidecar_log_config(level: str) -> dict:
         "formatters": {
             "plain": {"format": "%(asctime)s %(levelname)s %(name)s: %(message)s"},
         },
+        # Mail addresses and the user's home directory, masked on the way to
+        # disk. This is the file people are asked to attach to a bug report; the
+        # console handler below is deliberately not filtered, because someone
+        # watching their own terminal is not sharing anything.
+        "filters": {"redact": {"()": "app.diagnostics.Redactor"}},
         "handlers": {
             "file": {
                 "class": "logging.handlers.RotatingFileHandler",
                 "formatter": "plain",
+                "filters": ["redact"],
                 "filename": str(directory / "backend.log"),
                 "maxBytes": 1_000_000,
                 "backupCount": 3,

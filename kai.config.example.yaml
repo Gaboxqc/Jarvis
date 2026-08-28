@@ -107,6 +107,25 @@ actions:
   # Minutes a pending confirmation stays valid before it expires.
   confirmation_ttl_minutes: 10
 
+retention:
+  # How long the record of what was said and done is kept (REQ-26).
+  #
+  # Every turn writes two rows, and every gated action writes one carrying its
+  # parameters and its result -- which for a mail action is a subject line and
+  # an address, and for a file action is a list of your own paths. Nothing used
+  # to remove any of it, and the only control was "delete everything".
+  #
+  # Swept when the app starts and when it stops. Set either to 0 to keep
+  # forever, which is the honest way to turn this off -- picking a number large
+  # enough never to arrive is not a setting, it is a workaround.
+  #
+  # Memory facts, tasks, notes and transcripts are never swept. You asked for
+  # each of those to be kept, they are listed in the app, and each is deletable
+  # on its own; removing them on a timer would be the assistant throwing away
+  # work it was told to hold on to.
+  conversation_days: 90
+  history_days: 90
+
 avatar:
   # The avatar is drawn by Live2D Cubism Core, a proprietary runtime from
   # Live2D Inc. It ships with the app but is licensed separately, and nobody can

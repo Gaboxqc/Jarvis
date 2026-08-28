@@ -46,6 +46,10 @@ VERSION_FILES: list[tuple[str, str]] = [
     ("ui/package-lock.json", r'"version":\s*"([^"]+)"'),
     ("ui/src-tauri/Cargo.toml", r'^version\s*=\s*"([^"]+)"'),
     ("ui/src-tauri/tauri.conf.json", r'"version":\s*"([^"]+)"'),
+    # The backend, which used to report 0.1.0 from /health regardless of what
+    # had been installed. Checked here for the same reason as the rest: a
+    # version that can disagree is a version that eventually does.
+    ("backend/app/__init__.py", r'^__version__\s*=\s*"([^"]+)"'),
 ]
 
 

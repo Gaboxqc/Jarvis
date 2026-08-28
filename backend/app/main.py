@@ -21,7 +21,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.datastructures import Headers
 
-from . import focus, notifications, preferences, security
+from . import __version__, diagnostics, focus, notifications, preferences, retention, security
 from .actions import gate, journal, undo
 from .brain import llm, orchestrator
 from .connectors import setup as connector_setup
@@ -49,6 +49,11 @@ async def lifespan(app: FastAPI):
     security.token()
     load_skills()
     log.info("loaded %d skills", len(catalog()))
+    # Swept at both ends of the process. Startup catches the machine that was
+    # off for a month; shutdown catches the session that has just run for a
+    # week. Neither is enough on its own, and together they mean the window is
+    # honoured without a timer that has to be right.
+    retention.sweep()
     # Without this the API process has no subscriber and a due reminder is
     # consumed with nobody told -- the reminder is lost, not merely late.
     scheduler.subscribe(notifications.on_scheduler_delivery)
@@ -70,14 +75,16 @@ async def lifespan(app: FastAPI):
     finally:
         scheduler.stop()
         scheduler.unsubscribe(notifications.on_scheduler_delivery)
+        retention.sweep()
         # Before closing, and after the scheduler has stopped writing: a
         # checkpoint needs the file to itself, and shutdown is the one moment
-        # that is guaranteed.
+        # that is guaranteed. After the sweep, so the space it freed is actually
+        # reclaimed rather than left in the log.
         db.checkpoint()
         db.close_connection()
 
 
-app = FastAPI(title="Kai", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Kai", version=__version__, lifespan=lifespan)
 
 
 class LocalCredentials:
@@ -1133,6 +1140,10 @@ def health() -> dict[str, Any]:
     # Reporting ok=True there would make the one signal anyone checks a lie.
     return {
         "ok": skill_count > 0,
+        # Which backend is actually running. After an update that is the first
+        # thing worth knowing, and for a long time this endpoint could not say:
+        # it reported the FastAPI app's hardcoded 0.1.0, or nothing at all.
+        "version": __version__,
         "problem": None if skill_count else "No skills loaded - this build is broken.",
         "brain": llm.health(),
         "skills": skill_count,
@@ -1147,7 +1158,40 @@ def health() -> dict[str, Any]:
     }
 
 
+@app.get("/privacy/retention")
+def retention_status() -> dict[str, Any]:
+    """The window, and what is inside it right now — REQ-26."""
+    return retention.describe()
+
+
+@app.post("/privacy/retention/sweep")
+def retention_sweep() -> dict[str, Any]:
+    """Apply the window now rather than waiting for the next start or stop.
+
+    Here because shortening the window should visibly do something. Saving "30
+    days" and being told nothing happened until the next restart reads as a
+    setting that did not take.
+    """
+    return {"removed": retention.sweep()}
+
+
+@app.get("/diagnostics/logs")
+def diagnostic_logs() -> dict[str, Any]:
+    """Where the log is and how big it is — REQ-27.
+
+    Names and sizes, never contents. A log is a file to attach to a bug report,
+    not something to render in a chat window, and serving the text would put a
+    second copy somewhere it was not already.
+    """
+    return diagnostics.summary()
+
+
 @app.post("/privacy/wipe")
 def wipe() -> dict[str, Any]:
     """REQ-26 — the single delete-everything action."""
-    return {"removed": db.wipe_all_local_data()}
+    removed = db.wipe_all_local_data()
+    # The logs are local data too. Leaving them behind after "delete everything"
+    # would leave file paths and account labels on disk under a button that says
+    # it removed them.
+    removed["logs"] = diagnostics.wipe_logs()
+    return {"removed": removed}

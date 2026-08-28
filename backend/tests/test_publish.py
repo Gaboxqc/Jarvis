@@ -26,7 +26,7 @@ import publish  # noqa: E402
 
 @pytest.fixture
 def fake_tree(tmp_path, monkeypatch):
-    """A miniature repo with the five version files and a bundle directory."""
+    """A miniature repo with every version file and a bundle directory."""
 
     def write(version: str) -> None:
         (tmp_path / "ui" / "src-tauri").mkdir(parents=True, exist_ok=True)
@@ -44,6 +44,10 @@ def fake_tree(tmp_path, monkeypatch):
         )
         (tmp_path / "ui" / "src-tauri" / "Cargo.lock").write_text(
             f'[[package]]\nname = "kai"\nversion = "{version}"\n', encoding="utf-8"
+        )
+        (tmp_path / "backend" / "app").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "backend" / "app" / "__init__.py").write_text(
+            f'__version__ = "{version}"\n', encoding="utf-8"
         )
 
     bundle = tmp_path / "bundle"

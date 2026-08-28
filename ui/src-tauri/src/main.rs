@@ -82,6 +82,37 @@ async fn api_token() -> Result<String, String> {
     .map_err(|error| format!("could not read the API token: {error}"))?
 }
 
+/// Open the folder the backend writes its log to.
+///
+/// A command of its own rather than `shell:allow-open` in the capability file.
+/// That permission would let the webview ask the shell to open anything at all,
+/// which is exactly the kind of ability capabilities/default.json says it does
+/// not want to hand out -- "the assistant's capabilities live behind the Action
+/// Gate in the backend, and anything granted here would sit outside it". This
+/// opens one directory, computed here, and takes no argument that could point it
+/// somewhere else.
+/// Explorer directly, rather than the shell plugin's `open`, which is deprecated
+/// in favour of another plugin. One button is not worth a dependency, and this
+/// spawns one named program with a path this function computed -- nothing the
+/// caller supplies reaches it.
+#[tauri::command]
+async fn open_log_folder() -> Result<String, String> {
+    let directory = token_path()
+        .parent()
+        .ok_or("no data directory")?
+        .join("logs");
+    if !directory.is_dir() {
+        return Err(format!("no logs at {}", directory.display()));
+    }
+    // Not `.status()`: explorer.exe returns 1 on success as often as not, so
+    // waiting on the exit code would report every successful open as a failure.
+    std::process::Command::new("explorer.exe")
+        .arg(&directory)
+        .spawn()
+        .map_err(|error| format!("could not open {}: {error}", directory.display()))?;
+    Ok(directory.to_string_lossy().to_string())
+}
+
 fn toggle(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         // Toggle rather than always-show: the same key that summons it should
@@ -168,7 +199,7 @@ fn stop_backend(app: &tauri::AppHandle) {
 fn main() {
     tauri::Builder::default()
         .manage(Backend::default())
-        .invoke_handler(tauri::generate_handler![api_token])
+        .invoke_handler(tauri::generate_handler![api_token, open_log_folder])
         .plugin(tauri_plugin_shell::init())
         // A reminder that only appears inside a visible window is a reminder
         // you miss by having the window hidden -- which is the normal state for

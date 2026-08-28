@@ -162,6 +162,23 @@ class PrivacySettings:
 
 
 @dataclass(frozen=True)
+class RetentionSettings:
+    """How long the record of what was said and done is kept (REQ-26).
+
+    Ninety days rather than forever, and rather than something short. Long
+    enough that "what did I ask you to do about the lease" is still answerable
+    a season later; short enough that a year of daily use does not accumulate
+    into a permanent transcript nobody chose to keep.
+
+    Zero is the honest spelling of "off". Someone who wants the whole record
+    should not have to pick a number large enough never to arrive.
+    """
+
+    conversation_days: int = 90
+    history_days: int = 90
+
+
+@dataclass(frozen=True)
 class ActionSettings:
     pre_approved: tuple[str, ...] = ()
     confirmation_ttl_minutes: int = 10
@@ -256,6 +273,7 @@ class Config:
     actions: ActionSettings
     system: SystemSettings
     documents: DocumentSettings
+    retention: RetentionSettings = field(default_factory=RetentionSettings)
     avatar: AvatarSettings = field(default_factory=AvatarSettings)
     # Raw connector entries (REQ-8, REQ-13). Kept as plain data because
     # connectors/base.py owns their shape, and because they must never hold
@@ -295,6 +313,7 @@ def _build(raw: dict[str, Any], source: Path | None) -> Config:
     system_raw = raw.get("system") or {}
     documents_raw = raw.get("documents") or {}
     avatar_raw = raw.get("avatar") or {}
+    retention_raw = raw.get("retention") or {}
 
     def _paths(entries: Any) -> tuple[Path, ...]:
         resolved: list[Path] = []
@@ -353,6 +372,12 @@ def _build(raw: dict[str, Any], source: Path | None) -> Config:
         actions=ActionSettings(
             pre_approved=tuple(actions_raw.get("pre_approved") or ()),
             confirmation_ttl_minutes=int(actions_raw.get("confirmation_ttl_minutes", 10)),
+        ),
+        retention=RetentionSettings(
+            conversation_days=max(0, int(retention_raw.get(
+                "conversation_days", RetentionSettings.conversation_days))),
+            history_days=max(0, int(retention_raw.get(
+                "history_days", RetentionSettings.history_days))),
         ),
         system=SystemSettings(
             allowed_roots=tuple(roots),

@@ -261,6 +261,20 @@ export interface AccountFields {
   // No password. Not omitted for brevity — it must not exist. See addAccount.
 }
 
+export interface RetentionStatus {
+  conversation_days: number;
+  history_days: number;
+  conversation_turns: number;
+  action_records: number;
+}
+
+export interface LogSummary {
+  directory: string;
+  files: { name: string; size_bytes: number; modified: number }[];
+  total_bytes: number;
+  exists: boolean;
+}
+
 /** One configured account. Contains no secret and never will. */
 export interface Account {
   kind: string;
@@ -575,6 +589,37 @@ export const api = {
     ),
 
   memory: () => request<{ facts: MemoryFact[] }>("/memory"),
+
+  /** The retention window, and what is inside it right now. */
+  retention: () => request<RetentionStatus>("/privacy/retention"),
+
+  /**
+   * Apply the window now.
+   *
+   * Shortening it has to visibly do something: saving "30 days" and being told
+   * nothing happened until the next restart reads as a setting that did not take.
+   */
+  sweepRetention: () =>
+    request<{ removed: Record<string, number> }>("/privacy/retention/sweep", {
+      method: "POST",
+    }),
+
+  /** Where the log is and how big it is. Never its contents — see backend/app/diagnostics.py. */
+  logs: () => request<LogSummary>("/diagnostics/logs"),
+
+  /**
+   * Open the log folder in Explorer.
+   *
+   * Only inside the desktop shell: a browser tab cannot open a folder, and
+   * should not be able to. Resolves false when there is no shell to ask, so the
+   * caller can show the path instead of a button that would do nothing.
+   */
+  revealLogs: async (): Promise<boolean> => {
+    if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return false;
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("open_log_folder");
+    return true;
+  },
   forgetFact: (id: string) =>
     request<unknown>(`/memory/${encodeURIComponent(id)}`, { method: "DELETE" }),
   forgetAll: () => request<unknown>("/memory", { method: "DELETE" }),
