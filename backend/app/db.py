@@ -20,6 +20,51 @@ log = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 1
 
+# How an existing database is brought up to SCHEMA_VERSION.
+#
+# SCHEMA below is `CREATE TABLE IF NOT EXISTS`, which is a no-op against a table
+# that already exists. That is correct for a fresh install and silently wrong for
+# every other one: the first release to add a column would create it on new
+# machines and not on upgraded ones, and the app would start clean for a new user
+# and raise "no such column" for everyone who already had it. Nothing here noticed
+# because SCHEMA_VERSION was written into `meta` and never once read back.
+#
+# So it is read now, and this is where the difference is made up.
+#
+# To change the schema, do both of these in the same commit:
+#
+#   1. edit SCHEMA so it describes the new shape -- that is what a fresh
+#      database is built from, and it must always be the current one
+#   2. bump SCHEMA_VERSION and add the statements that take the previous
+#      version to it here
+#
+# Doing one without the other is what test_migrations.py checks for, because it
+# is the mistake that produces two different schemas depending on when the user
+# installed.
+MIGRATIONS: dict[int, tuple[str, ...]] = {
+    # 2: (
+    #     "ALTER TABLE tasks ADD COLUMN priority INTEGER NOT NULL DEFAULT 0",
+    # ),
+}
+
+
+class MigrationError(Exception):
+    """A migration could not be applied.
+
+    Deliberately not a `sqlite3.DatabaseError`, and the distinction is the whole
+    reason this class exists. `connect()` treats a DatabaseError as a corrupt
+    file and quarantines it -- moves it aside and starts an empty one -- which is
+    the right answer for a disk image that cannot be read and a catastrophe for a
+    file that reads perfectly and merely met a migration with a typo in it. The
+    first version of this code did exactly that: a failing migration destroyed
+    the database it was supposed to upgrade, and the tests caught it.
+
+    So this propagates. The backend does not start, and it says why. The data is
+    intact, the fix is a new build, and nothing has been thrown away in the name
+    of recovering from our own bug.
+    """
+
+
 _local = threading.local()
 _db_path_override: Path | None = None
 
@@ -228,14 +273,110 @@ def _prepare(conn: sqlite3.Connection, path: Path) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+
+    # Read before the schema script runs, because the script creates `meta` and
+    # after it there is no longer any way to tell a database that has never been
+    # stamped from one that has.
+    found = _stored_version(conn)
     conn.executescript(SCHEMA)
+    conn.commit()
+
+    if found is None:
+        # Nothing to migrate: the script above just built the current shape.
+        _stamp(conn, SCHEMA_VERSION)
+    else:
+        _migrate(conn, found)
+    return conn
+
+
+def _stored_version(conn: sqlite3.Connection) -> int | None:
+    """The version this file was last written by, or None if it is new."""
+    try:
+        row = conn.execute("SELECT value FROM meta WHERE key = 'schema_version'").fetchone()
+    except sqlite3.DatabaseError:
+        return None      # no meta table yet, so no database yet
+    if row is None:
+        return None
+    try:
+        return int(row[0])
+    except (TypeError, ValueError):
+        log.warning("unreadable schema_version %r; treating the database as current", row[0])
+        return SCHEMA_VERSION
+
+
+def _stamp(conn: sqlite3.Connection, version: int) -> None:
     conn.execute(
         "INSERT INTO meta(key, value) VALUES('schema_version', ?) "
         "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-        (str(SCHEMA_VERSION),),
+        (str(version),),
     )
     conn.commit()
-    return conn
+
+
+def _migrate(conn: sqlite3.Connection, found: int) -> None:
+    """Walk an existing database up to SCHEMA_VERSION, one step at a time."""
+    if found > SCHEMA_VERSION:
+        # An older build opened a database a newer one wrote. Said out loud and
+        # then left alone: the tables it does not know about are none of its
+        # business, and refusing to start would strand the user's data behind a
+        # version of the app they may no longer have.
+        log.error(
+            "this database was written by a newer version of Kai (schema %d, this build "
+            "understands %d). Carrying on, but consider updating.",
+            found, SCHEMA_VERSION,
+        )
+        return
+
+    # The transactions below are ours, so sqlite3's implicit BEGIN has to be out
+    # of the way -- otherwise it opens one before the first INSERT and the
+    # explicit COMMIT has nothing of its own to close.
+    previous_isolation = conn.isolation_level
+    conn.isolation_level = None
+    try:
+        _apply(conn, found)
+    finally:
+        conn.isolation_level = previous_isolation
+
+
+def _apply(conn: sqlite3.Connection, found: int) -> None:
+    for version in range(found + 1, SCHEMA_VERSION + 1):
+        statements = MIGRATIONS.get(version)
+        if statements is None:
+            # Refusing beats guessing. A missing step means someone bumped
+            # SCHEMA_VERSION without writing the migration, and continuing would
+            # stamp the database as migrated when it is not.
+            raise MigrationError(
+                f"no migration to schema version {version}; this build cannot "
+                f"safely open a version {found} database"
+            )
+
+        # IMMEDIATE takes the write lock up front. Connections are per thread and
+        # any of them may be the one that opens the file first, so two could
+        # otherwise both read the old version and both try to add the same
+        # column. Holding the lock makes the re-read below decisive.
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            if (_stored_version(conn) or 0) >= version:
+                conn.execute("COMMIT")
+                continue
+            for statement in statements:
+                conn.execute(statement)
+            conn.execute(
+                "INSERT INTO meta(key, value) VALUES('schema_version', ?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (str(version),),
+            )
+            conn.execute("COMMIT")
+        except Exception as exc:
+            # The stamp is inside the transaction, so a failure leaves the
+            # database at the version it was actually at rather than claiming a
+            # migration that did not finish.
+            conn.execute("ROLLBACK")
+            log.exception("migration to schema version %d failed", version)
+            # Re-raised as a MigrationError so connect() does not mistake it for
+            # a corrupt file and quarantine a database that is perfectly fine.
+            raise MigrationError(f"migration to schema version {version} failed: {exc}") from exc
+        log.info("migrated the database to schema version %d", version)
 
 
 def checkpoint() -> int:
