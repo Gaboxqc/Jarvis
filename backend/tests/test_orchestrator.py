@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
 
 from app.actions import journal
 from app.brain import llm, orchestrator
@@ -86,7 +85,7 @@ def test_yes_only_works_when_the_client_returns_the_action_id(workspace, monkeyp
 
     # A bare "yes" with no id in hand is just conversation — it must not execute.
     stub_llm(monkeypatch, NO_SKILLS, "Sure, about what?")
-    stray = orchestrator.handle_turn("yes", "t")
+    orchestrator.handle_turn("yes", "t")
     assert journal.get(action_id).status == journal.STATUS_PENDING
     assert (workspace / "a.pdf").exists()
 

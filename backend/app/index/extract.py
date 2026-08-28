@@ -114,7 +114,8 @@ def _extract_docx(path: Path) -> list[Section]:
             continue
         # Word's built-in heading styles are the document's own structure —
         # far better section labels than an arbitrary character offset.
-        if (paragraph.style.name or "").startswith("Heading"):
+        style = paragraph.style
+        if (getattr(style, "name", None) or "").startswith("Heading"):
             flush()
             heading = text
             continue

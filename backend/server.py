@@ -22,7 +22,14 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8756
 
 # Below this, packaging has silently dropped capabilities (see _selftest).
-MIN_EXPECTED_SKILLS = 40
+#
+# Raised from 40 with the skill count at 55. It is not a floor that should be
+# left behind: the point is to catch a *package* going missing, and the smallest
+# one is four skills, so a threshold far below the real count would let the
+# whole comms or system package vanish and still call the build good.
+# test_the_selftest_has_a_meaningful_threshold keeps it honest from both ends --
+# reachable by the real set, and within 75% of it.
+MIN_EXPECTED_SKILLS = 50
 
 
 def ensure_standard_streams() -> None:
@@ -72,6 +79,8 @@ def watch_parent() -> None:
     precisely so an abrupt stop is recoverable. Hanging around to close sockets
     tidily is how the orphan gets created in the first place.
     """
+    _warm_imports_that_deadlock_against_this_thread()
+
     stream = getattr(sys, "stdin", None)
     if stream is None:
         return
@@ -84,6 +93,40 @@ def watch_parent() -> None:
         os._exit(0)
 
     threading.Thread(target=wait, name="parent-watch", daemon=True).start()
+
+
+def _warm_imports_that_deadlock_against_this_thread() -> None:
+    """Import numpy before the watchdog thread exists, because afterwards it
+    cannot be imported at all.
+
+    Measured, not guessed. In a child process with its stdin a pipe, on this
+    machine, with a 180-second ceiling:
+
+        no watchdog thread, then import numpy      ->  completes (11s, loaded)
+        import numpy, then start the thread        ->  completes (21s, loaded)
+        start the thread, then import numpy        ->  never completes
+        start the thread, wait, then import numpy  ->  never completes
+
+    The ordering is the whole of it. Once a thread is blocked reading stdin,
+    `import numpy` does not return -- so a backend that reaches numpy after this
+    point never binds its port, and the desktop app reports an unreachable
+    backend forever. It is not specific to how the thread reads: `sys.stdin.read()`
+    and a raw `os.read(0, 1)` loop behave identically.
+
+    This got in through semantic search, which added numpy to the retrieval path.
+    Importing it lazily was not enough on its own -- that only moves the hang from
+    startup to the first search, which is worse, because the app looks healthy
+    until someone uses it.
+
+    Cheap when it works out: a quarter of a second on an idle machine, once, and
+    every later use is a `sys.modules` hit. Tolerant of numpy being absent,
+    because nothing here requires it -- semantic search is optional and the rest
+    of the app has never needed it.
+    """
+    try:
+        import numpy  # noqa: F401
+    except Exception:  # noqa: BLE001 - an assistant that starts beats a fast import
+        pass
 
 
 def sidecar_log_config(level: str) -> dict:
@@ -118,10 +161,16 @@ def sidecar_log_config(level: str) -> dict:
         "formatters": {
             "plain": {"format": "%(asctime)s %(levelname)s %(name)s: %(message)s"},
         },
+        # Mail addresses and the user's home directory, masked on the way to
+        # disk. This is the file people are asked to attach to a bug report; the
+        # console handler below is deliberately not filtered, because someone
+        # watching their own terminal is not sharing anything.
+        "filters": {"redact": {"()": "app.diagnostics.Redactor"}},
         "handlers": {
             "file": {
                 "class": "logging.handlers.RotatingFileHandler",
                 "formatter": "plain",
+                "filters": ["redact"],
                 "filename": str(directory / "backend.log"),
                 "maxBytes": 1_000_000,
                 "backupCount": 3,
@@ -193,6 +242,18 @@ def main(argv: list[str] | None = None) -> int:
     sidecar = bool(os.environ.get(PARENT_WATCH_ENV))
     if sidecar:
         watch_parent()
+
+    # Before the port opens, so that anything which finds the port listening can
+    # rely on the token file already being there. The desktop shell and the Vite
+    # dev server both read it, and both would otherwise race a backend that had
+    # bound the socket but not yet written the file.
+    from app import security
+
+    security.token()
+    if not sidecar:
+        # A terminal is the one place this is worth saying out loud: whoever
+        # started it by hand is the person who will want to curl it.
+        print(f"API token: {security.token_file()}", file=sys.stderr)
 
     import uvicorn
 

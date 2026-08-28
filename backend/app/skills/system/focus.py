@@ -12,7 +12,7 @@ from typing import Any
 
 from ... import focus
 from ...settings import load_config
-from ..base import Skill, SkillContext, SkillError, SkillParam, SkillResult
+from ..base import Severity, Skill, SkillContext, SkillError, SkillParam, SkillResult
 from .apps import _matching_processes
 
 DEFAULT_MINUTES = 25
@@ -39,7 +39,7 @@ class StartFocusSkill(Skill):
             found.extend(_matching_processes(name))
         return found
 
-    def severity(self, args: dict[str, Any]) -> str:
+    def severity(self, args: dict[str, Any]) -> Severity:
         # Only worth interrupting for if something will actually be closed.
         return "consequential" if self._to_close() else "routine"
 

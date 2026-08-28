@@ -17,6 +17,8 @@ All eleven phases of `tasks.md`:
 | Planning | Reminders, timers, recurrence, missed-reminder replay, tasks/notes |
 | Knowledge | Web search with sources, exact arithmetic, units, currency, time zones |
 | Documents | Q&A over your own PDFs, Word files and notes, with file + page citations |
+| Routines | A trigger and a list of actions, approved once and re-approved when edited |
+| Shortcuts | The same, run by name instead of by time — "run work setup" |
 | Files | Search by name, date or content; safe folder organization, full batch undo |
 | System | Launch/close apps, volume, lock, sleep, focus sessions |
 | Voice | Local speech in and out, wake word, confidence-gated so it asks rather than guesses |
@@ -57,6 +59,23 @@ cd backend && ../.venv/Scripts/python.exe -m uvicorn app.main:app --port 8756
 cd ui && npm install && npm run dev
 ```
 
+**Start them in that order.** The API refuses unauthenticated calls, and the dev
+server reads the token from `%LOCALAPPDATA%\Kai\api-token` once, when it starts.
+The backend writes that file as it comes up, so a dev server started first sees
+nothing and spends the session getting 401s — it says so on the console. Same
+file if you want to drive the API by hand:
+
+```bash
+curl -H "Authorization: Bearer $(cat "$LOCALAPPDATA/Kai/api-token")" http://127.0.0.1:8756/health
+```
+
+The token exists because loopback is not a trust boundary and CORS is not a
+lock: CORS decides whether a page may *read* a reply, never whether the request
+is delivered, and a plain HTML form on any site is a request no browser
+preflights. Without a token, any page you visited while Kai was running could
+wipe your data or strike a skill off the Action Gate. The reasoning is written
+up in `backend/app/security.py`.
+
 Then open http://127.0.0.1:5173. Four sections — chat, memory, history,
 settings — switchable with Ctrl+1…4.
 
@@ -83,6 +102,58 @@ runs local OCR and takes several seconds, which is the cost of not sending your
 display to a cloud vision API. Both happen only when asked — there is no
 watcher, no polling — the capture is announced in the reply, and the image is
 never written anywhere.
+
+## Searching by meaning
+
+Document search and memory recall are keyword-based out of the box: SQLite FTS5
+over the text, token overlap over remembered facts. That is enough for "the
+lease" and not enough for "how much was the deposit" when the lease says
+*security payment*.
+
+Turning on semantic search closes that gap and costs one model:
+
+```bash
+ollama pull nomic-embed-text
+```
+
+274MB, into the Ollama that is already running the language model. Nothing new
+is installed, nothing leaves the machine, and there is a button for it on the
+Documents screen if you would rather not use the terminal.
+
+Both rankings are then produced and merged, rather than one replacing the
+other — keyword search is the better answer for "invoice 2024-118" and semantic
+is the better answer for a paraphrase, and an assistant is asked both kinds of
+question. **Until the model is pulled, search behaves exactly as it did before**;
+that is a tested property, not an intention.
+
+## Routines
+
+`"every weekday at 9, start a focus session and give me the briefing"`.
+
+A routine is a trigger and a list of actions, and the interesting part is what
+happens when one of those actions is something Kai would normally ask about.
+You approve it once, when the routine is created, from a preview that names the
+trigger and every step. That approval is stamped with a fingerprint of exactly
+those steps — so it is narrower than a pre-approval (these arguments, in this
+routine, not "this skill, forever"), and editing the routine revokes it until
+you approve it again.
+
+When it fires, every step goes through the same Action Gate everything else
+does, lands in the same action history, and is undoable as one batch.
+
+## Shortcuts
+
+`"make a shortcut called work setup that opens Slack, VS Code and Spotify"`, then
+`"run work setup"`.
+
+A shortcut is a routine with a name where its trigger time would be, and it
+shares everything else with one — including the approval. You agree once, from a
+preview naming every action, and editing it revokes that until you approve it
+again.
+
+Two names cannot collide, and an ambiguous one asks rather than guesses:
+running the wrong multi-step sequence is exactly the mistake the Action Gate
+exists to prevent, and picking one for you would be making it on your behalf.
 
 ## Recording a meeting
 

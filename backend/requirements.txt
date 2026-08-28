@@ -7,6 +7,32 @@ uvicorn[standard]==0.41.0
 pydantic==2.12.4
 httpx==0.28.1
 PyYAML==6.0.3
+# Reading the config is PyYAML; *writing* it is ruamel, because a PyYAML
+# round-trip drops all 74 comments and would quietly delete the config's own
+# documentation the first time anyone flipped a switch in the UI.
+#
+# Undeclared until CI ran for the first time and 37 tests failed on a clean
+# machine with "ruamel.yaml isn't installed". It was present in the developer's
+# virtualenv by hand -- nothing depends on it transitively -- so a fresh
+# `pip install -r requirements.txt` produced an app that could not save a
+# setting, add an account, or record a licence acceptance, and a frozen build
+# from that environment would have shipped the same way.
+ruamel.yaml==0.19.1
+
+# Declared because the app imports them, not because pip would otherwise miss
+# them. All three arrive today as transitive dependencies -- anyio and starlette
+# under FastAPI, numpy under onnxruntime, ctranslate2 and rapidocr -- so nothing
+# is broken as things stand. That is exactly the position ruamel.yaml was in
+# until it wasn't: an import with no declaration behind it is a bug waiting for
+# somebody's dependency tree to shift, and `pip install -r` should install what
+# the code actually uses.
+#
+#   anyio      events.py, for the sampling that must not block the event loop
+#   numpy      voice/audio, screen/capture, voice/cloning, index/embeddings
+#   starlette  main.py, for Headers in the credentials middleware
+anyio==4.14.2
+numpy==2.5.1
+starlette==0.49.3
 python-dateutil==2.9.0.post0
 Pint==0.25
 send2trash==1.8.3
@@ -38,5 +64,6 @@ keyring==25.7.0
 icalendar==7.2.2
 caldav==3.2.1
 
-# dev
-pytest==9.0.1
+# Test and lint tooling lives in requirements-dev.txt, not here. This file is
+# what the frozen build is analysed against, and pytest sitting in it made the
+# test runner an input to a 550MB bundle that has no use for one.

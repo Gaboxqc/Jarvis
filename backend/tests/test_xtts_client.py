@@ -13,7 +13,6 @@ does in the field, and none are reachable by asking the real thing nicely.
 
 from __future__ import annotations
 
-import json
 import sys
 import textwrap
 from pathlib import Path

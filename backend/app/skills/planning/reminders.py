@@ -73,7 +73,7 @@ class ListRemindersSkill(Skill):
     parameters = ()
 
     def run(self, args: dict[str, Any], ctx: SkillContext) -> SkillResult:
-        items = [i for i in store.active_items() if i.kind != store.KIND_ROUTINE]
+        items = [i for i in store.active_items() if i.kind in store.REMINDER_KINDS]
         if not items:
             return SkillResult(ok=True, message="Nothing is scheduled.", data={"reminders": []})
         lines = [f"{index}. {item.describe()}" for index, item in enumerate(items, start=1)]

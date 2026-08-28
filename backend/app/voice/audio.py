@@ -13,8 +13,6 @@ duration of one turn and are dropped afterwards (REQ-26).
 from __future__ import annotations
 
 import logging
-import math
-import time
 from dataclasses import dataclass
 from typing import Any, Callable
 

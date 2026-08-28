@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from email.utils import parsedate_to_datetime
-from typing import Any, Iterator
+from typing import Any
 
 from .base import AuthFailed, ConnectorConfig, ConnectorError
 
@@ -93,8 +93,16 @@ def _connect(config: ConnectorConfig) -> imaplib.IMAP4_SSL:
         raise ConnectorError(f"Mail account '{config.label}' has no host configured.")
     port = config.port or 993
 
+    # The context is passed explicitly, and that is the whole point. Left out,
+    # imaplib falls back to `ssl._create_stdlib_context()`, which sets
+    # check_hostname=False and verify_mode=CERT_NONE -- so any certificate at
+    # all is accepted and anyone able to intercept the connection collects the
+    # password and reads the mailbox. `create_default_context()` is the one that
+    # verifies, and it is what send() twenty lines down has always used.
     try:
-        connection = imaplib.IMAP4_SSL(host, port, timeout=TIMEOUT)
+        connection = imaplib.IMAP4_SSL(
+            host, port, ssl_context=ssl.create_default_context(), timeout=TIMEOUT
+        )
     except Exception as exc:  # noqa: BLE001
         raise ConnectorError(f"Couldn't reach {host}: {exc}") from exc
 
@@ -152,7 +160,7 @@ def _decode(raw: Any) -> str:
     return str(raw).strip()
 
 
-def _extract_body(message: email.message.Message) -> str:
+def _extract_body(message: email.message.EmailMessage) -> str:
     if message.is_multipart():
         for part in message.walk():
             if part.get_content_type() == "text/plain":
@@ -294,6 +302,9 @@ def send(config: ConnectorConfig, message: EmailMessage) -> str:
 
     try:
         context = ssl.create_default_context()
+        # Annotated as the base class: 465 is implicit TLS and 587 is STARTTLS,
+        # and the two branches produce different types for the same variable.
+        server: smtplib.SMTP
         if port == 465:
             server = smtplib.SMTP_SSL(host, port, timeout=TIMEOUT, context=context)
         else:

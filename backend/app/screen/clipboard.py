@@ -13,7 +13,6 @@ from __future__ import annotations
 import ctypes
 import logging
 import os
-from ctypes import wintypes
 from typing import Any
 
 log = logging.getLogger(__name__)

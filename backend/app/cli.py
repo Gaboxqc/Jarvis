@@ -9,7 +9,6 @@ nothing pending does nothing at all.
 from __future__ import annotations
 
 import sys
-from typing import Any
 
 from rich.console import Console
 from rich.panel import Panel
@@ -177,6 +176,14 @@ def _record(argument: str) -> None:
             transcript = capture.stop()
         except capture.CaptureError as exc:
             console.print(f"[yellow]{exc}[/yellow]")
+            return
+        if transcript is None:
+            # stop() raises when nothing is recording, so None means the row is
+            # gone -- a /wipe or a delete while the meeting was still running.
+            # Rare, and the recording is lost either way; the difference is
+            # whether that arrives as a sentence or as a traceback (REQ-27).
+            # The API has always said this; the CLI used to crash instead.
+            console.print("[yellow]The recording stopped, but nothing was saved.[/yellow]")
             return
         console.print(f"[dim]{transcript.word_count} words transcribed. Summarising...[/dim]")
         with console.status("[dim]thinking...[/dim]", spinner="dots"):
@@ -453,8 +460,8 @@ def _handle_command(command: str) -> bool:
         case "/health":
             _print_health()
         case "/undo":
-            result = undo.undo_last()
-            console.print(f"[{'green' if result.ok else 'red'}]{result.message}[/]")
+            undone = undo.undo_last()
+            console.print(f"[{'green' if undone.ok else 'red'}]{undone.message}[/]")
         case "/wipe":
             console.print("[bold red]Delete all local data — conversations, memories, "
                           "history, reminders, tasks?[/bold red]")

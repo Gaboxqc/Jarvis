@@ -202,6 +202,43 @@ const STRINGS = {
     "startup.note":
       "Opens minimised to the tray. Without this, the Ctrl+Alt+K hotkey does nothing until you launch Kai yourself.",
     "settings.language": "Language",
+    "documents.semantic": "Search by meaning",
+    "documents.semanticNote":
+      "Keyword search can't answer “how much was the deposit” about a lease that says “security payment”. This adds meaning-based search alongside it — an exact match still wins where there is one.",
+    "documents.semanticOff":
+      "Needs a {size} MB model ({model}), into the Ollama you already run. Nothing leaves your machine.",
+    "documents.semanticOn": "On — {embedded} of {chunks} passage(s) indexed by meaning.",
+    "documents.semanticCatchUp":
+      "On — {embedded} of {chunks} passage(s) so far. The rest are indexed in the background.",
+    "documents.semanticInstall": "Download and turn on",
+    "documents.semanticInstalling": "Downloading…",
+    "planner.shortcuts": "Shortcuts",
+    "planner.noShortcuts":
+      "No shortcuts yet. Ask in chat — “make a shortcut called work setup that opens Slack and VS Code”.",
+    "planner.shortcutRun": "Run",
+    "planner.routines": "Routines",
+    "planner.noRoutines": "No routines yet. Ask in chat — “every weekday at 9, give me the briefing”.",
+    "planner.routineSteps": "{count} step(s)",
+    "planner.routineNeedsApproval": "Changed since you approved it — its gated steps are being skipped.",
+    "planner.routineApprove": "Approve",
+    "planner.routineRun": "Run now",
+    "planner.routineRan": "{ran} step(s) ran, {skipped} skipped.",
+    "planner.routineDeleteConfirm": "Delete this routine?",
+    "settings.retention": "How long Kai keeps the record",
+    "settings.retentionNote":
+      "Conversations and action history older than this are removed when Kai starts and stops. Memories, tasks, notes and recordings are never removed on a timer — you asked for those, and each one is deletable on its own.",
+    "settings.retentionDays": "Days to keep",
+    "settings.retentionForever": "0 keeps everything forever.",
+    "settings.retentionHolding": "Holding {turns} conversation turn(s) and {actions} action(s).",
+    "settings.retentionSweep": "Apply now",
+    "settings.retentionSwept": "Removed {count} record(s).",
+    "settings.diagnostics": "Diagnostics",
+    "settings.logsNote":
+      "Kai writes a log while it runs. Mail addresses and your home folder are masked before anything is written, so it is safe to attach to a bug report.",
+    "settings.logsWhere": "{count} file(s), {size} — {path}",
+    "settings.logsNone": "Nothing logged yet.",
+    "settings.logsOpen": "Open log folder",
+    "settings.logsOpenFailed": "Couldn't open the folder. The path is above.",
     "settings.danger": "Delete all local data",
     "settings.dangerNote":
       "Removes every conversation, memory, action record, reminder, task, transcript and document index. This cannot be undone.",
@@ -524,6 +561,43 @@ const STRINGS = {
     "startup.note":
       "Se abre minimizado en la bandeja. Sin esto, el atajo Ctrl+Alt+K no hace nada hasta que abras Kai tú mismo.",
     "settings.language": "Idioma",
+    "documents.semantic": "Buscar por significado",
+    "documents.semanticNote":
+      "La búsqueda por palabras no puede responder “cuánto era el depósito” si el contrato dice “fianza”. Esto añade búsqueda por significado junto a la otra — una coincidencia exacta sigue ganando cuando la hay.",
+    "documents.semanticOff":
+      "Necesita un modelo de {size} MB ({model}), dentro del Ollama que ya usas. Nada sale de tu equipo.",
+    "documents.semanticOn": "Activada — {embedded} de {chunks} fragmento(s) indexados por significado.",
+    "documents.semanticCatchUp":
+      "Activada — {embedded} de {chunks} fragmento(s) por ahora. El resto se indexa en segundo plano.",
+    "documents.semanticInstall": "Descargar y activar",
+    "documents.semanticInstalling": "Descargando…",
+    "planner.shortcuts": "Atajos",
+    "planner.noShortcuts":
+      "Todavía no hay atajos. Pídelo en el chat: “crea un atajo llamado configuración de trabajo que abra Slack y VS Code”.",
+    "planner.shortcutRun": "Ejecutar",
+    "planner.routines": "Rutinas",
+    "planner.noRoutines": "Todavía no hay rutinas. Pídelo en el chat: “cada día laborable a las 9, dame el resumen”.",
+    "planner.routineSteps": "{count} paso(s)",
+    "planner.routineNeedsApproval": "Cambió desde que la aprobaste — sus pasos con confirmación se están omitiendo.",
+    "planner.routineApprove": "Aprobar",
+    "planner.routineRun": "Ejecutar ahora",
+    "planner.routineRan": "{ran} paso(s) ejecutados, {skipped} omitidos.",
+    "planner.routineDeleteConfirm": "¿Eliminar esta rutina?",
+    "settings.retention": "Cuánto tiempo guarda Kai el registro",
+    "settings.retentionNote":
+      "Las conversaciones y el historial de acciones más antiguos se eliminan cuando Kai arranca y se cierra. Los recuerdos, tareas, notas y grabaciones nunca se eliminan por tiempo: los pediste tú, y cada uno se puede borrar por separado.",
+    "settings.retentionDays": "Días que se guardan",
+    "settings.retentionForever": "0 lo guarda todo para siempre.",
+    "settings.retentionHolding": "Guardando {turns} turno(s) de conversación y {actions} acción(es).",
+    "settings.retentionSweep": "Aplicar ahora",
+    "settings.retentionSwept": "Se eliminaron {count} registro(s).",
+    "settings.diagnostics": "Diagnóstico",
+    "settings.logsNote":
+      "Kai escribe un registro mientras funciona. Las direcciones de correo y tu carpeta personal se enmascaran antes de escribir nada, así que puedes adjuntarlo a un informe de error.",
+    "settings.logsWhere": "{count} archivo(s), {size} — {path}",
+    "settings.logsNone": "Todavía no hay nada registrado.",
+    "settings.logsOpen": "Abrir la carpeta del registro",
+    "settings.logsOpenFailed": "No se pudo abrir la carpeta. La ruta está arriba.",
     "settings.danger": "Borrar todos los datos locales",
     "settings.dangerNote":
       "Elimina cada conversación, recuerdo, acción, recordatorio, tarea, transcripción e índice. No se puede deshacer.",

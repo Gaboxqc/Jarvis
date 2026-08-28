@@ -29,6 +29,9 @@ from pathlib import Path
 
 import pytest
 
+from app import security
+from tests.conftest import TEST_API_TOKEN
+
 BACKEND = Path(__file__).resolve().parents[1]
 SERVER = BACKEND / "server.py"
 PORT = 8796
@@ -39,8 +42,17 @@ REQUESTS = 200
 
 
 def _probe(timeout: float) -> bool:
+    # Credentials on every probe, because the API refuses without them
+    # (app/security.py). Worth noting what this makes the test cover for free:
+    # everything else exercises authentication through TestClient, and this is
+    # the one place a real uvicorn process on a real socket has to accept a real
+    # token before the test can proceed at all.
+    request = urllib.request.Request(
+        f"http://127.0.0.1:{PORT}/state",
+        headers={"Authorization": f"Bearer {TEST_API_TOKEN}"},
+    )
     try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{PORT}/state", timeout=timeout) as r:
+        with urllib.request.urlopen(request, timeout=timeout) as r:
             r.read()
         return True
     except Exception:
@@ -51,6 +63,9 @@ def _probe(timeout: float) -> bool:
 def test_the_sidecar_survives_a_parent_that_never_reads_its_output(tmp_path):
     env = {
         **os.environ,
+        # Named rather than merely inherited: the probes above authenticate with
+        # this exact value, and a child that minted its own would refuse them.
+        security.API_TOKEN_ENV: TEST_API_TOKEN,
         "KAI_NO_BACKGROUND_SCAN": "1",
         "KAI_DATA_DIR": str(tmp_path),
         # What the desktop app sets. It selects file logging, which is the fix.

@@ -1,0 +1,127 @@
+# Run the checks that already existed but nothing was running.
+#
+# There were 6,700 lines of tests and no CI, and build.ps1 gated a release on
+# the freeze self-test without ever invoking pytest. The cost of that was not
+# hypothetical: the full suite had been red-by-timeout for as long as the XTTS
+# environment existed -- one test walking 43,853 files of PyTorch -- and nobody
+# found out until it was run deliberately.
+#
+# windows-latest because this is a Windows desktop app. The paths, the Start
+# Menu lookups, ctypes.windll, WASAPI and the packaging are all Windows, and a
+# green Linux run would be a statement about code nobody ships.
+
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # A second push supersedes the first: the answer that matters is about the
+  # newest commit, and a queue of stale runs is how people learn to ignore CI.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        # The signing-key guard asks `git ls-files` what is tracked, so the
+        # checkout has to be a real repository rather than an exported tree.
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Install
+        run: python -m pip install -r backend/requirements-dev.txt
+
+      - name: Lint
+        run: python -m ruff check .
+
+      - name: Types
+        run: python -m mypy --config-file mypy.ini backend/app
+
+      - name: Tests
+        working-directory: backend
+        # No Ollama here, and none needed: the turn loop is tested against a
+        # stubbed model, and the tests that would touch a real one are marked
+        # slow and skip themselves when the models are absent.
+        run: python -m pytest
+
+  ui:
+    name: Desktop UI
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Types
+        run: npx tsc --noEmit
+
+      - name: Tests
+        run: npm test
+
+      - name: Build
+        # Also the check that vite.config.ts still holds together, and that the
+        # dev-server token plugin stays out of a production bundle.
+        run: npx vite build
+
+  shell:
+    name: Tauri shell
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # No toolchain action: the windows-latest image ships rustup and a stable
+      # toolchain already, and every third-party action in a workflow is another
+      # thing that can push code into a build that signs installers.
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ui/src-tauri/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('ui/src-tauri/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      - name: Stand in for the frozen backend
+        # tauri.conf.json declares `resources/kai-backend/**/*`, which is the
+        # PyInstaller output -- 550MB, gitignored, produced by build.ps1. Absent
+        # from a checkout, tauri-build fails the glob before rustc is reached.
+        # This job asks whether the Rust compiles, so a placeholder is the
+        # honest stand-in; the real bundling is build.ps1's job.
+        run: |
+          New-Item -ItemType Directory -Force ui/src-tauri/resources/kai-backend | Out-Null
+          Set-Content ui/src-tauri/resources/kai-backend/placeholder.txt "not the real backend"
+
+      - name: Check
+        working-directory: ui/src-tauri
+        # `cargo check`, not `tauri build`: this is about whether the Rust
+        # compiles, and a full bundle needs the frozen backend staged beside it.
+        run: cargo check --locked

@@ -162,6 +162,23 @@ class PrivacySettings:
 
 
 @dataclass(frozen=True)
+class RetentionSettings:
+    """How long the record of what was said and done is kept (REQ-26).
+
+    Ninety days rather than forever, and rather than something short. Long
+    enough that "what did I ask you to do about the lease" is still answerable
+    a season later; short enough that a year of daily use does not accumulate
+    into a permanent transcript nobody chose to keep.
+
+    Zero is the honest spelling of "off". Someone who wants the whole record
+    should not have to pick a number large enough never to arrive.
+    """
+
+    conversation_days: int = 90
+    history_days: int = 90
+
+
+@dataclass(frozen=True)
 class ActionSettings:
     pre_approved: tuple[str, ...] = ()
     confirmation_ttl_minutes: int = 10
@@ -181,6 +198,13 @@ class DocumentSettings:
     max_file_mb: int = 25
     rescan_minutes: int = 15
     pause_on_battery: bool = True
+    # Semantic retrieval, alongside the keyword index rather than instead of it.
+    # On by default and inert until the model is pulled: `available()` is false
+    # without it, and search is exactly what it was before. The switch is here so
+    # it can be turned off by someone who does not want a second model running,
+    # not because the default is in doubt.
+    semantic_search: bool = True
+    embedding_model: str = "nomic-embed-text"
 
 
 @dataclass(frozen=True)
@@ -256,6 +280,7 @@ class Config:
     actions: ActionSettings
     system: SystemSettings
     documents: DocumentSettings
+    retention: RetentionSettings = field(default_factory=RetentionSettings)
     avatar: AvatarSettings = field(default_factory=AvatarSettings)
     # Raw connector entries (REQ-8, REQ-13). Kept as plain data because
     # connectors/base.py owns their shape, and because they must never hold
@@ -295,6 +320,7 @@ def _build(raw: dict[str, Any], source: Path | None) -> Config:
     system_raw = raw.get("system") or {}
     documents_raw = raw.get("documents") or {}
     avatar_raw = raw.get("avatar") or {}
+    retention_raw = raw.get("retention") or {}
 
     def _paths(entries: Any) -> tuple[Path, ...]:
         resolved: list[Path] = []
@@ -354,6 +380,12 @@ def _build(raw: dict[str, Any], source: Path | None) -> Config:
             pre_approved=tuple(actions_raw.get("pre_approved") or ()),
             confirmation_ttl_minutes=int(actions_raw.get("confirmation_ttl_minutes", 10)),
         ),
+        retention=RetentionSettings(
+            conversation_days=max(0, int(retention_raw.get(
+                "conversation_days", RetentionSettings.conversation_days))),
+            history_days=max(0, int(retention_raw.get(
+                "history_days", RetentionSettings.history_days))),
+        ),
         system=SystemSettings(
             allowed_roots=tuple(roots),
             distracting_apps=tuple(system_raw.get("distracting_apps") or ()),
@@ -367,6 +399,10 @@ def _build(raw: dict[str, Any], source: Path | None) -> Config:
             max_file_mb=int(documents_raw.get("max_file_mb", 25)),
             rescan_minutes=int(documents_raw.get("rescan_minutes", 15)),
             pause_on_battery=bool(documents_raw.get("pause_on_battery", True)),
+            semantic_search=bool(documents_raw.get("semantic_search", True)),
+            embedding_model=str(
+                documents_raw.get("embedding_model", DocumentSettings.embedding_model)
+            ),
         ),
         avatar=AvatarSettings(
             licence_accepted=bool(avatar_raw.get("licence_accepted", False)),

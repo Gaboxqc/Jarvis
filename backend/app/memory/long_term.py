@@ -73,7 +73,14 @@ def add(text: str, category: str = "fact", source_turn_id: str | None = None) ->
         # duplicates that would later contradict each other.
         db.execute("UPDATE memory_facts SET text = ?, category = ? WHERE id = ?",
                    (text, category, existing.id))
-        return MemoryFact(existing.id, text, category, existing.created_at, existing.last_used_at)
+        updated = MemoryFact(
+            existing.id, text, category, existing.created_at, existing.last_used_at
+        )
+        # The wording changed, so the old vector describes text that no longer
+        # exists. Re-embedded rather than left: a stale vector is worse than
+        # none, because it still ranks.
+        embed_fact(updated)
+        return updated
 
     fact_id = str(uuid.uuid4())
     db.execute(
@@ -83,6 +90,10 @@ def add(text: str, category: str = "fact", source_turn_id: str | None = None) ->
     )
     got = get(fact_id)
     assert got is not None
+    # Best effort, and never in the way: with no embedding model this is a
+    # no-op, and remembering something must not fail because an optional model
+    # is missing.
+    embed_fact(got)
     return got
 
 
@@ -100,12 +111,14 @@ def delete(fact_id: str) -> MemoryFact | None:
     if fact is None:
         return None
     db.execute("DELETE FROM memory_facts WHERE id = ?", (fact_id,))
+    db.execute("DELETE FROM fact_vectors WHERE fact_id = ?", (fact_id,))
     return fact
 
 
 def delete_all() -> int:
     count = len(all_facts())
     db.execute("DELETE FROM memory_facts")
+    db.execute("DELETE FROM fact_vectors")
     return count
 
 
@@ -118,7 +131,28 @@ def search(text: str) -> list[MemoryFact]:
 
 
 def relevant(query_text: str, limit: int = 6) -> list[MemoryFact]:
-    """Facts worth putting in front of the model for this turn."""
+    """Facts worth putting in front of the model for this turn.
+
+    Word overlap plus, where the embedding model is pulled, meaning. Overlap
+    alone could not connect "am I allergic to anything" with "peanuts make me
+    ill" -- the two sentences share no word longer than two letters, which is
+    exactly the shape of the thing a person expects an assistant to remember.
+
+    Both rankings are merged, and the lexical one is not dropped: a fact
+    containing the user's landlord's name should still surface when they type
+    that name, and a nearest-neighbour search over eight facts is happy to put
+    something vaguely thematic ahead of an exact match.
+    """
+    lexical = _by_overlap(query_text, limit)
+    semantic = _by_meaning(query_text, limit)
+
+    top = lexical[:limit] if not semantic else _fuse(lexical, semantic)[:limit]
+    for fact in top:
+        db.execute("UPDATE memory_facts SET last_used_at = ? WHERE id = ?", (db.now(), fact.id))
+    return top
+
+
+def _by_overlap(query_text: str, limit: int) -> list[MemoryFact]:
     terms = _tokens(query_text)
     if not terms:
         return []
@@ -137,10 +171,77 @@ def relevant(query_text: str, limit: int = 6) -> list[MemoryFact]:
         scored.append((score, fact))
 
     scored.sort(key=lambda pair: pair[0], reverse=True)
-    top = [fact for _, fact in scored[:limit]]
-    for fact in top:
-        db.execute("UPDATE memory_facts SET last_used_at = ? WHERE id = ?", (db.now(), fact.id))
-    return top
+    return [fact for _, fact in scored[:limit]]
+
+
+def _by_meaning(query_text: str, limit: int) -> list[MemoryFact]:
+    from ..index import embeddings
+
+    vector = embeddings.embed_one(query_text)
+    if vector is None:
+        return []
+
+    rows = db.query(
+        "SELECT fact_id, vector FROM fact_vectors WHERE model = ?", (embeddings.model_name(),)
+    )
+    ranked = embeddings.rank(vector, [(r["fact_id"], r["vector"]) for r in rows], limit)
+
+    facts = []
+    for fact_id, _score in ranked:
+        fact = get(fact_id)
+        if fact is not None:
+            facts.append(fact)
+    return facts
+
+
+def _fuse(*rankings: list[MemoryFact]) -> list[MemoryFact]:
+    """Reciprocal rank fusion, same as index/search.py and for the same reason:
+    the two scores are on scales that cannot be compared, and only the ordering
+    of each is trustworthy."""
+    scores: dict[str, float] = {}
+    seen: dict[str, MemoryFact] = {}
+    for ranking in rankings:
+        for rank, fact in enumerate(ranking):
+            scores[fact.id] = scores.get(fact.id, 0.0) + 1.0 / (60 + rank + 1)
+            seen.setdefault(fact.id, fact)
+    return [seen[fid] for fid in sorted(scores, key=lambda f: scores[f], reverse=True)]
+
+
+def embed_fact(fact: MemoryFact) -> bool:
+    """Store a vector for one fact. False when there is no model to ask."""
+    from ..index import embeddings
+
+    vector = embeddings.embed_one(fact.text)
+    if vector is None:
+        return False
+    db.execute(
+        "INSERT OR REPLACE INTO fact_vectors(fact_id, model, vector) VALUES(?, ?, ?)",
+        (fact.id, embeddings.model_name(), embeddings.pack(vector)),
+    )
+    return True
+
+
+def embed_missing() -> int:
+    """Embed every fact that has no vector for the current model.
+
+    Facts are added one at a time by a person, so this is normally a no-op. It
+    matters exactly twice: the first run after the model is pulled, and after
+    the model is changed.
+    """
+    from ..index import embeddings
+
+    if not embeddings.available():
+        return 0
+
+    rows = db.query(
+        """
+        SELECT f.* FROM memory_facts f
+        LEFT JOIN fact_vectors v ON v.fact_id = f.id AND v.model = ?
+        WHERE v.fact_id IS NULL
+        """,
+        (embeddings.model_name(),),
+    )
+    return sum(1 for row in rows if embed_fact(_row(row)))
 
 
 def _tokens(text: str) -> set[str]:

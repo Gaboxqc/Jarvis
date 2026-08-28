@@ -22,7 +22,8 @@ MIRROR_NAME = "tasks.md"
 
 def _mirror() -> None:
     rows = db.query("SELECT * FROM tasks ORDER BY done ASC, created_at DESC")
-    open_lines, done_lines = [], []
+    open_lines: list[str] = []
+    done_lines: list[str] = []
     for row in rows:
         tags = db.loads(row["tags"], []) or []
         suffix = ("  " + " ".join(f"#{t}" for t in tags)) if tags else ""

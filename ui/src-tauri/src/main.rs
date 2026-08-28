@@ -10,6 +10,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 use tauri::{
@@ -33,6 +34,84 @@ fn hotkey() -> Shortcut {
 /// The spawned backend, kept so it can be shut down with the app.
 #[derive(Default)]
 struct Backend(Mutex<Option<CommandChild>>);
+
+/// Where the backend writes its API token.
+///
+/// Mirrors `data_dir()` in backend/app/settings.py. Duplicated rather than
+/// asked for, because the one process that could answer the question is the one
+/// this is trying to authenticate against.
+fn token_path() -> PathBuf {
+    if let Ok(override_dir) = std::env::var("KAI_DATA_DIR") {
+        return PathBuf::from(override_dir).join("api-token");
+    }
+    let base = std::env::var("LOCALAPPDATA").unwrap_or_default();
+    PathBuf::from(base).join("Kai").join("api-token")
+}
+
+/// Hand the webview the token it needs to talk to the backend.
+///
+/// The API refuses unauthenticated calls, because loopback and CORS are not
+/// access control -- a form on any web page can POST to 127.0.0.1 with no
+/// preflight, and CORS only hides the reply. See backend/app/security.py.
+///
+/// Retried rather than read once. The webview loads from a bundled directory
+/// and is ready almost immediately; the backend is a PyInstaller bundle that
+/// takes seconds to unpack before it writes the file. Asking once would mean a
+/// UI that came up first never authenticated at all.
+///
+/// `async` plus `spawn_blocking` because of where the waiting happens: a
+/// synchronous Tauri command runs on the main thread, so the retry loop would
+/// freeze the window for as long as it ran -- during startup, which is exactly
+/// when a frozen window reads as a broken app.
+#[tauri::command]
+async fn api_token() -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let path = token_path();
+        for _ in 0..100 {
+            if let Ok(contents) = std::fs::read_to_string(&path) {
+                let token = contents.trim();
+                if !token.is_empty() {
+                    return Ok(token.to_string());
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        Err(format!("no API token at {} after 10s", path.display()))
+    })
+    .await
+    .map_err(|error| format!("could not read the API token: {error}"))?
+}
+
+/// Open the folder the backend writes its log to.
+///
+/// A command of its own rather than `shell:allow-open` in the capability file.
+/// That permission would let the webview ask the shell to open anything at all,
+/// which is exactly the kind of ability capabilities/default.json says it does
+/// not want to hand out -- "the assistant's capabilities live behind the Action
+/// Gate in the backend, and anything granted here would sit outside it". This
+/// opens one directory, computed here, and takes no argument that could point it
+/// somewhere else.
+/// Explorer directly, rather than the shell plugin's `open`, which is deprecated
+/// in favour of another plugin. One button is not worth a dependency, and this
+/// spawns one named program with a path this function computed -- nothing the
+/// caller supplies reaches it.
+#[tauri::command]
+async fn open_log_folder() -> Result<String, String> {
+    let directory = token_path()
+        .parent()
+        .ok_or("no data directory")?
+        .join("logs");
+    if !directory.is_dir() {
+        return Err(format!("no logs at {}", directory.display()));
+    }
+    // Not `.status()`: explorer.exe returns 1 on success as often as not, so
+    // waiting on the exit code would report every successful open as a failure.
+    std::process::Command::new("explorer.exe")
+        .arg(&directory)
+        .spawn()
+        .map_err(|error| format!("could not open {}: {error}", directory.display()))?;
+    Ok(directory.to_string_lossy().to_string())
+}
 
 fn toggle(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
@@ -120,6 +199,7 @@ fn stop_backend(app: &tauri::AppHandle) {
 fn main() {
     tauri::Builder::default()
         .manage(Backend::default())
+        .invoke_handler(tauri::generate_handler![api_token, open_log_folder])
         .plugin(tauri_plugin_shell::init())
         // A reminder that only appears inside a visible window is a reminder
         // you miss by having the window hidden -- which is the normal state for

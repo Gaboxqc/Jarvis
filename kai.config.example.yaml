@@ -107,6 +107,25 @@ actions:
   # Minutes a pending confirmation stays valid before it expires.
   confirmation_ttl_minutes: 10
 
+retention:
+  # How long the record of what was said and done is kept (REQ-26).
+  #
+  # Every turn writes two rows, and every gated action writes one carrying its
+  # parameters and its result -- which for a mail action is a subject line and
+  # an address, and for a file action is a list of your own paths. Nothing used
+  # to remove any of it, and the only control was "delete everything".
+  #
+  # Swept when the app starts and when it stops. Set either to 0 to keep
+  # forever, which is the honest way to turn this off -- picking a number large
+  # enough never to arrive is not a setting, it is a workaround.
+  #
+  # Memory facts, tasks, notes and transcripts are never swept. You asked for
+  # each of those to be kept, they are listed in the app, and each is deletable
+  # on its own; removing them on a timer would be the assistant throwing away
+  # work it was told to hold on to.
+  conversation_days: 90
+  history_days: 90
+
 avatar:
   # The avatar is drawn by Live2D Cubism Core, a proprietary runtime from
   # Live2D Inc. It ships with the app but is licensed separately, and nobody can
@@ -162,8 +181,8 @@ connectors:
 
 documents:
   # Folders indexed for document search (REQ-16). Text is extracted and indexed
-  # locally with SQLite full-text search — nothing is uploaded, and no embedding
-  # model is downloaded. Empty means document search is off.
+  # locally with SQLite full-text search — nothing is uploaded. Empty means
+  # document search is off.
   indexed_folders:
     - ~/Documents
   # Files larger than this are skipped rather than stalling a scan.
@@ -172,6 +191,24 @@ documents:
   rescan_minutes: 15
   # Back off while unplugged, so indexing never eats battery (REQ-31).
   pause_on_battery: true
+
+  # Search by meaning as well as by word.
+  #
+  # Keyword search cannot answer "how much was the deposit" about a lease that
+  # says "security payment" -- the words the user reaches for and the words the
+  # document used are frequently not the same words. With this on, both
+  # rankings are produced and merged, so an exact match still wins where there
+  # is one and a paraphrase is found where there is not.
+  #
+  # Inert until the model is pulled, and it is not pulled for you: until then
+  # search is exactly what it was. Turn it on from the Documents screen, or:
+  #
+  #     ollama pull nomic-embed-text
+  #
+  # 274MB, into the Ollama that is already running the language model. Nothing
+  # leaves the machine either way.
+  semantic_search: true
+  embedding_model: nomic-embed-text
 
 system:
   # Folders organize_folder and find_files are allowed to touch (REQ-21, REQ-26).

@@ -17,14 +17,25 @@ from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
+from starlette.datastructures import Headers
 
-from . import focus, notifications, preferences
+from . import (
+    __version__,
+    diagnostics,
+    events,
+    focus,
+    notifications,
+    preferences,
+    retention,
+    security,
+)
 from .actions import gate, journal, undo
 from .brain import llm, orchestrator
 from .connectors import setup as connector_setup
 from .index import scanner as index_scanner
+from .index import search as index_search
 from .index import store as index_store
 from .memory import long_term, short_term
 from .scheduler import service as scheduler
@@ -39,8 +50,20 @@ log = logging.getLogger("kai")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # First, and before the port is serving. The desktop shell and the Vite dev
+    # server both read this file, and both read it once at their own startup --
+    # so creating it lazily on the first request means whichever of them started
+    # first found nothing and spent the whole session unauthenticated. Doing it
+    # here rather than in server.py covers `uvicorn app.main:app` too, which is
+    # how the README says to run it in development.
+    security.token()
     load_skills()
     log.info("loaded %d skills", len(catalog()))
+    # Swept at both ends of the process. Startup catches the machine that was
+    # off for a month; shutdown catches the session that has just run for a
+    # week. Neither is enough on its own, and together they mean the window is
+    # honoured without a timer that has to be right.
+    retention.sweep()
     # Without this the API process has no subscriber and a due reminder is
     # consumed with nobody told -- the reminder is lost, not merely late.
     scheduler.subscribe(notifications.on_scheduler_delivery)
@@ -62,31 +85,92 @@ async def lifespan(app: FastAPI):
     finally:
         scheduler.stop()
         scheduler.unsubscribe(notifications.on_scheduler_delivery)
+        retention.sweep()
         # Before closing, and after the scheduler has stopped writing: a
         # checkpoint needs the file to itself, and shutdown is the one moment
-        # that is guaranteed.
+        # that is guaranteed. After the sweep, so the space it freed is actually
+        # reclaimed rather than left in the log.
         db.checkpoint()
         db.close_connection()
 
 
-app = FastAPI(title="Kai", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Kai", version=__version__, lifespan=lifespan)
+
+
+class LocalCredentials:
+    """Nothing reaches a handler without the token — see app/security.py.
+
+    Loopback and CORS are not access control. A form on any web page can POST
+    here with no preflight and no JavaScript, and before this existed that was
+    enough to wipe every local record, strike a skill off the Action Gate, or
+    start the microphone. The Action Gate cannot help with any of it: it governs
+    what the assistant does with a request, not who was allowed to make one.
+
+    Written as a plain ASGI middleware rather than with `@app.middleware("http")`,
+    which would wrap every response in Starlette's BaseHTTPMiddleware. That class
+    pumps the body through a memory stream, and `/turn/stream` is a server-sent
+    event stream whose entire point is that each token arrives when it is
+    produced. Authentication is a header check; it has no business standing
+    between the generator and the socket.
+    """
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        # The preflight carries no Authorization header -- that is the thing it
+        # is asking permission to send -- so it cannot be judged by one. CORS
+        # sits outside this and has already answered it; this is for whoever
+        # changes the ordering below without reading why it is that way.
+        if scope.get("method") == "OPTIONS":
+            return await self.app(scope, receive, send)
+
+        headers = Headers(scope=scope)
+        rejection: JSONResponse | None = None
+
+        if not security.origin_allowed(headers.get("origin")):
+            rejection = JSONResponse(
+                status_code=403,
+                content={"detail": "Kai only answers its own windows."},
+            )
+        elif not security.authorizes(headers.get("authorization")):
+            rejection = JSONResponse(
+                status_code=401,
+                content={
+                    "detail": (
+                        "Not authorised. Kai's API needs the token in "
+                        f"{security.token_file()}."
+                    )
+                },
+            )
+
+        if rejection is not None:
+            return await rejection(scope, receive, send)
+        await self.app(scope, receive, send)
+
+
+# Added before the CORS middleware on purpose. Starlette builds the stack so the
+# last one added sits outermost, which leaves CORS on the outside where it can
+# answer a preflight without an answer to the question this one asks. Reversed,
+# every preflight would be refused for carrying no credentials and the packaged
+# app would never complete a single call.
+app.add_middleware(LocalCredentials)
 
 # The desktop UI runs from a local dev server, and inside Tauri from a
 # platform-specific origin. Localhost only -- this API reaches the user's files,
 # mail and calendar, so it must never accept a page served from anywhere else
 # (REQ-26).
 #
-# `tauri.localhost` is not optional. Windows WebView2 serves the packaged app
-# from http://tauri.localhost, while tauri:// is the macOS and Linux scheme.
-# Allowing only the latter meant the installed Windows app was CORS-blocked from
+# Allowing only tauri:// meant the installed Windows app was CORS-blocked from
 # its own backend on every request -- it reported "backend unreachable" against a
-# backend that was running and healthy.
+# backend that was running and healthy. The pattern lives in security.py so the
+# middleware above and this policy cannot disagree about what "local" means.
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=(
-        r"^(https?://(localhost|127\.0\.0\.1|tauri\.localhost)(:\d+)?"
-        r"|tauri://localhost)$"
-    ),
+    allow_origin_regex=security.ALLOWED_ORIGIN_PATTERN,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -143,7 +227,7 @@ def turn_stream(request: TurnRequest) -> StreamingResponse:
     then settles on `done`.
     """
 
-    def events() -> Iterator[str]:
+    def frames() -> Iterator[str]:
         try:
             for event in orchestrator.run_turn(
                 request.text,
@@ -172,7 +256,7 @@ def turn_stream(request: TurnRequest) -> StreamingResponse:
             yield f"data: {json.dumps(failed)}\n\n"
 
     return StreamingResponse(
-        events(),
+        frames(),
         media_type="text/event-stream",
         # Without this a proxy or the WebView can hold the whole response back
         # to buffer it, which produces exactly the all-at-once delivery
@@ -347,6 +431,111 @@ class TaskRequest(BaseModel):
     due: str | None = None
 
 
+# -- routines (REQ-12) -----------------------------------------------------
+
+
+@app.get("/routines")
+def list_routines() -> dict[str, Any]:
+    from .scheduler import routines
+
+    return {
+        "routines": [
+            {
+                **item.to_dict(),
+                "steps": routines.describe(item.payload.get("steps") or []),
+                "needs_approval": routines.needs_approval(item),
+            }
+            for item in routines.all_routines()
+        ]
+    }
+
+
+@app.post("/routines/{routine_id}/approve")
+def approve_routine(routine_id: str) -> dict[str, Any]:
+    """Re-approve a routine whose steps changed — REQ-12, REQ-24.
+
+    The other half of "re-prompt if the routine is later edited". Editing
+    revokes the approval; this is where the user gives it again, having seen the
+    steps listed on the screen that offers this button.
+    """
+    from .scheduler import routines
+
+    item = routines.approve(routine_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="No such routine")
+    return {"approved": True, "routine": item.to_dict()}
+
+
+@app.post("/routines/{routine_id}/run")
+def run_routine(routine_id: str) -> dict[str, Any]:
+    """Run a routine now. Useful for checking one does what you meant."""
+    from .scheduler import routines
+
+    item = routines.get(routine_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="No such routine")
+    return routines.run(item)
+
+
+@app.delete("/routines/{routine_id}")
+def delete_routine(routine_id: str) -> dict[str, Any]:
+    from .scheduler import routines
+
+    if not routines.cancel(routine_id):
+        raise HTTPException(status_code=404, detail="No such routine")
+    return {"deleted": routine_id}
+
+
+# -- shortcuts (REQ-22) ----------------------------------------------------
+
+
+@app.get("/shortcuts")
+def list_shortcuts() -> dict[str, Any]:
+    from .scheduler import sequences, shortcuts
+
+    return {
+        "shortcuts": [
+            {
+                "id": item.id,
+                "label": item.label,
+                "steps": sequences.describe(item.payload.get("steps") or []),
+                "needs_approval": shortcuts.needs_approval(item),
+            }
+            for item in shortcuts.all_shortcuts()
+        ]
+    }
+
+
+@app.post("/shortcuts/{shortcut_id}/run")
+def run_shortcut(shortcut_id: str) -> dict[str, Any]:
+    from .scheduler import shortcuts
+
+    item = shortcuts.get(shortcut_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="No such shortcut")
+    return shortcuts.run(item)
+
+
+@app.post("/shortcuts/{shortcut_id}/approve")
+def approve_shortcut(shortcut_id: str) -> dict[str, Any]:
+    """Re-approve a shortcut whose steps changed — REQ-22, REQ-24."""
+    from .scheduler import shortcuts
+
+    item = shortcuts.approve(shortcut_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="No such shortcut")
+    return {"approved": True, "shortcut": item.to_dict()}
+
+
+@app.delete("/shortcuts/{shortcut_id}")
+def delete_shortcut(shortcut_id: str) -> dict[str, Any]:
+    from .scheduler import shortcuts
+
+    if not shortcuts.cancel(shortcut_id):
+        raise HTTPException(status_code=404, detail="No such shortcut")
+    return {"deleted": shortcut_id}
+
+
 @app.get("/tasks")
 def list_tasks(include_done: bool = True) -> dict[str, Any]:
     from .skills.planning import tasks as task_store
@@ -422,9 +611,49 @@ def reindex_documents(force: bool = True) -> dict[str, Any]:
     return index_scanner.scan(force=force).to_dict()
 
 
+@app.get("/documents/semantic")
+def semantic_status() -> dict[str, Any]:
+    """Whether meaning-based search is on, and how much of the index has it.
+
+    "Semantic search is enabled" is not a useful claim on its own: the setting
+    can be on, the model absent, and every query still purely lexical. So the
+    answer carries the model, whether it is actually pulled, and the count.
+    """
+    from .index import embeddings
+
+    coverage = index_search.coverage()
+    return {
+        "enabled": load_config().documents.semantic_search,
+        "model": embeddings.model_name(),
+        "model_installed": embeddings.available(),
+        "download_mb": 274,
+        **coverage,
+    }
+
+
+@app.post("/documents/semantic/model")
+def install_embedding_model() -> dict[str, Any]:
+    """Pull the embedding model. Explicit, and never on startup.
+
+    274MB, which is small next to the language model already required but is
+    still hundreds of megabytes that must not move because somebody opened
+    Settings. Same rule the voice models follow.
+    """
+    from .index import embeddings
+
+    result = embeddings.install()
+    if not result["ok"]:
+        raise HTTPException(status_code=503, detail=result["error"])
+    # Anything already indexed has no vectors yet, and a half-covered index
+    # ranks worse than an uncovered one.
+    index_scanner.scan_in_background(force=True)
+    long_term.embed_missing()
+    return semantic_status()
+
+
 @app.get("/documents/search")
 def search_documents(q: str, limit: int = 5) -> dict[str, Any]:
-    return {"results": [hit.to_dict() for hit in index_store.search(q, limit=limit)]}
+    return {"results": [hit.to_dict() for hit in index_search.search(q, limit=limit)]}
 
 
 @app.delete("/documents/index")
@@ -1031,6 +1260,29 @@ def end_focus() -> dict[str, Any]:
     return {"active": state.active}
 
 
+@app.get("/events")
+async def event_stream() -> StreamingResponse:
+    """Everything the shell used to poll for, pushed instead — REQ-31, REQ-32.
+
+    Presence, notifications and brain health arrived through three timers
+    running for the life of the window: roughly 48 requests a minute with the
+    app idle, to establish forty-seven times out of forty-eight that nothing had
+    changed. See app/events.py for what is sampled and how often.
+
+    /state and /notifications stay. The CLI uses them, they are what this is
+    tested against, and an endpoint that answers one question once is the right
+    shape for a script.
+    """
+    return StreamingResponse(
+        events.stream(),
+        media_type="text/event-stream",
+        # Same reasoning as /turn/stream: without these a proxy or the WebView
+        # holds the response back to buffer it, which turns a live stream into
+        # a very slow poll.
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @app.get("/state")
 def presence_state() -> dict[str, Any]:
     """What the presence indicator shows — REQ-32.
@@ -1066,6 +1318,10 @@ def health() -> dict[str, Any]:
     # Reporting ok=True there would make the one signal anyone checks a lie.
     return {
         "ok": skill_count > 0,
+        # Which backend is actually running. After an update that is the first
+        # thing worth knowing, and for a long time this endpoint could not say:
+        # it reported the FastAPI app's hardcoded 0.1.0, or nothing at all.
+        "version": __version__,
         "problem": None if skill_count else "No skills loaded - this build is broken.",
         "brain": llm.health(),
         "skills": skill_count,
@@ -1080,7 +1336,40 @@ def health() -> dict[str, Any]:
     }
 
 
+@app.get("/privacy/retention")
+def retention_status() -> dict[str, Any]:
+    """The window, and what is inside it right now — REQ-26."""
+    return retention.describe()
+
+
+@app.post("/privacy/retention/sweep")
+def retention_sweep() -> dict[str, Any]:
+    """Apply the window now rather than waiting for the next start or stop.
+
+    Here because shortening the window should visibly do something. Saving "30
+    days" and being told nothing happened until the next restart reads as a
+    setting that did not take.
+    """
+    return {"removed": retention.sweep()}
+
+
+@app.get("/diagnostics/logs")
+def diagnostic_logs() -> dict[str, Any]:
+    """Where the log is and how big it is — REQ-27.
+
+    Names and sizes, never contents. A log is a file to attach to a bug report,
+    not something to render in a chat window, and serving the text would put a
+    second copy somewhere it was not already.
+    """
+    return diagnostics.summary()
+
+
 @app.post("/privacy/wipe")
 def wipe() -> dict[str, Any]:
     """REQ-26 — the single delete-everything action."""
-    return {"removed": db.wipe_all_local_data()}
+    removed = db.wipe_all_local_data()
+    # The logs are local data too. Leaving them behind after "delete everything"
+    # would leave file paths and account labels on disk under a button that says
+    # it removed them.
+    removed["logs"] = diagnostics.wipe_logs()
+    return {"removed": removed}

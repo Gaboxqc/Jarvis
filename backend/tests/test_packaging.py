@@ -139,6 +139,155 @@ def test_the_build_script_gates_on_the_selftest():
     assert "refusing to package a broken build" in script.lower()
 
 
+def test_the_build_script_runs_the_tests_before_it_freezes_anything():
+    """The self-test asks whether packaging kept the skills. That is a much
+    narrower question than whether the app works, and for a long time it was the
+    only one being asked here -- there was no CI either, so a release could ship
+    from a red suite with nothing to say so."""
+    script = (PROJECT / "installer" / "build.ps1").read_text(encoding="utf-8")
+
+    assert "pytest" in script
+    assert "refusing to build an installer" in script.lower()
+    # Ahead of the freeze, not after it: a bundle built from failing code is
+    # wasted work even when it packages correctly.
+    assert script.index("pytest") < script.index("PyInstaller")
+
+
+def test_continuous_integration_runs_everything_the_build_script_does():
+    """The build script is one person's machine. This is the other guard."""
+    workflow = (PROJECT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    for command in ("ruff check", "mypy", "pytest", "tsc --noEmit", "npm test", "cargo check"):
+        assert command in workflow, f"CI does not run {command}"
+
+
+def test_the_watchdog_warms_numpy_before_it_starts_its_thread():
+    """The ordering that keeps the packaged backend able to start.
+
+    Once a thread is blocked reading stdin -- which is how the sidecar notices
+    its parent dying -- `import numpy` never returns. Measured in a child
+    process with a 180-second ceiling:
+
+        no thread, then import numpy               ->  completes
+        import numpy, then start the thread        ->  completes
+        start the thread, then import numpy        ->  never completes
+        start the thread, wait, then import numpy  ->  never completes
+
+    So the backend would never bind its port, or -- with numpy imported lazily,
+    which was the first attempt at a fix -- would start healthy and then wedge
+    on the first semantic search, which is worse.
+
+    Ordering is the fix, and it belongs in watch_parent() because that is the
+    function that creates the hazard.
+    """
+    server_source = SERVER.read_text(encoding="utf-8")
+
+    warm = server_source.index("_warm_imports_that_deadlock_against_this_thread()")
+    thread = server_source.index('threading.Thread(target=wait, name="parent-watch"')
+    assert warm < thread, "numpy must be warmed before the watchdog thread exists"
+
+
+def test_importing_the_app_does_not_pull_in_numpy():
+    """Defence in depth for the deadlock above, and a lean startup besides.
+
+    watch_parent() warming numpy is what makes the backend correct; this keeps
+    numpy off `app.main`'s import graph anyway, so the CLI and the tests do not
+    pay for it and so a future module-scope import is a conversation rather than
+    a surprise. voice/tts.py and screen/capture.py already import it inside
+    functions; index/embeddings.py now does too.
+    """
+    result = subprocess.run(
+        [sys.executable, "-c",
+         "import sys; import app.main; "
+         "sys.exit(1 if 'numpy' in sys.modules else 0)"],
+        cwd=str(PROJECT / "backend"),
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+
+    assert result.returncode == 0, (
+        "importing app.main pulled numpy into sys.modules. Something now imports "
+        "it at module scope, and the packaged backend will hang on startup."
+    )
+
+
+def test_every_third_party_import_is_declared():
+    """The bug CI found on its first run, made impossible to reach CI again.
+
+    ruamel.yaml was imported by preferences.py and connectors/setup.py and
+    declared nowhere. It sat in the developer's virtualenv by hand, so a fresh
+    `pip install -r requirements.txt` produced an app that could not save a
+    setting, add an account or record a licence acceptance -- and a frozen build
+    from that environment shipped the same hole. Thirty-seven tests failed the
+    first time a clean machine ran them.
+
+    Nothing local could have caught it, because "is it installed here" is the
+    wrong question. This asks the right one: does every module the code imports
+    map to a distribution the requirements file names.
+
+    `packages_distributions()` does the module-name-to-pip-name mapping, so this
+    is a lookup rather than a guess about `ruamel.yaml` versus `ruamel-yaml`.
+    """
+    import ast
+    import re
+    from importlib.metadata import packages_distributions
+
+    backend = PROJECT / "backend"
+    first_party = {"app", "server", "tests", "generate_manifest"}
+    # Imported on purpose without being installed alongside the backend.
+    deliberately_absent = {
+        # The cloning engine's own environment -- sidecar/requirements.txt, built
+        # separately because torch is a couple of gigabytes.
+        "TTS", "torch",
+        # The fallback import for ddgs under its older package name.
+        "duckduckgo_search",
+    }
+
+    def normalise(name: str) -> str:
+        return re.sub(r"[-_.]+", "-", name).lower()
+
+    declared = set()
+    for line in (backend / "requirements.txt").read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith(("#", "-")):
+            continue
+        declared.add(normalise(re.split(r"[<>=!\[;]", line)[0].strip()))
+
+    imported: dict[str, str] = {}
+    for path in [backend / "server.py", *sorted((backend / "app").rglob("*.py"))]:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    imported.setdefault(alias.name.split(".")[0], path.name)
+            elif isinstance(node, ast.ImportFrom) and not node.level and node.module:
+                imported.setdefault(node.module.split(".")[0], path.name)
+
+    provides = packages_distributions()
+    missing = []
+    for module, where in sorted(imported.items()):
+        if (
+            module in sys.stdlib_module_names
+            or module in first_party
+            or module in deliberately_absent
+            or module.startswith("_")
+        ):
+            continue
+        distributions = provides.get(module)
+        # Not installed here and not on the deliberate list: this test cannot
+        # say what provides it, and guessing would make it a source of false
+        # failures rather than a guard.
+        if not distributions:
+            continue
+        if not any(normalise(d) in declared for d in distributions):
+            missing.append(f"{module} (from {'/'.join(sorted(distributions))}, in {where})")
+
+    assert not missing, (
+        "imported but not in backend/requirements.txt: " + "; ".join(missing)
+    )
+
+
 # -- health reporting -----------------------------------------------------
 
 
@@ -156,6 +305,35 @@ def test_health_reports_not_ok_when_no_skills_loaded(workspace, monkeypatch):
     assert health["ok"] is False
     assert health["skills"] == 0
     assert "No skills loaded" in (health["problem"] or "")
+
+
+def test_health_reports_which_backend_is_running(workspace):
+    """It used to report 0.1.0 forever, because that string was typed into the
+    FastAPI constructor and never touched again. After an update, "which build
+    is this" is the first question, and this endpoint could not answer it."""
+    from fastapi.testclient import TestClient
+
+    from app import __version__
+    from app import main as main_module
+
+    with TestClient(main_module.app) as client:
+        health = client.get("/health").json()
+
+    assert health["version"] == __version__
+    assert health["version"] != "0.1.0"
+
+
+def test_the_backend_version_is_one_publish_py_checks(workspace):
+    """Six files carry the version now. A seventh that nothing checks is how
+    they start disagreeing again."""
+    sys.path.insert(0, str(PROJECT / "installer"))
+    import publish
+
+    from app import __version__
+
+    checked = dict(publish.VERSION_FILES)
+    assert "backend/app/__init__.py" in checked
+    assert publish.agreed_version() == __version__
 
 
 def test_health_is_ok_with_a_real_skill_set(workspace):
@@ -331,7 +509,6 @@ def test_a_corrupt_database_is_quarantined_and_replaced(tmp_path, monkeypatch):
     storage returns 500, and the app is wedged with no way out from inside it.
     Seen for real after a force-kill during a write.
     """
-    import sqlite3
 
     from app import db
 
@@ -489,7 +666,17 @@ def test_no_private_signing_key_is_in_the_repository():
     #   the header says "rsign", not "minisign" -- Tauri's signer writes rsign
     #       secret keys and minisign public ones
     #
-    # A guard that cannot fire is worse than none, because it is believed.
+    # A guard that cannot fire is worse than none, because it is believed. This
+    # one spent a while in a third way of not firing: it walked the filesystem
+    # and skipped a hardcoded list of directory names containing ".venv", while
+    # the XTTS environment that sidecar/requirements.txt tells you to build is
+    # called ".venv-xtts" -- 43,853 files and 1.4GB of PyTorch, every one of
+    # them read as text and fed to a base64 decoder. The test did not fail, it
+    # simply never finished, and took the whole suite with it.
+    #
+    # `git ls-files` fixes that by being the right question. Only a tracked file
+    # can leak a key, the list is the index rather than the disk, and no future
+    # build directory can defeat it by having a name nobody added to a set.
     import base64
 
     # Assembled rather than written out, or this file matches itself.
@@ -507,19 +694,27 @@ def test_no_private_signing_key_is_in_the_repository():
             return False
         return any(marker in decoded for marker in markers)
 
+    listing = subprocess.run(
+        ["git", "ls-files", "-z"],
+        cwd=PROJECT, capture_output=True, check=True, text=True,
+    )
+    tracked = [name for name in listing.stdout.split("\0") if name]
+    # If this is ever zero the test has stopped checking anything, and would
+    # pass for exactly that reason.
+    assert tracked, "git ls-files returned nothing; this guard is not running"
+
     offenders = []
 
-    for path in PROJECT.rglob("*"):
-        if not path.is_file():
+    for name in tracked:
+        path = PROJECT / name
+        if not path.is_file():  # deleted but still in the index
             continue
-        if any(part in {".git", "node_modules", "target", "dist", "build", ".venv",
-                        "__pycache__"} for part in path.parts):
-            continue
-        if path.suffix in {".png", ".ico", ".icns", ".exe", ".dll", ".pyd", ".wav", ".pyc"}:
+        if path.suffix in {".png", ".ico", ".icns", ".exe", ".dll", ".pyd", ".wav", ".pyc",
+                           ".moc3", ".jpg", ".gif"}:
             continue
         try:
             if looks_like_a_private_key(path.read_text(encoding="utf-8", errors="ignore")):
-                offenders.append(str(path.relative_to(PROJECT)))
+                offenders.append(name)
         except OSError:
             continue
 

@@ -8,10 +8,9 @@
  */
 
 import { useEffect, useState } from "react";
-import { api, type PresenceState } from "../api";
+import type { PresenceState } from "../api";
+import { subscribe, subscribeConnection } from "../events";
 import type { Key, Lang } from "../i18n";
-
-const POLL_MS = 2000;
 
 interface Props {
   busy: boolean;
@@ -23,24 +22,20 @@ export function Presence({ busy, t }: Props) {
   const [state, setState] = useState<PresenceState | null>(null);
   const [offline, setOffline] = useState(false);
 
+  // Pushed, not polled. This asked the backend every two seconds what it was
+  // doing, which for an assistant that is idle most of the day is 30 questions
+  // a minute with the same answer (REQ-31).
   useEffect(() => {
-    let alive = true;
-    async function poll() {
-      try {
-        const next = await api.state();
-        if (alive) {
-          setState(next);
-          setOffline(false);
-        }
-      } catch {
-        if (alive) setOffline(true);
+    const unsubscribe = subscribe((event) => {
+      if (event.type === "state") {
+        const { type: _type, ...rest } = event;
+        setState(rest as PresenceState);
       }
-    }
-    poll();
-    const timer = setInterval(poll, POLL_MS);
+    });
+    const unwatch = subscribeConnection((status) => setOffline(status === "down"));
     return () => {
-      alive = false;
-      clearInterval(timer);
+      unsubscribe();
+      unwatch();
     };
   }, []);
 

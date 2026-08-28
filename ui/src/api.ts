@@ -10,7 +10,9 @@
  * file that could approve something the user was not shown.
  */
 
-const BASE =
+// Exported so events.ts can open the same origin with the same credentials
+// rather than keeping a second copy of either.
+export const BASE =
   (import.meta.env.VITE_KAI_API as string | undefined) ?? "http://127.0.0.1:8756";
 
 export class ApiError extends Error {
@@ -19,27 +21,83 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The bearer token every call carries.
+ *
+ * The backend refuses anything without it, because loopback and CORS are not
+ * access control — a form on any web page can POST to 127.0.0.1 with no
+ * preflight, and CORS only hides the reply. See backend/app/security.py.
+ *
+ * Two ways to get it, and neither of them is "bundle it":
+ *
+ *   in the desktop shell, from the Rust side, which reads the file the backend
+ *       wrote and hands it over on request
+ *   in the browser during development, from VITE_KAI_TOKEN, which vite.config.ts
+ *       fills in from the same file — and only when serving, never when
+ *       building, so a developer's token can never be compiled into a release
+ *
+ * Resolved once, and only a success is kept. A failure returns the empty string
+ * rather than throwing — the call then comes back 401, which is a message about
+ * the backend rather than an exception raised before any request was made — and
+ * it is not cached, so a backend that was still starting up gets asked again on
+ * the next call instead of leaving the window unauthenticated until it reloads.
+ */
+let pendingToken: Promise<string> | null = null;
+
+function readToken(): Promise<string> {
+  if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+    return import("@tauri-apps/api/core").then(({ invoke }) =>
+      invoke<string>("api_token"),
+    );
+  }
+  return Promise.resolve((import.meta.env.VITE_KAI_TOKEN as string | undefined) ?? "");
+}
+
+export async function authHeaders(): Promise<Record<string, string>> {
+  if (!pendingToken) {
+    pendingToken = readToken().catch(() => "");
+  }
+  const value = await pendingToken;
+  if (!value) pendingToken = null;
+  return value ? { Authorization: `Bearer ${value}` } : {};
+}
+
 async function request<T>(
   path: string,
   init?: RequestInit & { timeoutMs?: number },
 ): Promise<T> {
   let response: Response;
-  const { timeoutMs, ...rest } = init ?? {};
+  const { timeoutMs, headers, ...rest } = init ?? {};
   // Capturing an utterance blocks until the speaker stops, then transcribes.
   // The default fetch has no timeout at all, so a wedged microphone would hang
   // the button forever with no way back.
   const abort = timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined;
   try {
     response = await fetch(`${BASE}${path}`, {
-      headers: { "Content-Type": "application/json" },
       signal: abort,
       ...rest,
+      // After the spread, not before: a caller's headers should add to these,
+      // and the credentials are not a caller's to drop.
+      headers: {
+        "Content-Type": "application/json",
+        ...(headers as Record<string, string> | undefined),
+        ...(await authHeaders()),
+      },
     });
   } catch {
     // A dead backend is the common case while developing, and the message the
     // user sees should say what to do about it (REQ-27).
     throw new ApiError(
       "Can't reach Kai. Is the backend running on port 8756?",
+    );
+  }
+  if (response.status === 401 || response.status === 403) {
+    // Distinguished from a dead backend on purpose: the port answered, so
+    // "is it running" is the wrong question and sends people the wrong way.
+    throw new ApiError(
+      "Kai's backend refused this window. Restart the app so it can hand over " +
+        "its access token again.",
+      response.status,
     );
   }
   if (!response.ok) {
@@ -203,6 +261,46 @@ export interface AccountFields {
   url?: string;
   writable?: boolean;
   // No password. Not omitted for brevity — it must not exist. See addAccount.
+}
+
+export interface SemanticStatus {
+  enabled: boolean;
+  model: string;
+  model_installed: boolean;
+  download_mb: number;
+  chunks: number;
+  embedded: number;
+}
+
+export interface RoutineSummary {
+  id: string;
+  label: string;
+  next_fire_at: string | null;
+  recurring: boolean;
+  active: boolean;
+  steps: string[];
+  needs_approval: boolean;
+}
+
+export interface ShortcutSummary {
+  id: string;
+  label: string;
+  steps: string[];
+  needs_approval: boolean;
+}
+
+export interface RetentionStatus {
+  conversation_days: number;
+  history_days: number;
+  conversation_turns: number;
+  action_records: number;
+}
+
+export interface LogSummary {
+  directory: string;
+  files: { name: string; size_bytes: number; modified: number }[];
+  total_bytes: number;
+  exists: boolean;
 }
 
 /** One configured account. Contains no secret and never will. */
@@ -404,7 +502,7 @@ export const api = {
     try {
       response = await fetch(`${BASE}/turn/stream`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({
           text,
           session_id: sessionId,
@@ -519,6 +617,82 @@ export const api = {
     ),
 
   memory: () => request<{ facts: MemoryFact[] }>("/memory"),
+
+  /** Whether search by meaning is on, and how much of the index has it. */
+  semanticStatus: () => request<SemanticStatus>("/documents/semantic"),
+
+  /**
+   * Pull the embedding model. 274MB, so the timeout is generous and the caller
+   * has to show that something is happening.
+   */
+  installEmbeddingModel: () =>
+    request<SemanticStatus>("/documents/semantic/model", {
+      method: "POST",
+      timeoutMs: 30 * 60_000,
+    }),
+
+  routines: () => request<{ routines: RoutineSummary[] }>("/routines"),
+
+  /** Re-approve a routine whose steps changed — the second half of REQ-12. */
+  approveRoutine: (id: string) =>
+    request<{ approved: boolean }>(`/routines/${encodeURIComponent(id)}/approve`, {
+      method: "POST",
+    }),
+
+  runRoutine: (id: string) =>
+    request<{ ran: number; skipped: number }>(`/routines/${encodeURIComponent(id)}/run`, {
+      method: "POST",
+    }),
+
+  deleteRoutine: (id: string) =>
+    request<{ deleted: string }>(`/routines/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  shortcuts: () => request<{ shortcuts: ShortcutSummary[] }>("/shortcuts"),
+
+  runShortcut: (id: string) =>
+    request<{ ran: number; skipped: number }>(`/shortcuts/${encodeURIComponent(id)}/run`, {
+      method: "POST",
+    }),
+
+  /** Re-approve a shortcut whose steps changed — REQ-22, REQ-24. */
+  approveShortcut: (id: string) =>
+    request<{ approved: boolean }>(`/shortcuts/${encodeURIComponent(id)}/approve`, {
+      method: "POST",
+    }),
+
+  deleteShortcut: (id: string) =>
+    request<{ deleted: string }>(`/shortcuts/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  /** The retention window, and what is inside it right now. */
+  retention: () => request<RetentionStatus>("/privacy/retention"),
+
+  /**
+   * Apply the window now.
+   *
+   * Shortening it has to visibly do something: saving "30 days" and being told
+   * nothing happened until the next restart reads as a setting that did not take.
+   */
+  sweepRetention: () =>
+    request<{ removed: Record<string, number> }>("/privacy/retention/sweep", {
+      method: "POST",
+    }),
+
+  /** Where the log is and how big it is. Never its contents — see backend/app/diagnostics.py. */
+  logs: () => request<LogSummary>("/diagnostics/logs"),
+
+  /**
+   * Open the log folder in Explorer.
+   *
+   * Only inside the desktop shell: a browser tab cannot open a folder, and
+   * should not be able to. Resolves false when there is no shell to ask, so the
+   * caller can show the path instead of a button that would do nothing.
+   */
+  revealLogs: async (): Promise<boolean> => {
+    if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return false;
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("open_log_folder");
+    return true;
+  },
   forgetFact: (id: string) =>
     request<unknown>(`/memory/${encodeURIComponent(id)}`, { method: "DELETE" }),
   forgetAll: () => request<unknown>("/memory", { method: "DELETE" }),
@@ -615,7 +789,14 @@ export const api = {
   uploadCloneReference: async (file: File) => {
     const body = new FormData();
     body.append("file", file);
-    const response = await fetch(`${BASE}/voice/clone/reference`, { method: "POST", body });
+    const response = await fetch(`${BASE}/voice/clone/reference`, {
+      method: "POST",
+      // Authorization only. Setting Content-Type here would override the
+      // multipart boundary the browser generates and the server could not
+      // parse the body.
+      headers: await authHeaders(),
+      body,
+    });
     if (!response.ok) {
       let detail = `${response.status} ${response.statusText}`;
       try {

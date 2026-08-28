@@ -152,7 +152,6 @@ export function Chat({ t, onBusyChange, voice }: Props) {
         void maybeSpeak(turn.reply, turn.spoke);
       }
       setPending(null);
-      void api.state().catch(() => undefined);
     } catch (error) {
       push("kai", error instanceof ApiError ? error.message : t("voiceBlocked.failed"), true);
     } finally {

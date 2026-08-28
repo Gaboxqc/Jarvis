@@ -8,12 +8,36 @@
 # serves and answers questions -- a build that is broken in the only way that
 # matters and looks fine from the outside. It happened on the first attempt.
 
-param([switch]$SkipBackend, [switch]$SkipSelfTest)
+param([switch]$SkipBackend, [switch]$SkipSelfTest, [switch]$SkipTests)
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $python = Join-Path $root ".venv\Scripts\python.exe"
 $dist = Join-Path $root "installer\dist\kai-backend"
+
+# Before anything is frozen, because a bundle is only worth building from code
+# that passes. This script has always gated on the self-test, which asks whether
+# packaging kept the skills -- a different and much narrower question than
+# whether the app works. The suite answers the second one, takes under two
+# minutes, and was never run here.
+#
+# -SkipTests exists for the case where you are iterating on the packaging itself
+# and have just run them by hand. It says so, loudly, for the same reason
+# -SkipSelfTest does.
+if ($SkipTests) {
+    Write-Host "==> TESTS SKIPPED - nothing has checked this code" -ForegroundColor Yellow
+}
+else {
+    Write-Host "==> Running the test suite" -ForegroundColor Cyan
+    Push-Location (Join-Path $root "backend")
+    try {
+        & $python -m pytest -q
+        if ($LASTEXITCODE -ne 0) { throw "Tests failed - refusing to build an installer from this" }
+    } finally {
+        Pop-Location
+    }
+    Write-Host "    suite passed" -ForegroundColor Green
+}
 
 if (-not $SkipBackend) {
     Write-Host "==> Freezing the backend" -ForegroundColor Cyan
@@ -111,9 +135,50 @@ if (Test-Path $keyFile) {
     Write-Host "    the installer will work, but cannot be published as an update" -ForegroundColor Yellow
 }
 
+# Authenticode signing — separate from the updater key above, and often confused
+# with it. The updater key is minisign: it proves to an *already installed* Kai
+# that an update came from you. Authenticode proves to *Windows* that the
+# installer did, and it is the only one SmartScreen and Smart App Control read.
+# Signing one does nothing for the other.
+#
+# Driven by a thumbprint in the environment rather than anything in the repo, so
+# no certificate reference is committed and an unsigned build stays possible.
+#
+#     $env:KAI_SIGN_THUMBPRINT = "the thumbprint, no spaces"
+#
+# The timestamp matters as much as the signature: without one, everything you
+# ever shipped stops verifying the day the certificate expires. With one, old
+# installers keep working because the countersignature records that the
+# signature existed while the certificate was valid.
+$signArgs = @()
+$thumbprint = $env:KAI_SIGN_THUMBPRINT
+if (-not $thumbprint) {
+    $found = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert -ErrorAction SilentlyContinue |
+        Sort-Object NotAfter -Descending | Select-Object -First 1
+    if ($found) { $thumbprint = $found.Thumbprint }
+}
+
+if ($thumbprint) {
+    $config = @{
+        bundle = @{
+            windows = @{
+                certificateThumbprint = $thumbprint
+                digestAlgorithm       = "sha256"
+                timestampUrl          = "http://timestamp.digicert.com"
+            }
+        }
+    } | ConvertTo-Json -Depth 6 -Compress
+    $signArgs = @("--config", $config)
+    Write-Host "    signing with certificate $($thumbprint.Substring(0,8))..." -ForegroundColor Green
+} else {
+    Write-Host "    NOT Authenticode signed - no code signing certificate found" -ForegroundColor Yellow
+    Write-Host "    Windows will warn on install, and Smart App Control will refuse" -ForegroundColor Yellow
+    Write-Host "    to run it at all. See docs/RELEASING.md." -ForegroundColor Yellow
+}
+
 Push-Location (Join-Path $root "ui")
 try {
-    npm run tauri build
+    npm run tauri build -- @signArgs
     if ($LASTEXITCODE -ne 0) { throw "Tauri bundle failed" }
 } finally {
     Pop-Location

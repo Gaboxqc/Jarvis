@@ -109,6 +109,10 @@ WRITABLE: dict[str, dict[str, Any]] = {
         "indexed_folders": Folders,
         "max_file_mb": int,
         "pause_on_battery": bool,
+        # Not Sensitive: the embedding model runs in the same local Ollama the
+        # language model already uses, so turning it on sends nothing anywhere
+        # that was not already being sent.
+        "semantic_search": bool,
     },
     "system": {
         # The files the assistant may read and organise. Guarded harder than the
@@ -126,6 +130,14 @@ WRITABLE: dict[str, dict[str, Any]] = {
         "model": str,
         "temperature": float,
         "context_tokens": int,
+    },
+    # How long the record of what was said and done is kept. Plain ints rather
+    # than Sensitive: nothing here changes what leaves the machine, and the
+    # direction that needs care is *shortening* the window, which destroys data
+    # -- reported in the reply and visible in the counts, not logged as egress.
+    "retention": {
+        "conversation_days": int,
+        "history_days": int,
     },
 }
 

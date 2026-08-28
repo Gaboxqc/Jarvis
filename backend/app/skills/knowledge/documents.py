@@ -11,10 +11,9 @@ model even sees the source.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
-from ...index import scanner, store
+from ...index import scanner, search, store
 from ..base import Skill, SkillContext, SkillError, SkillParam, SkillResult
 
 MAX_CHARS = 6000
@@ -53,7 +52,7 @@ class SearchDocumentsSkill(Skill):
                 "ask again shortly, or say 'reindex my documents'."
             )
 
-        hits = store.search(query, limit=limit)
+        hits = search.search(query, limit=limit)
         if not hits:
             # Say nothing matched rather than letting the brain fill the gap.
             note = ""
