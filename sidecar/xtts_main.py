@@ -107,6 +107,48 @@ def _reply(stream, payload: dict) -> None:
     stream.flush()
 
 
+def _read_audio_without_ffmpeg() -> None:
+    """Make XTTS read its reference with soundfile instead of FFmpeg.
+
+    XTTS loads the reference through `torchaudio.load`, which on PyTorch 2.9+
+    dispatches to torchcodec, which is a wrapper around FFmpeg shared
+    libraries. Those are not part of Python at all -- they are a system
+    dependency -- so on a machine without FFmpeg the whole thing fails with
+
+        Could not load libtorchcodec ... OSError: libtorchcodec_core4.dll
+
+    after the model has loaded and 1.8GB has been downloaded. Confirmed to fail
+    identically outside the frozen bundle, so this is not a packaging gap:
+    shipping it would mean every user needs FFmpeg installed to clone a voice.
+
+    soundfile reads the same file with no system dependency at all, and is
+    already here because the rest of the app uses it. This replaces one
+    function and keeps its behaviour: mono downmix, resample, the same range
+    check and the same clipping.
+    """
+    import numpy
+    import soundfile
+    import torch
+    import torchaudio
+    from TTS.tts.models import xtts
+
+    def load_audio(audiopath, sampling_rate):
+        data, rate = soundfile.read(audiopath, dtype="float32", always_2d=True)
+        # soundfile gives (samples, channels); torchaudio's convention is the
+        # other way round, and everything downstream assumes torchaudio's.
+        audio = torch.from_numpy(numpy.ascontiguousarray(data.T))
+
+        if audio.size(0) != 1:
+            audio = torch.mean(audio, dim=0, keepdim=True)
+        if rate != sampling_rate:
+            audio = torchaudio.functional.resample(audio, rate, sampling_rate)
+
+        audio.clip_(-1, 1)
+        return audio
+
+    xtts.load_audio = load_audio
+
+
 class Engine:
     """Loads XTTS once, on the first request that needs it."""
 
@@ -149,6 +191,7 @@ class Engine:
 
         from TTS.api import TTS
 
+        _read_audio_without_ffmpeg()
         self._tts = TTS(MODEL_NAME).to(self.device)
         return self._tts
 

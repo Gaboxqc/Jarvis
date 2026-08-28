@@ -47,6 +47,16 @@ for package in (
     # Needed for audio IO on PyTorch 2.9+, and its absence surfaces as a
     # completely unrelated complaint about a GPT-2 class.
     "torchcodec",
+    # Collected explicitly, not merely un-excluded. TTS reaches it through
+    # importlib.import_module in TTS/vocoder/configs/__init__.py, so nothing
+    # static points at it and PyInstaller's analysis never follows the chain
+    # vocoder.configs -> wavegrad_config -> wavegrad -> generic_utils ->
+    # matplotlib. Dropping it from the exclude list was not enough.
+    "matplotlib",
+    # Same story: coqui-tts imports it through its own dynamic loading, so
+    # nothing static reaches ko_speech_tools.data and the frozen engine fails
+    # at model load rather than at build time.
+    "ko_speech_tools",
 ):
     try:
         found_datas, found_binaries, found_hidden = collect_all(package)
@@ -125,7 +135,12 @@ analysis = Analysis(
     runtime_hooks=[],
     # None of this is reachable from a synthesis request, and each costs
     # hundreds of megabytes in a bundle that is already too big.
-    excludes=["tkinter", "matplotlib", "PySide6", "PyQt5", "pytest", "IPython", "tensorboard"],
+    # matplotlib is NOT excluded, though it looks like an obvious win in a
+    # speech engine. Five files in TTS import it at module scope, so leaving it
+    # out produces `No module named 'matplotlib'` at model load -- after a
+    # ten-minute build. The rest are genuinely unreachable from a synthesis
+    # request: checked by grepping TTS and trainer for each one.
+    excludes=["tkinter", "PySide6", "PyQt5", "pytest", "IPython", "tensorboard"],
     noarchive=False,
 )
 

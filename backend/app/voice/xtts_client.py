@@ -31,7 +31,12 @@ from ..settings import data_dir, load_config
 log = logging.getLogger(__name__)
 
 # Loading the model on the first synthesis is the slow one; a ping is instant.
-READY_TIMEOUT = 30.0
+# A cold start of the frozen engine is not fast: the bundle is some 6,700 files
+# and Windows will happily scan every one of them the first time. Thirty seconds
+# was enough on a warm cache and turned a working engine into "stopped
+# responding" on a cold one -- reported as a timeout, which points at the engine
+# rather than at the clock.
+READY_TIMEOUT = 180.0
 PING_TIMEOUT = 15.0
 SYNTHESIS_TIMEOUT = 300.0
 # The first load downloads the model. On a slow connection that is a long wait
