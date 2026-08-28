@@ -8,12 +8,36 @@
 # serves and answers questions -- a build that is broken in the only way that
 # matters and looks fine from the outside. It happened on the first attempt.
 
-param([switch]$SkipBackend, [switch]$SkipSelfTest)
+param([switch]$SkipBackend, [switch]$SkipSelfTest, [switch]$SkipTests)
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $python = Join-Path $root ".venv\Scripts\python.exe"
 $dist = Join-Path $root "installer\dist\kai-backend"
+
+# Before anything is frozen, because a bundle is only worth building from code
+# that passes. This script has always gated on the self-test, which asks whether
+# packaging kept the skills -- a different and much narrower question than
+# whether the app works. The suite answers the second one, takes under two
+# minutes, and was never run here.
+#
+# -SkipTests exists for the case where you are iterating on the packaging itself
+# and have just run them by hand. It says so, loudly, for the same reason
+# -SkipSelfTest does.
+if ($SkipTests) {
+    Write-Host "==> TESTS SKIPPED - nothing has checked this code" -ForegroundColor Yellow
+}
+else {
+    Write-Host "==> Running the test suite" -ForegroundColor Cyan
+    Push-Location (Join-Path $root "backend")
+    try {
+        & $python -m pytest -q
+        if ($LASTEXITCODE -ne 0) { throw "Tests failed - refusing to build an installer from this" }
+    } finally {
+        Pop-Location
+    }
+    Write-Host "    suite passed" -ForegroundColor Green
+}
 
 if (-not $SkipBackend) {
     Write-Host "==> Freezing the backend" -ForegroundColor Cyan

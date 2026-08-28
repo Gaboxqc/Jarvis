@@ -139,6 +139,28 @@ def test_the_build_script_gates_on_the_selftest():
     assert "refusing to package a broken build" in script.lower()
 
 
+def test_the_build_script_runs_the_tests_before_it_freezes_anything():
+    """The self-test asks whether packaging kept the skills. That is a much
+    narrower question than whether the app works, and for a long time it was the
+    only one being asked here -- there was no CI either, so a release could ship
+    from a red suite with nothing to say so."""
+    script = (PROJECT / "installer" / "build.ps1").read_text(encoding="utf-8")
+
+    assert "pytest" in script
+    assert "refusing to build an installer" in script.lower()
+    # Ahead of the freeze, not after it: a bundle built from failing code is
+    # wasted work even when it packages correctly.
+    assert script.index("pytest") < script.index("PyInstaller")
+
+
+def test_continuous_integration_runs_everything_the_build_script_does():
+    """The build script is one person's machine. This is the other guard."""
+    workflow = (PROJECT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    for command in ("ruff check", "mypy", "pytest", "tsc --noEmit", "npm test", "cargo check"):
+        assert command in workflow, f"CI does not run {command}"
+
+
 # -- health reporting -----------------------------------------------------
 
 
