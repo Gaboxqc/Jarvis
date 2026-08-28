@@ -489,7 +489,17 @@ def test_no_private_signing_key_is_in_the_repository():
     #   the header says "rsign", not "minisign" -- Tauri's signer writes rsign
     #       secret keys and minisign public ones
     #
-    # A guard that cannot fire is worse than none, because it is believed.
+    # A guard that cannot fire is worse than none, because it is believed. This
+    # one spent a while in a third way of not firing: it walked the filesystem
+    # and skipped a hardcoded list of directory names containing ".venv", while
+    # the XTTS environment that sidecar/requirements.txt tells you to build is
+    # called ".venv-xtts" -- 43,853 files and 1.4GB of PyTorch, every one of
+    # them read as text and fed to a base64 decoder. The test did not fail, it
+    # simply never finished, and took the whole suite with it.
+    #
+    # `git ls-files` fixes that by being the right question. Only a tracked file
+    # can leak a key, the list is the index rather than the disk, and no future
+    # build directory can defeat it by having a name nobody added to a set.
     import base64
 
     # Assembled rather than written out, or this file matches itself.
@@ -507,19 +517,27 @@ def test_no_private_signing_key_is_in_the_repository():
             return False
         return any(marker in decoded for marker in markers)
 
+    listing = subprocess.run(
+        ["git", "ls-files", "-z"],
+        cwd=PROJECT, capture_output=True, check=True, text=True,
+    )
+    tracked = [name for name in listing.stdout.split("\0") if name]
+    # If this is ever zero the test has stopped checking anything, and would
+    # pass for exactly that reason.
+    assert tracked, "git ls-files returned nothing; this guard is not running"
+
     offenders = []
 
-    for path in PROJECT.rglob("*"):
-        if not path.is_file():
+    for name in tracked:
+        path = PROJECT / name
+        if not path.is_file():  # deleted but still in the index
             continue
-        if any(part in {".git", "node_modules", "target", "dist", "build", ".venv",
-                        "__pycache__"} for part in path.parts):
-            continue
-        if path.suffix in {".png", ".ico", ".icns", ".exe", ".dll", ".pyd", ".wav", ".pyc"}:
+        if path.suffix in {".png", ".ico", ".icns", ".exe", ".dll", ".pyd", ".wav", ".pyc",
+                           ".moc3", ".jpg", ".gif"}:
             continue
         try:
             if looks_like_a_private_key(path.read_text(encoding="utf-8", errors="ignore")):
-                offenders.append(str(path.relative_to(PROJECT)))
+                offenders.append(name)
         except OSError:
             continue
 
