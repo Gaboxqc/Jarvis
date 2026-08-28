@@ -38,5 +38,6 @@ keyring==25.7.0
 icalendar==7.2.2
 caldav==3.2.1
 
-# dev
-pytest==9.0.1
+# Test and lint tooling lives in requirements-dev.txt, not here. This file is
+# what the frozen build is analysed against, and pytest sitting in it made the
+# test runner an input to a 550MB bundle that has no use for one.

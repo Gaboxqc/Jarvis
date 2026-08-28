@@ -1,0 +1,21 @@
+# Everything needed to test and check the backend, and nothing the shipped app
+# needs. Kept separate from requirements.txt because that file is what the
+# PyInstaller spec collects against: anything listed there is a candidate for
+# the bundle, and a test runner in a 550MB installer is 550MB plus dead weight.
+#
+#   .venv\Scripts\python -m pip install -r backend\requirements-dev.txt
+#
+# It pulls the runtime set in, so this is the only file a developer installs.
+-r requirements.txt
+
+pytest==9.0.1
+
+# Lint and format. Pinned like everything else here -- an unpinned linter turns
+# an unrelated release into a red build on a branch that changed nothing.
+ruff==0.15.4
+
+# Types. Run over app/ only; the tests monkeypatch freely and checking them
+# would report on the mocking rather than on the code.
+mypy==1.19.0
+types-PyYAML==6.0.12.20260815
+types-python-dateutil==2.9.0.20260807
