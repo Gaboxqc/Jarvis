@@ -62,6 +62,10 @@ async def lifespan(app: FastAPI):
     finally:
         scheduler.stop()
         scheduler.unsubscribe(notifications.on_scheduler_delivery)
+        # Before closing, and after the scheduler has stopped writing: a
+        # checkpoint needs the file to itself, and shutdown is the one moment
+        # that is guaranteed.
+        db.checkpoint()
         db.close_connection()
 
 

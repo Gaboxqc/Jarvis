@@ -233,7 +233,12 @@ const STRINGS = {
     "clone.licenceAccept": "Accept and continue",
     "clone.licenceAcceptedOn": "Licence accepted on {date}",
     "clone.engineSize":
-      "The engine is a separate download of roughly 2GB. Nothing is fetched until you ask, and you can remove it again afterwards.",
+      "The engine is a separate download of about 320MB, which took around seven minutes here. Nothing is fetched until you ask, and you can remove it again afterwards.",
+    "clone.slowNote":
+      "Worth knowing before you switch this on: the first reply after starting Kai takes about a minute while the voice loads, and every reply after that takes roughly 30 seconds to speak, because this runs on your processor rather than a server. The built-in voice is instant.",
+    "clone.firstUseNote":
+      "The first time it speaks it also downloads the voice model, which is another 1.8GB. It is kept in your data folder with everything else.",
+    "clone.preparing": "Preparing the voice — this takes about a minute the first time",
     "clone.engineInstall": "Download the voice engine",
     "clone.engineProgress": "Downloading… {percent}%",
     "clone.engine.downloading": "Downloading…",
@@ -550,7 +555,12 @@ const STRINGS = {
     "clone.licenceAccept": "Aceptar y continuar",
     "clone.licenceAcceptedOn": "Licencia aceptada el {date}",
     "clone.engineSize":
-      "El motor es una descarga aparte de unos 2GB. No se descarga nada hasta que lo pidas, y puedes eliminarlo después.",
+      "El motor es una descarga aparte de unos 320MB, que aquí tardó unos siete minutos. No se descarga nada hasta que lo pidas, y puedes eliminarlo después.",
+    "clone.slowNote":
+      "Conviene saberlo antes de activarlo: la primera respuesta después de abrir Kai tarda alrededor de un minuto mientras se carga la voz, y cada respuesta siguiente tarda unos 30 segundos en hablar, porque esto funciona en tu procesador y no en un servidor. La voz integrada es instantánea.",
+    "clone.firstUseNote":
+      "La primera vez que hable también descargará el modelo de voz: otros 1,8GB. Se guarda en tu carpeta de datos junto con todo lo demás.",
+    "clone.preparing": "Preparando la voz: la primera vez tarda alrededor de un minuto",
     "clone.engineInstall": "Descargar el motor de voz",
     "clone.engineProgress": "Descargando… {percent}%",
     "clone.engine.downloading": "Descargando…",

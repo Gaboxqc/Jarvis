@@ -178,6 +178,7 @@ export function VoiceCloning({ t }: Props) {
           {status.packaged && status.licence_accepted && (
             <>
               <p className="small muted">{t("clone.engineSize")}</p>
+              <p className="small muted">{t("clone.firstUseNote")}</p>
               {engine?.state === "downloading" || engine?.state === "verifying" ||
                engine?.state === "installing" ? (
                 <p className="small" role="status">
@@ -221,6 +222,7 @@ export function VoiceCloning({ t }: Props) {
             />
           </label>
           <p className="small muted">{t("clone.consentNote")}</p>
+          <p className="small muted">{t("clone.slowNote")}</p>
 
           {status.consented && (
             <>
