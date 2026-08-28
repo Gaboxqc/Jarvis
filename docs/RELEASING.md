@@ -51,7 +51,7 @@ published there does not exist as far as any installed copy is concerned.
 2. **Build.** The script picks up the signing key automatically:
 
    ```powershell
-   powershell -ExecutionPolicy Bypass -File installeruild.ps1
+   powershell -ExecutionPolicy Bypass -File installer\build.ps1
    ```
 
    It refuses to package a bundle whose self-test fails. Where an Application
@@ -71,7 +71,7 @@ published there does not exist as far as any installed copy is concerned.
    without `--replace` -- each of those produces a release that looks complete
    and cannot update anybody.
 
-   To attach the voice engine: `--asset path	o\kai-xtts-<version>-x64.zip`.
+   To attach the voice engine: `--asset path\to\kai-xtts-<version>-x64.zip`.
 
 4. **Check it from outside.**
 
