@@ -125,11 +125,21 @@ Write-Host "==> Bundling the installer" -ForegroundColor Cyan
 # A build without it still produces a working installer; it just cannot be
 # offered as an update to anyone. That is said out loud rather than failing,
 # because a first-time build on a fresh checkout has no reason to have a key.
+# Deliberately NOT exported into the build. The key has no password, and there
+# is no way to say "no password" through the environment: on Windows, assigning
+# "" to a variable deletes it, so `$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""`
+# leaves Tauri seeing nothing set. It then prompts -- and it reads that prompt
+# from the console device (CONIN$), not stdin, specifically so redirection
+# cannot answer it. Piping an empty line does nothing. A build started by
+# anything that is not a person sitting at a console hangs forever, which is
+# what happened to 0.4.0: silently, after the installer had already been built.
+#
+# So the bundle is produced unsigned and signed afterwards by `tauri signer
+# sign`, where the password is a command-line flag and an empty one can
+# actually be expressed. Same key, same signature, no prompt.
 $keyFile = Join-Path $env:USERPROFILE ".tauri\kai-updater.key"
 if (Test-Path $keyFile) {
-    $env:TAURI_SIGNING_PRIVATE_KEY = Get-Content $keyFile -Raw
-    $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
-    Write-Host "    signing with $keyFile" -ForegroundColor Green
+    Write-Host "    will sign with $keyFile after bundling" -ForegroundColor Green
 } else {
     Write-Host "    no signing key at $keyFile" -ForegroundColor Yellow
     Write-Host "    the installer will work, but cannot be published as an update" -ForegroundColor Yellow
@@ -182,9 +192,33 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Tauri bundle failed" }
 } finally {
     Pop-Location
-    # Out of the environment as soon as it is done with.
-    Remove-Item Env:\TAURI_SIGNING_PRIVATE_KEY -ErrorAction SilentlyContinue
-    Remove-Item Env:\TAURI_SIGNING_PRIVATE_KEY_PASSWORD -ErrorAction SilentlyContinue
+}
+
+# Sign for the updater -- see the note where $keyFile is read for why this is a
+# separate step and not part of the build above.
+if (Test-Path $keyFile) {
+    Write-Host "==> Signing the installer for the updater" -ForegroundColor Cyan
+    $nsis = Join-Path $root "ui/src-tauri/target/release/bundle/nsis"
+    $installers = @(Get-ChildItem -Path $nsis -Filter "*-setup.exe" -ErrorAction SilentlyContinue)
+    if ($installers.Count -eq 0) {
+        throw "Bundling reported success but produced no installer in $nsis"
+    }
+    Push-Location (Join-Path $root "ui")
+    try {
+        foreach ($installer in $installers) {
+            # --password "" is the point of the whole exercise: an empty
+            # password that can actually be expressed, so nothing prompts.
+            npx tauri signer sign --private-key-path $keyFile --password "" $installer.FullName
+            if ($LASTEXITCODE -ne 0) { throw "Signing $($installer.Name) failed" }
+            $sig = "$($installer.FullName).sig"
+            if (-not (Test-Path $sig)) {
+                throw "The signer exited 0 but wrote no $([IO.Path]::GetFileName($sig)) - the update would be rejected by every install"
+            }
+            Write-Host "    signed $($installer.Name)" -ForegroundColor Green
+        }
+    } finally {
+        Pop-Location
+    }
 }
 
 Write-Host "`nInstallers written to ui\src-tauri\target\release\bundle" -ForegroundColor Green
