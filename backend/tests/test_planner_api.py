@@ -196,13 +196,13 @@ def test_focus_reports_what_starting_would_close(client):
 def test_a_focus_session_can_be_started_and_ended(client, monkeypatch):
     """No real process is closed here — that is the point of the patch.
 
-    _to_close is what reaches for the user's running applications, so a test
-    that did not stub it would terminate whatever happened to be open on the
-    machine running the suite.
+    processes_to_close() is what reaches for the user's running applications,
+    so a test that did not stub it would terminate whatever happened to be open
+    on the machine running the suite.
     """
-    from app.skills.system.focus import StartFocusSkill
+    from app.skills.system import focus as focus_skills
 
-    monkeypatch.setattr(StartFocusSkill, "_to_close", staticmethod(lambda: []))
+    monkeypatch.setattr(focus_skills, "processes_to_close", lambda: [])
 
     started = client.post("/focus/start", json={"minutes": 25}).json()
     assert started["active"] is True
@@ -212,9 +212,9 @@ def test_a_focus_session_can_be_started_and_ended(client, monkeypatch):
 
 
 def test_starting_twice_is_refused(client, monkeypatch):
-    from app.skills.system.focus import StartFocusSkill
+    from app.skills.system import focus as focus_skills
 
-    monkeypatch.setattr(StartFocusSkill, "_to_close", staticmethod(lambda: []))
+    monkeypatch.setattr(focus_skills, "processes_to_close", lambda: [])
     client.post("/focus/start", json={"minutes": 25})
 
     response = client.post("/focus/start", json={"minutes": 25})

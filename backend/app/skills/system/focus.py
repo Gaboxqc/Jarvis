@@ -13,9 +13,31 @@ from typing import Any
 from ... import focus
 from ...settings import load_config
 from ..base import Severity, Skill, SkillContext, SkillError, SkillParam, SkillResult
-from .apps import _matching_processes
+from .apps import matching_processes
 
 DEFAULT_MINUTES = 25
+
+
+def processes_to_close() -> list[Any]:
+    """The running processes a focus session would terminate right now.
+
+    A module function rather than a method on the skill, because the question
+    has two askers: the skill, which needs it to decide severity and to write
+    its preview, and GET /focus, which needs it to name the apps before the UI
+    offers a button. That second caller used to reach through
+    `StartFocusSkill._to_close()` -- the API layer calling a private method on
+    a skill class, which is the kind of coupling that makes the skill contract
+    meaningless.
+    """
+    found: list[Any] = []
+    for name in load_config().system.distracting_apps:
+        found.extend(matching_processes(name))
+    return found
+
+
+def would_close() -> list[str]:
+    """Their names, deduplicated and sorted. What a person is shown."""
+    return sorted({(process.info.get("name") or "?") for process in processes_to_close()})
 
 
 class StartFocusSkill(Skill):
@@ -32,20 +54,13 @@ class StartFocusSkill(Skill):
     consequential = True
     reversible = False
 
-    @staticmethod
-    def _to_close() -> list[Any]:
-        found = []
-        for name in load_config().system.distracting_apps:
-            found.extend(_matching_processes(name))
-        return found
-
     def severity(self, args: dict[str, Any]) -> Severity:
         # Only worth interrupting for if something will actually be closed.
-        return "consequential" if self._to_close() else "routine"
+        return "consequential" if processes_to_close() else "routine"
 
     def preview(self, args: dict[str, Any]) -> str:
         minutes = int(args.get("minutes", DEFAULT_MINUTES) or DEFAULT_MINUTES)
-        running = self._to_close()
+        running = processes_to_close()
         if not running:
             return f"Start a {minutes} minute focus session."
         names = sorted({(p.info.get("name") or "?") for p in running})
@@ -63,7 +78,7 @@ class StartFocusSkill(Skill):
             raise SkillError("A focus session needs to be at least a minute.")
 
         closed: list[str] = []
-        for process in self._to_close():
+        for process in processes_to_close():
             try:
                 name = process.info.get("name") or "?"
                 process.terminate()

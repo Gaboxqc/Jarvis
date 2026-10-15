@@ -92,7 +92,14 @@ def _running_processes() -> list[Any]:
     return list(psutil.process_iter(["pid", "name", "exe"]))
 
 
-def _matching_processes(name: str) -> list[Any]:
+def matching_processes(name: str) -> list[Any]:
+    """Running processes whose executable name looks like `name`.
+
+    Public because two other modules need the same answer -- the focus skill,
+    and the endpoint that names what a session would close before offering the
+    button. An underscore on something three callers import is a note saying
+    "do not depend on this" next to three dependencies.
+    """
     needle = name.lower().replace(".exe", "").strip()
     matches = []
     for proc in _running_processes():
@@ -138,7 +145,7 @@ class CloseAppSkill(Skill):
 
     def preview(self, args: dict[str, Any]) -> str:
         app = str(args.get("app", ""))
-        matches = _matching_processes(app)
+        matches = matching_processes(app)
         if not matches:
             return f"Close {app} — but nothing by that name is running right now."
         names = sorted({(p.info.get("name") or "?") for p in matches})
@@ -149,7 +156,7 @@ class CloseAppSkill(Skill):
 
     def run(self, args: dict[str, Any], ctx: SkillContext) -> SkillResult:
         app = str(args["app"]).strip()
-        matches = _matching_processes(app)
+        matches = matching_processes(app)
         if not matches:
             raise SkillError(f"'{app}' doesn't appear to be running.")
 
