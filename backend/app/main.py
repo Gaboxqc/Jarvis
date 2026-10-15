@@ -13,9 +13,9 @@ import os
 from collections.abc import Iterator
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -194,6 +194,69 @@ class SkillCallRequest(BaseModel):
     session_id: str = "default"
 
 
+# Bounds for the query parameters below.
+#
+# Every one of these used to be a bare `int` with a default, which is a
+# different thing from a bound: `?limit=100000000` was a valid request that
+# would read the whole table into a list of dicts and serialise it. The token
+# keeps the open internet out, and the bound keeps an honest mistake -- a UI
+# that computes a page size, a script with an off-by-a-lot -- from taking the
+# assistant down on the machine it is supposed to be helping.
+#
+# They are also the first thing the generated TypeScript client will carry
+# across, so a constraint stated here is a constraint the UI cannot violate
+# without a type error.
+Limit = Annotated[int, Query(ge=1, le=200)]
+SearchQuery = Annotated[str, Query(min_length=1, max_length=500)]
+
+# A voice reference is seconds of speech. 50MB is already far more than one
+# needs -- a minute of 24kHz 16-bit mono is under 3MB -- and the number is kept
+# generous on purpose so a long or needlessly high-quality recording is not
+# refused for being tidy.
+MAX_REFERENCE_BYTES = 50 * 1024 * 1024
+
+# Read in pieces rather than whole, because a size limit enforced after the
+# body has been accepted is not a limit.
+UPLOAD_CHUNK_BYTES = 1024 * 1024
+
+
+async def _read_capped(file: UploadFile, cap: int, what: str) -> bytes:
+    """Read an upload, refusing one that is over `cap`.
+
+    This used to be `await file.read()` followed by a check on `len()`, which
+    reads the entire body first and then decides whether it was allowed to.
+    Starlette spools past a threshold, so the cost was disk rather than memory
+    -- but it was unbounded disk, written before anything had agreed to accept
+    it, and the one caller is an endpoint whose whole input is a file.
+
+    `Content-Length` is checked first because it is free and it lets an honest
+    client be turned away without sending anything. It is a claim rather than a
+    fact, so the chunked read below enforces the same cap on the bytes that
+    actually arrive, and stops at the first chunk that crosses it.
+    """
+    declared = file.size
+    if declared is not None and declared > cap:
+        raise HTTPException(
+            status_code=413,
+            detail=f"That file is too large to be {what} ({declared // (1024 * 1024)}MB).",
+        )
+
+    pieces: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(UPLOAD_CHUNK_BYTES)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > cap:
+            raise HTTPException(
+                status_code=413,
+                detail=f"That file is too large to be {what}.",
+            )
+        pieces.append(chunk)
+    return b"".join(pieces)
+
+
 # -- conversation ---------------------------------------------------------
 
 
@@ -329,7 +392,7 @@ def decline_action(action_id: str, session_id: str = "default") -> dict[str, Any
 
 
 @app.get("/actions/history")
-def action_history(limit: int = 25) -> dict[str, Any]:
+def action_history(limit: Limit = 25) -> dict[str, Any]:
     return {
         "history": [
             {
@@ -586,8 +649,18 @@ def cancel_reminder(reminder_id: str) -> dict[str, Any]:
 
 @app.post("/reminders/tick")
 def force_tick() -> dict[str, Any]:
-    """Deliver anything due right now. Used by tests and by the UI on wake."""
-    return {"delivered": [d.message() for d in scheduler.tick()]}
+    """Deliver anything due right now. Used by tests and by the UI on wake.
+
+    Waits for any routine the tick queued. Routines run on their own worker so
+    a slow one cannot hold up reminder delivery or the indexer -- but this
+    endpoint exists to make the due thing happen while somebody is looking at
+    it, so returning before the routine has run would report a tick that had
+    only been scheduled.
+    """
+    deliveries = scheduler.tick()
+    if not scheduler.wait_for_routines():
+        log.warning("a routine was still running when /reminders/tick returned")
+    return {"delivered": [d.message() for d in deliveries]}
 
 
 # -- privacy & health (REQ-26, REQ-27) ------------------------------------
@@ -652,7 +725,7 @@ def install_embedding_model() -> dict[str, Any]:
 
 
 @app.get("/documents/search")
-def search_documents(q: str, limit: int = 5) -> dict[str, Any]:
+def search_documents(q: SearchQuery, limit: Limit = 5) -> dict[str, Any]:
     return {"results": [hit.to_dict() for hit in index_search.search(q, limit=limit)]}
 
 
@@ -1113,9 +1186,7 @@ async def upload_clone_reference(file: UploadFile = File(...)) -> dict[str, Any]
             ),
         )
 
-    raw = await file.read()
-    if len(raw) > 50 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="That file is too large to be a voice sample.")
+    raw = await _read_capped(file, MAX_REFERENCE_BYTES, "a voice sample")
 
     try:
         pcm, rate = cloning.pcm_from_wav(raw)
@@ -1226,14 +1297,12 @@ def focus_status() -> dict[str, Any]:
     when something is actually running -- so the UI can name the apps before
     asking instead of warning about a risk that does not exist today.
     """
-    from .skills.system.focus import StartFocusSkill
+    from .skills.system import focus as focus_skills
 
     state = focus.state()
-    would_close = sorted({
-        (process.info.get("name") or "?") for process in StartFocusSkill._to_close()
-    })
     return {"active": state.active, "minutes_left": state.minutes_left,
-            "closed_apps": list(state.closed_apps), "would_close": would_close}
+            "closed_apps": list(state.closed_apps),
+            "would_close": focus_skills.would_close()}
 
 
 @app.post("/focus/start")
