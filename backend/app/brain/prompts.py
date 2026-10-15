@@ -187,7 +187,7 @@ def native_router_prompt() -> str:
     ])
 
 
-def router_prompt(catalog: list[dict[str, Any]]) -> str:
+def router_prompt(catalog: list[dict[str, Any]], max_skills: int) -> str:
     """Instructions for the routing pass. Returns JSON, always."""
     return "\n".join(
         [
@@ -214,6 +214,14 @@ def router_prompt(catalog: list[dict[str, Any]]) -> str:
             "- Only use tool names from the list. Never invent one.",
             "- Include every required argument.",
             "- Prefer one tool. Use several only when the request genuinely has several parts.",
+            # The orchestrator enforces this with a slice, and said nothing when
+            # it bit. Stating it here is the half that prevents it: a model that
+            # knows the limit picks the three that matter instead of listing six
+            # and having the tail silently dropped. `max_skills` is passed in
+            # rather than imported so there is one definition of the number and
+            # no import cycle back into the orchestrator.
+            f"- Never use more than {max_skills} tools. If the request needs more, "
+            f"use the {max_skills} that matter most and leave the rest.",
             "- Asking to undo something is not a tool: use {\"skills\": [], \"reply\": null}.",
             "- If the user tells you to remember, note, or forget something about them, "
             "that is always memory.remember or memory.forget. Agreeing in conversation "
@@ -365,14 +373,37 @@ def router_prompt(catalog: list[dict[str, Any]]) -> str:
     )
 
 
-def synthesis_prompt(results: list[dict[str, Any]]) -> str:
-    """Instructions for turning skill output into the user-facing reply."""
+def synthesis_prompt(
+    results: list[dict[str, Any]], not_run: list[str] | None = None
+) -> str:
+    """Instructions for turning skill output into the user-facing reply.
+
+    `not_run` names skills the router asked for and the turn limit refused.
+    They have to reach the reply: a turn that quietly does three of five
+    things and describes the three is indistinguishable from one that did
+    everything, and the user only finds out when the fourth thing turns out
+    not to have happened.
+    """
+    dropped = (
+        [
+            "",
+            "I did NOT run these, because one turn cannot run more: "
+            + ", ".join(not_run)
+            + ".",
+            "Say so at the end of your reply, briefly and in your own words, "
+            "and invite the user to ask for them next. Do not describe results "
+            "for them -- there are none.",
+        ]
+        if not_run
+        else []
+    )
     return "\n".join(
         [
             "[System note, not written by the user]",
             "I ran the following for the message above. Results:",
             "",
             json.dumps(results, indent=2, default=str),
+            *dropped,
             "",
             "Now write the reply to my last message, using only these results.",
             "- Report what the tools actually returned. Do not add facts they did not contain.",
