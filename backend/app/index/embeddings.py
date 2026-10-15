@@ -221,33 +221,93 @@ def install() -> dict[str, Any]:
     return {"ok": True, "error": None}
 
 
-def rank(query: np.ndarray, rows: list[tuple[Any, bytes]], limit: int) -> list[tuple[Any, float]]:
-    """The `limit` closest rows to `query`, most similar first.
+def to_matrix(
+    rows: list[tuple[Any, bytes]], width: int
+) -> tuple[list[Any], np.ndarray | None]:
+    """Stored blobs as one `(n, width)` matrix, with the keys that survived.
 
-    One matrix multiply rather than a loop. A few thousand chunks at 768
-    dimensions is a few million multiply-adds, which numpy does in single-digit
-    milliseconds and CPython does in most of a second -- and this runs inside a
-    turn the user is waiting on.
+    Built from a single joined buffer rather than one array per row and a
+    stack: `frombuffer` over the concatenation is one allocation and one copy,
+    where the per-row version was two of each per vector. At twenty thousand
+    chunks that was most of the cost of a search.
+
+    A stored vector of a different width came from a different model. Those
+    are dropped rather than reshaped -- the alternative is confident nonsense
+    -- which is why the keys come back alongside: after a drop, row *i* of the
+    matrix is no longer row *i* of the input.
+    """
+    numpy = _numpy()
+    stride = width * 4  # float32
+
+    keys: list[Any] = []
+    buffers: list[bytes] = []
+    for key, blob in rows:
+        if len(blob) != stride:
+            continue
+        keys.append(key)
+        buffers.append(blob)
+
+    if not buffers:
+        return [], None
+
+    flat = numpy.frombuffer(b"".join(buffers), dtype=numpy.float32)
+    return keys, flat.reshape(len(buffers), width)
+
+
+def concatenate(blocks: list[np.ndarray]) -> np.ndarray:
+    """One matrix from several, for a caller that read in batches."""
+    numpy = _numpy()
+    if len(blocks) == 1:
+        return blocks[0]
+    return numpy.concatenate(blocks, axis=0)
+
+
+def rank_matrix(
+    query: np.ndarray, matrix: np.ndarray, keys: list[Any], limit: int
+) -> list[tuple[Any, float]]:
+    """The `limit` closest rows of an already-built matrix, most similar first.
+
+    One matrix multiply. Vectors are unit length on the way in (see
+    `normalise`), so the dot product is the cosine and nothing divides here.
+
+    `argpartition` rather than a full `argsort`: the caller wants the top two
+    dozen out of possibly twenty thousand, and partitioning is O(n) where
+    sorting the whole thing is O(n log n). Only the slice is then sorted.
+
+    Ties are broken by row order, which is the order the rows came out of the
+    database. Without that, `argpartition` leaves equal scores in whatever
+    order its selection happened to produce, and the same query over the same
+    data could rank two equally-good chunks either way round -- in particular
+    differently from the streaming path in index/search.py, which merges in
+    row order. Documents that score exactly alike are common: boilerplate,
+    duplicates, a file saved twice under two names.
+    """
+    numpy = _numpy()
+    if matrix is None or len(keys) == 0:
+        return []
+
+    scores = matrix @ query
+    take = min(limit, scores.shape[0])
+    if take == 0:
+        return []
+
+    top = numpy.argpartition(-scores, take - 1)[:take]
+    # lexsort reads its keys last-first: score descending, then index ascending.
+    top = top[numpy.lexsort((top, -scores[top]))]
+    return [(keys[int(i)], float(scores[int(i)])) for i in top]
+
+
+def rank(query: np.ndarray, rows: list[tuple[Any, bytes]], limit: int) -> list[tuple[Any, float]]:
+    """The `limit` closest of some stored blobs, most similar first.
+
+    Kept for callers that hold raw rows rather than a matrix -- fact recall,
+    and the streaming path in index/search.py for an index too large to keep
+    resident.
     """
     if not rows:
         return []
 
-    numpy = _numpy()
-    width = query.shape[0]
-    keys: list[Any] = []
-    usable: list[np.ndarray] = []
-    for key, blob in rows:
-        vector = unpack(blob)
-        # A stored vector of a different width came from a different model.
-        # Skipped rather than reshaped: the alternative is confident nonsense.
-        if vector.shape[0] != width:
-            continue
-        keys.append(key)
-        usable.append(vector)
-
-    if not usable:
+    keys, matrix = to_matrix(rows, query.shape[0])
+    if matrix is None:
         return []
-
-    scores = numpy.stack(usable) @ query
-    order = numpy.argsort(-scores)[:limit]
-    return [(keys[int(i)], float(scores[int(i)])) for i in order]
+    return rank_matrix(query, matrix, keys, limit)
