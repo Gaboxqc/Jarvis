@@ -681,6 +681,35 @@ export const api = {
   logs: () => request<LogSummary>("/diagnostics/logs"),
 
   /**
+   * Record something that failed in the window rather than the backend.
+   *
+   * The updater, the WebView and the Live2D runtime are all reachable only
+   * from here, and when one fails the message lives in a card until the user
+   * clicks away. Writing it to the log means it can still be read afterwards
+   * -- which is the difference between diagnosing a failure and asking
+   * somebody what it said.
+   *
+   * Never throws. A reporting call that can fail the thing it is reporting on
+   * would be worse than not reporting at all.
+   */
+  reportProblem: async (context: string, error: unknown, detail = ""): Promise<void> => {
+    try {
+      const name = error instanceof Error ? error.name : typeof error;
+      const message = error instanceof Error ? error.message : String(error);
+      const cause =
+        error instanceof Error && error.cause !== undefined
+          ? ` cause: ${String(error.cause)}`
+          : "";
+      await request<{ ok: boolean }>("/diagnostics/client-problem", {
+        method: "POST",
+        body: JSON.stringify({ context, name, message, detail: detail + cause }),
+      });
+    } catch {
+      // Nothing to do, and nowhere left to say it.
+    }
+  },
+
+  /**
    * Open the log folder in Explorer.
    *
    * Only inside the desktop shell: a browser tab cannot open a folder, and

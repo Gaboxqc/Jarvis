@@ -1364,6 +1364,44 @@ def diagnostic_logs() -> dict[str, Any]:
     return diagnostics.summary()
 
 
+class ClientProblem(BaseModel):
+    """Something that went wrong in the desktop shell, not the backend."""
+
+    context: str
+    name: str = ""
+    message: str = ""
+    detail: str = ""
+
+
+@app.post("/diagnostics/client-problem")
+def client_problem(problem: ClientProblem) -> dict[str, bool]:
+    """Record a failure the frontend hit — REQ-27.
+
+    The window can reach things the backend cannot: the updater, the WebView,
+    the Live2D runtime. When one of those fails, the only account of it was a
+    sentence in a card that disappears when the user clicks elsewhere, and the
+    console it was also written to needs devtools that a packaged build does
+    not ship.
+
+    That is not a hypothetical gap. An update failed on a real install and the
+    whole investigation came down to asking the user to read the message back,
+    because nothing had kept it. A failure nobody can retrieve ten minutes
+    later cannot be diagnosed, only guessed at.
+
+    Logged, never stored in the database: it is a line in the same file
+    /diagnostics/logs points at, and it goes through the same Redactor as
+    everything else there.
+    """
+    log.warning(
+        "client problem [%s] %s: %s%s",
+        problem.context,
+        problem.name or "Error",
+        problem.message,
+        f" | {problem.detail}" if problem.detail else "",
+    )
+    return {"ok": True}
+
+
 @app.post("/privacy/wipe")
 def wipe() -> dict[str, Any]:
     """REQ-26 — the single delete-everything action."""

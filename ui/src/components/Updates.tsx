@@ -19,6 +19,7 @@
  */
 
 import { useState } from "react";
+import { api } from "../api";
 import type { Key } from "../i18n";
 
 type UpdaterModule = typeof import("@tauri-apps/plugin-updater");
@@ -73,6 +74,7 @@ export function Updates({ t, version }: { t: (key: Key, vars?: Record<string, st
       // Offline, rate-limited, or no release published yet. All three are
       // ordinary and none of them is the user's fault, so say what happened
       // rather than "an error occurred".
+      void api.reportProblem("updater.check", caught);
       setMessage(
         t("updates.checkFailed", {
           error: caught instanceof Error ? caught.message : String(caught),
@@ -93,6 +95,14 @@ export function Updates({ t, version }: { t: (key: Key, vars?: Record<string, st
       await pending.downloadAndInstall();
       setMessage(t("updates.installed"));
     } catch (caught) {
+      // Written to the log as well as the card. The card is one sentence that
+      // vanishes on the next click; this is the only copy that survives long
+      // enough to be read by whoever has to fix it.
+      void api.reportProblem(
+        "updater.downloadAndInstall",
+        caught,
+        `offered ${pending.version}, running ${version}`,
+      );
       setMessage(
         t("updates.installFailed", {
           error: caught instanceof Error ? caught.message : String(caught),
