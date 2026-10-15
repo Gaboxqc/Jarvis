@@ -106,6 +106,15 @@ actions:
   pre_approved: []
   # Minutes a pending confirmation stays valid before it expires.
   confirmation_ttl_minutes: 10
+  # How many skills one turn may run, as a bound on runaway tool loops.
+  #
+  # The router is told this number, so it usually does not propose more; when
+  # it does anyway, the extra ones are named in the reply rather than quietly
+  # dropped. Three is the measured default -- the routing sweep's held-out
+  # cases never need more, and a model given a higher ceiling starts padding.
+  # Worth raising only if you are running a much larger model and asking it
+  # genuinely multi-step questions.
+  max_skills_per_turn: 3
 
 retention:
   # How long the record of what was said and done is kept (REQ-26).

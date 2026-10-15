@@ -15,7 +15,10 @@ from __future__ import annotations
 
 import json
 
+import yaml
+
 from app.brain import llm, orchestrator, prompts
+from app.settings import load_config, reset_config_cache
 from app.skills.registry import catalog
 
 from .conftest import make_files
@@ -187,3 +190,60 @@ def test_a_parked_action_on_its_own_leaves_nothing_unsaid(workspace, monkeypatch
 
     assert result.needs_confirmation
     assert result.not_run == []
+
+
+# -- and the limit is a setting, not a module private ---------------------
+
+
+def set_budget(config_file, value):
+    raw = yaml.safe_load(config_file.read_text(encoding="utf-8"))
+    raw["actions"]["max_skills_per_turn"] = value
+    config_file.write_text(yaml.safe_dump(raw), encoding="utf-8")
+    reset_config_cache()
+
+
+def test_raising_the_limit_runs_more_of_them(workspace, config_file, monkeypatch):
+    """The reason this moved out of the module.
+
+    Someone running a larger model should be able to let a turn do four
+    things without editing the turn loop -- and the only way to know the
+    setting is wired to anything is to watch the count change.
+    """
+    set_budget(config_file, 5)
+    stub_llm(monkeypatch, route(five_harmless_calls()), "Here you go.")
+
+    result = orchestrator.handle_turn("do five things", "t")
+
+    assert len(result.skill_calls) == 5
+    assert result.not_run == []
+
+
+def test_lowering_the_limit_defers_the_rest(workspace, config_file, monkeypatch):
+    set_budget(config_file, 1)
+    stub_llm(monkeypatch, route(five_harmless_calls()), "Here you go.")
+
+    result = orchestrator.handle_turn("do five things", "t")
+
+    assert len(result.skill_calls) == 1
+    assert len(result.not_run) == 4
+
+
+def test_the_router_is_told_the_configured_limit(workspace, config_file, monkeypatch):
+    """The whole point of the setting living in one place: the prompt and the
+    slice read the same number, so they cannot disagree."""
+    set_budget(config_file, 4)
+    seen = stub_llm(monkeypatch, route([]), "Nothing to do.")
+
+    orchestrator.handle_turn("hello there, what can you do", "t")
+
+    routing = seen[0]["messages"]
+    assert any("more than 4 tools" in message["content"] for message in routing)
+
+
+def test_a_limit_of_zero_is_floored_rather_than_honoured(workspace, config_file):
+    """Zero would mean a router that proposes skills, a turn that runs none,
+    and a reply apologising for all of them -- an assistant switched off by a
+    value that reads like a tuning knob."""
+    set_budget(config_file, 0)
+
+    assert load_config().actions.max_skills_per_turn == 1
