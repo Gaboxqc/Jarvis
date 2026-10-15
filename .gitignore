@@ -79,3 +79,9 @@ api-token
 # The Live2D runtime is proprietary and licensed per-user from live2d.com.
 # It is dropped in locally, never committed.
 ui/public/live2d/live2dcubismcore.min.js
+
+# The unpacked model drop. 28MB of .moc3, textures and motions, and a copy of
+# what already sits in ui/public/live2d/ -- which is where the app actually
+# reads them from. This is the folder they arrive in, kept locally so the set
+# can be re-copied, not a second source of truth.
+/Alexia/
