@@ -94,3 +94,22 @@ def test_a_second_checkpoint_costs_nothing(workspace):
     db.checkpoint()
 
     assert db.checkpoint() == 0
+
+
+def test_the_durability_settings_are_what_the_comment_says(workspace):
+    """The two PRAGMAs that decide what a crash costs — REQ-26.
+
+    Pinned because they are easy to lose: both are set per connection in
+    `_prepare`, so a new code path that opens SQLite directly, or a reordering
+    that drops a line, leaves a connection with SQLite's defaults and nothing
+    anywhere fails. The cost of that is silent — a rollback journal instead of
+    a WAL, or an fsync on every one of the several commits a turn makes.
+    """
+    connection = db.connect()
+
+    assert connection.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
+    # 1 is NORMAL. The documented companion to WAL: a process crash is still
+    # recoverable and the file stays consistent, which FULL's extra fsync per
+    # commit does not buy anything more of here.
+    assert connection.execute("PRAGMA synchronous").fetchone()[0] == 1
+    assert connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1

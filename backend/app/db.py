@@ -382,6 +382,24 @@ def _prepare(conn: sqlite3.Connection, path: Path) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    # One fsync per commit is what FULL buys, and `execute()` below commits per
+    # statement -- so every conversation turn, journal entry and scheduler tick
+    # was paying for a flush to the platter. NORMAL is the documented
+    # companion to WAL: the write-ahead log still makes the database
+    # recoverable and consistent after a process crash, and what a power cut
+    # can cost is the last transaction or two rather than the file.
+    #
+    # The trade is worth naming, because it is a real one. Losing the last
+    # reminder written before the lights went out is recoverable by asking
+    # again; what is not acceptable is a corrupt database, and NORMAL does not
+    # risk that under WAL. Measured on this machine, 1,000 single-statement
+    # commits:
+    #
+    #     synchronous=FULL     2.50s, 2.54s
+    #     synchronous=NORMAL   0.062s, 0.065s
+    #
+    # That is 2.5ms of fsync per commit, and a turn commits several times.
+    conn.execute("PRAGMA synchronous=NORMAL")
 
     # Read before the schema script runs, because the script creates `meta` and
     # after it there is no longer any way to tell a database that has never been
