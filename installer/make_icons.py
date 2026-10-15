@@ -29,6 +29,7 @@ made almost entirely of.
 
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -130,26 +131,41 @@ def draw_master() -> Image.Image:
     return image
 
 
-def write_all() -> int:
+def write_all(out: Path | None = None) -> int:
+    """Write the icon set, by default over the committed one.
+
+    `out` exists for the test that checks this script still runs. Without it
+    the only way to run the generator was to overwrite the repository's own
+    icons, so proving the generator works meant rewriting fifteen tracked
+    PNGs, an .ico and an .icns on every `pytest`. That is invisible while the
+    output is byte-identical and stops being invisible the moment anyone
+    edits this file, replaces Logo.png or upgrades Pillow -- at which point
+    running the tests quietly rewrites files the developer did not ask to
+    change, including any they were part-way through changing themselves.
+
+    The logo is always read from ICONS; only the destination moves.
+    """
+    destination = out or ICONS
     if not ICONS.exists():
         print(f"no icons directory at {ICONS}", file=sys.stderr)
         return 1
+    destination.mkdir(parents=True, exist_ok=True)
 
     master = draw_master()
 
     for name, size in PNG_SIZES.items():
-        master.resize((size, size), Image.LANCZOS).save(ICONS / name)
+        master.resize((size, size), Image.LANCZOS).save(destination / name)
     print(f"wrote {len(PNG_SIZES)} PNGs")
 
     # Pillow builds the .ico from the sizes given, so every member is a proper
     # downsample rather than the shell scaling one bitmap badly.
-    master.save(ICONS / "icon.ico", sizes=[(s, s) for s in ICO_SIZES])
+    master.save(destination / "icon.ico", sizes=[(s, s) for s in ICO_SIZES])
     print(f"wrote icon.ico with {len(ICO_SIZES)} sizes")
 
     # macOS is not a build target today, but the bundle config lists this file
     # and a stale one would be the old placeholder.
     try:
-        master.save(ICONS / "icon.icns")
+        master.save(destination / "icon.icns")
         print("wrote icon.icns")
     except Exception as exc:  # noqa: BLE001
         print(f"skipped icon.icns ({exc}); not a build target on this platform")
@@ -157,5 +173,17 @@ def write_all() -> int:
     return 0
 
 
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Generate the Kai icon set")
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        metavar="DIR",
+        help="where to write (default: the committed icons directory)",
+    )
+    return write_all(parser.parse_args(argv).out)
+
+
 if __name__ == "__main__":
-    raise SystemExit(write_all())
+    raise SystemExit(main())
