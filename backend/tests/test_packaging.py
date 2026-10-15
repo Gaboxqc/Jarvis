@@ -12,6 +12,7 @@ manifest generator can never write an empty list.
 
 from __future__ import annotations
 
+import hashlib
 import subprocess
 import sys
 from pathlib import Path
@@ -647,19 +648,80 @@ def test_the_icon_is_not_the_placeholder():
     assert sum(corner) < 200, f"the corner is {corner}; the icon looks like the placeholder again"
 
 
-def test_the_icon_generator_runs():
+def test_the_icon_generator_runs(tmp_path):
     """It is a script so the mark can be changed by editing numbers.
 
     A generator that has rotted is worse than none: the next person edits it,
     sees nothing change, and hand-edits the PNGs instead.
+
+    Written to a temporary directory, not over the committed icons. This used
+    to run the script bare, which meant the suite rewrote fifteen tracked
+    PNGs, an .ico and an .icns every time it ran. Harmless only for as long
+    as the output stayed byte-identical: change this script, replace Logo.png
+    or upgrade Pillow and `pytest` silently modifies the working tree,
+    including icons someone may be part-way through changing by hand.
+
+    Checking the files appear, rather than only the exit code, because a
+    generator that returns 0 and writes nothing is the exact rot this is
+    here to catch.
     """
     generator = PROJECT / "installer" / "make_icons.py"
     assert generator.exists()
 
+    out = tmp_path / "icons"
     result = subprocess.run(
-        [sys.executable, str(generator)], capture_output=True, text=True, timeout=120
+        [sys.executable, str(generator), "--out", str(out)],
+        capture_output=True,
+        text=True,
+        timeout=120,
     )
     assert result.returncode == 0, result.stderr
+
+    produced = {path.name for path in out.iterdir()}
+    assert "icon.ico" in produced
+    for required in ("32x32.png", "128x128.png", "icon.png"):
+        assert required in produced, f"the generator did not write {required}"
+
+
+def test_running_the_tests_does_not_rewrite_the_committed_icons(tmp_path):
+    """The suite must leave the repository exactly as it found it.
+
+    Asserted on modification time as well as content, and the mtime is the
+    half that does the work. The generator is deterministic, so the version
+    of this that ran it bare rewrote every icon with byte-identical content:
+    a hash comparison sees nothing, `git status` sees nothing, and the files
+    were rewritten all the same. The day someone edits the script or swaps
+    the logo, those writes stop being identical -- and a guard that only
+    wakes up once the damage is visible is not a guard.
+    """
+    icons = PROJECT / "ui" / "src-tauri" / "icons"
+
+    def snapshot() -> dict[str, tuple[int, str]]:
+        return {
+            path.name: (
+                path.stat().st_mtime_ns,
+                hashlib.sha256(path.read_bytes()).hexdigest(),
+            )
+            for path in sorted(icons.iterdir())
+            if path.is_file()
+        }
+
+    before = snapshot()
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT / "installer" / "make_icons.py"),
+            "--out",
+            str(tmp_path / "elsewhere"),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=True,
+    )
+
+    assert snapshot() == before
 
 
 # -- the updater signing key (REQ-26, REQ-29) -----------------------------
