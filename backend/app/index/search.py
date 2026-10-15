@@ -36,6 +36,7 @@ and this returns precisely what BM25 returned before any of it existed.
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Any
 
 from .. import db
@@ -70,27 +71,26 @@ def _semantic(query: str, limit: int) -> list[store.Hit]:
     if vector is None:
         return []
 
-    rows = db.query(
-        "SELECT path, ordinal, vector FROM chunk_vectors WHERE model = ?",
-        (embeddings.model_name(),),
-    )
-    if not rows:
-        return []
-
-    ranked = embeddings.rank(
-        vector, [((row["path"], row["ordinal"]), row["vector"]) for row in rows], limit
-    )
+    ranked = _rank_against_index(vector, limit)
     if not ranked:
         return []
 
-    # One query for the text rather than one per hit. The vector table holds the
-    # key and the similarity; the chunk itself still lives in FTS5.
+    # One query for the text, not one per hit. The vector table holds the key
+    # and the similarity; the chunk itself still lives beside FTS5. The loop
+    # this replaced issued one round trip per hit while the comment above it
+    # claimed the opposite.
+    wanted = [key for key, _ in ranked]
+    placeholders = ",".join("(?,?)" for _ in wanted)
+    rows = db.query(
+        "SELECT path, ordinal, text, section FROM document_chunks "
+        f"WHERE (path, ordinal) IN (VALUES {placeholders})",
+        tuple(value for key in wanted for value in key),
+    )
+    by_key = {(row["path"], row["ordinal"]): row for row in rows}
+
     hits: list[store.Hit] = []
-    for (path, ordinal), score in ranked:
-        chunk = db.query_one(
-            "SELECT text, path, section FROM document_chunks WHERE path = ? AND ordinal = ?",
-            (path, ordinal),
-        )
+    for key, score in ranked:
+        chunk = by_key.get(key)
         if chunk is None:
             # The vector outlived its chunk. Possible between a reindex writing
             # chunks and writing vectors; skipped rather than surfaced as a hit
@@ -105,6 +105,189 @@ def _semantic(query: str, limit: int) -> list[store.Hit]:
             )
         )
     return hits
+
+
+# -- the resident index ---------------------------------------------------
+#
+# Every query used to read every vector out of SQLite, rebuild each one into
+# its own small array, and stack them into a matrix -- then throw all of it
+# away and do it again for the next query. Measured on this machine:
+#
+#      chunks     sql     rank    total     read
+#         500     8ms      4ms     12ms    1.5MB
+#       2,000    35ms     16ms     51ms    6.1MB
+#       5,000    61ms     32ms     94ms   15.4MB
+#      20,000   422ms    244ms    666ms   61.4MB
+#
+# Linear in the size of the corpus, inside a turn someone is waiting on, and
+# the matrix it rebuilt was identical every time until a document changed.
+#
+# So it is built once and kept. `generation` comes from a counter the database
+# bumps by trigger on any write to chunk_vectors (see db.py), which is what
+# makes "has this gone stale" a comparison of one integer rather than a promise
+# that every writer remembered to call an invalidate function -- index/store.py
+# deletes these rows too, and never goes through this module.
+
+# How much of someone's memory this may hold. 64MB is 21,845 vectors at 768
+# float32 dimensions: more than a large personal corpus, and an unremarkable
+# line in Task Manager for a process meant to sit in the background all day.
+RESIDENT_BUDGET_BYTES = 64 * 1024 * 1024
+
+# Rows per batch when reading vectors. Bounds the peak: without it, building
+# the matrix holds the blobs, the per-row arrays and the stacked copy at once,
+# which is the spike the old code paid on every query.
+BATCH = 2048
+
+_lock = threading.Lock()
+_cache: dict[str, Any] | None = None
+
+
+def _generation() -> int:
+    row = db.query_one("SELECT value FROM index_state WHERE key = 'vectors_generation'")
+    return int(row["value"]) if row else 0
+
+
+def _invalidate() -> None:
+    """Drop the resident matrix.
+
+    Not what keeps the cache honest -- the generation counter is -- but writes
+    from this module can say so directly, so the next search does not pay to
+    notice.
+    """
+    global _cache
+    with _lock:
+        _cache = None
+
+
+def _rank_against_index(vector: Any, limit: int) -> list[tuple[tuple[str, int], float]]:
+    global _cache
+
+    model = embeddings.model_name()
+    generation = _generation()
+
+    with _lock:
+        cached = _cache
+        fresh = (
+            cached is not None
+            and cached["model"] == model
+            and cached["generation"] == generation
+        )
+        if fresh and cached is not None:
+            if cached["matrix"] is None:
+                # Known to be over budget. Streamed, and still bounded.
+                return _rank_streaming(vector, model, limit)
+            return embeddings.rank_matrix(
+                vector, cached["matrix"], cached["keys"], limit
+            )
+
+    keys, matrix = _load(model, int(vector.shape[0]))
+    with _lock:
+        _cache = {
+            "model": model,
+            "generation": generation,
+            "keys": keys,
+            "matrix": matrix,
+        }
+
+    if matrix is None:
+        return _rank_streaming(vector, model, limit)
+    return embeddings.rank_matrix(vector, matrix, keys, limit)
+
+
+def _load(model: str, width: int) -> tuple[list[tuple[str, int]], Any]:
+    """Read the vectors into one matrix, or decline if they will not fit.
+
+    Returns `(…, None)` when the corpus is over budget, which is the signal to
+    stream instead. That decision is cached like any other, so an over-budget
+    index costs one counter read per search rather than a rebuild.
+
+    `width` is the query vector's, not a constant. Sizing this from
+    DEFAULT_DIMENSIONS looked equivalent and was not: anything storing a
+    different width -- another model, or the eight-dimensional stand-in the
+    tests use -- had every row rejected as the wrong size, and the whole thing
+    fell through to the streaming path. Correct answers, fast path never once
+    taken, tests green. Taking the width from the query means the comparison
+    is against the only width that could have produced a score anyway.
+    """
+    keys: list[tuple[str, int]] = []
+    blocks: list[Any] = []
+    held = 0
+
+    # The budget is checked as the rows arrive rather than from a COUNT taken
+    # first. `model` is not indexed, so counting means a full scan of its own:
+    # at twenty thousand chunks that scan cost more than reading every vector,
+    # and it was paid on the way to deciding whether to read them. Accumulating
+    # instead reads at most one batch past the limit before giving up.
+    for batch in _batches(model):
+        batch_keys, block = embeddings.to_matrix(batch, width)
+        if block is None:
+            continue
+        held += int(block.nbytes)
+        if held > RESIDENT_BUDGET_BYTES:
+            log.info(
+                "vectors exceed the %dMB resident budget; ranking by streaming",
+                RESIDENT_BUDGET_BYTES // (1024 * 1024),
+            )
+            return [], None
+        keys.extend(batch_keys)
+        blocks.append(block)
+
+    if not blocks:
+        return [], None
+    return keys, embeddings.concatenate(blocks)
+
+
+def _batches(model: str) -> Any:
+    """Vectors in groups of BATCH, ordered by the primary key.
+
+    Ordered so the paging is stable: without ORDER BY, SQLite may return rows
+    in a different order between two pages of the same scan, and a row can
+    then be seen twice or missed entirely.
+
+    Paged by seeking past the last key rather than by OFFSET. OFFSET makes
+    SQLite walk and discard every row it has already returned, so reading a
+    table in pages costs O(n²/BATCH) -- at twenty thousand chunks that turned
+    a 300ms read into 1.65s, which would have made the first search after
+    every single reindex slower than the full scan this replaces. The row
+    value comparison seeks straight into the (path, ordinal) index instead.
+    """
+    last: tuple[str, int] | None = None
+    while True:
+        if last is None:
+            rows = db.query(
+                "SELECT path, ordinal, vector FROM chunk_vectors WHERE model = ? "
+                "ORDER BY path, ordinal LIMIT ?",
+                (model, BATCH),
+            )
+        else:
+            rows = db.query(
+                "SELECT path, ordinal, vector FROM chunk_vectors "
+                "WHERE model = ? AND (path, ordinal) > (?, ?) "
+                "ORDER BY path, ordinal LIMIT ?",
+                (model, last[0], last[1], BATCH),
+            )
+        if not rows:
+            return
+        yield [((row["path"], row["ordinal"]), row["vector"]) for row in rows]
+        if len(rows) < BATCH:
+            return
+        last = (rows[-1]["path"], int(rows[-1]["ordinal"]))
+
+
+def _rank_streaming(
+    vector: Any, model: str, limit: int
+) -> list[tuple[tuple[str, int], float]]:
+    """Rank an index too large to hold, a batch at a time.
+
+    Peak memory is one batch rather than the whole corpus, so this is still an
+    improvement on the code it replaces, which materialised everything.
+    """
+    best: list[tuple[tuple[str, int], float]] = []
+    for batch in _batches(model):
+        best.extend(embeddings.rank(vector, batch, limit))
+        best.sort(key=lambda pair: pair[1], reverse=True)
+        del best[limit:]
+    return best
 
 
 def _fuse(rankings: list[list[store.Hit]]) -> list[store.Hit]:
@@ -160,15 +343,18 @@ def index_chunks(path: str, chunks: list[Any]) -> int:
         ],
     )
     connection.commit()
+    _invalidate()
     return len(vectors)
 
 
 def forget(path: str) -> None:
     db.execute("DELETE FROM chunk_vectors WHERE path = ?", (path,))
+    _invalidate()
 
 
 def clear() -> int:
     cursor = db.execute("DELETE FROM chunk_vectors")
+    _invalidate()
     return cursor.rowcount or 0
 
 

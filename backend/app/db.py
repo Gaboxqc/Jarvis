@@ -18,7 +18,7 @@ from .settings import data_dir
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # How an existing database is brought up to SCHEMA_VERSION.
 #
@@ -66,6 +66,37 @@ MIGRATIONS: dict[int, tuple[str, ...]] = {
             model    TEXT NOT NULL,
             vector   BLOB NOT NULL
         )
+        """,
+    ),
+    # The generation counter the resident vector cache checks. See the long
+    # note beside the triggers in the schema above for why this is enforced by
+    # the database and not by the callers.
+    #
+    # Starts at 0 on an existing install even though it already has vectors:
+    # the counter is only ever compared against itself, so the absolute value
+    # means nothing and there is nothing to backfill.
+    3: (
+        """
+        CREATE TABLE IF NOT EXISTS index_state (
+            key    TEXT PRIMARY KEY,
+            value  INTEGER NOT NULL
+        )
+        """,
+        "INSERT OR IGNORE INTO index_state(key, value) VALUES('vectors_generation', 0)",
+        """
+        CREATE TRIGGER IF NOT EXISTS chunk_vectors_ai AFTER INSERT ON chunk_vectors BEGIN
+            UPDATE index_state SET value = value + 1 WHERE key = 'vectors_generation';
+        END
+        """,
+        """
+        CREATE TRIGGER IF NOT EXISTS chunk_vectors_au AFTER UPDATE ON chunk_vectors BEGIN
+            UPDATE index_state SET value = value + 1 WHERE key = 'vectors_generation';
+        END
+        """,
+        """
+        CREATE TRIGGER IF NOT EXISTS chunk_vectors_ad AFTER DELETE ON chunk_vectors BEGIN
+            UPDATE index_state SET value = value + 1 WHERE key = 'vectors_generation';
+        END
         """,
     ),
 }
@@ -226,6 +257,37 @@ CREATE TABLE IF NOT EXISTS chunk_vectors (
     PRIMARY KEY (path, ordinal)
 );
 CREATE INDEX IF NOT EXISTS idx_chunk_vectors_path ON chunk_vectors(path);
+
+-- A generation counter for chunk_vectors, bumped by the database rather than
+-- by whoever wrote the row.
+--
+-- index/search.py holds the vectors in memory as one matrix, because reading
+-- every one of them out of SQLite per query cost 666ms and 61MB at twenty
+-- thousand chunks, inside a turn someone is waiting on. A resident copy is only
+-- safe if it can tell it has gone stale, and the writers are spread across
+-- index/store.py and index/search.py -- so a cache invalidated by "remember to
+-- call invalidate()" is one new call site away from serving deleted documents.
+--
+-- Triggers cannot be forgotten. Any INSERT, UPDATE or DELETE bumps this, from
+-- any code path and any connection, and the reader compares one integer.
+-- Connections here are thread-local (see connect()), which rules out
+-- PRAGMA data_version and total_changes: both are per-connection, and a cache
+-- shared between threads cannot be stamped with either.
+CREATE TABLE IF NOT EXISTS index_state (
+    key    TEXT PRIMARY KEY,
+    value  INTEGER NOT NULL
+);
+INSERT OR IGNORE INTO index_state(key, value) VALUES('vectors_generation', 0);
+
+CREATE TRIGGER IF NOT EXISTS chunk_vectors_ai AFTER INSERT ON chunk_vectors BEGIN
+    UPDATE index_state SET value = value + 1 WHERE key = 'vectors_generation';
+END;
+CREATE TRIGGER IF NOT EXISTS chunk_vectors_au AFTER UPDATE ON chunk_vectors BEGIN
+    UPDATE index_state SET value = value + 1 WHERE key = 'vectors_generation';
+END;
+CREATE TRIGGER IF NOT EXISTS chunk_vectors_ad AFTER DELETE ON chunk_vectors BEGIN
+    UPDATE index_state SET value = value + 1 WHERE key = 'vectors_generation';
+END;
 
 -- REQ-7: the same, for durable facts. Recall was token overlap, which cannot
 -- connect "peanuts" to a question about allergies.
