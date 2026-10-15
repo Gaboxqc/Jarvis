@@ -85,3 +85,9 @@ ui/public/live2d/live2dcubismcore.min.js
 # reads them from. This is the folder they arrive in, kept locally so the set
 # can be re-copied, not a second source of truth.
 /Alexia/
+
+# Claude Code's per-machine settings: a permission allowlist full of absolute
+# paths and session ids from whoever ran it. .claude/launch.json beside it is
+# shared on purpose -- it is how the dev server gets started -- so this ignores
+# the one file rather than the directory.
+.claude/settings.local.json
