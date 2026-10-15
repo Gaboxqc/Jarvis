@@ -282,6 +282,10 @@ def test_a_due_routine_executes_rather_than_announcing_itself(workspace):
     routines.create(label="Standup", fire_at=past(), steps=[GATED], approved=True)
 
     service.tick()
+    # Routines run on their own worker so a slow one cannot hold up reminder
+    # delivery or the indexer -- so the assertion has to wait for the work it
+    # is about rather than for the tick that scheduled it.
+    assert service.wait_for_routines(), "the routine never finished"
 
     assert performed == ["send the mail"]
     queued = notifications.drain()
@@ -294,8 +298,16 @@ def test_a_routine_that_raises_does_not_stop_the_scheduler(workspace, monkeypatc
     routines.create(label="Standup", fire_at=past(), steps=[HARMLESS], approved=True)
     monkeypatch.setattr(routines, "run", lambda item: 1 / 0)
 
-    # The thread that delivers every reminder in the app also runs this.
+    # A routine that raises must not take the worker down with it, or the next
+    # one would never run and nothing would say why.
     service.tick()
+    assert service.wait_for_routines()
+
+    # And the worker is still there to run the next one.
+    routines.create(label="Second", fire_at=past(), steps=[HARMLESS], approved=True)
+    monkeypatch.undo()
+    service.tick()
+    assert service.wait_for_routines()
 
 
 def test_routines_stay_out_of_the_reminder_list(workspace):
@@ -350,3 +362,94 @@ def test_an_unknown_routine_is_a_404_rather_than_a_500(client):
     assert client.post("/routines/nope/approve").status_code == 404
     assert client.post("/routines/nope/run").status_code == 404
     assert client.delete("/routines/nope").status_code == 404
+
+
+def test_a_slow_routine_does_not_hold_up_the_tick(workspace, monkeypatch):
+    """The reason routines moved off the poll loop.
+
+    `tick()` is the same 5-second loop that delivers every reminder, advances
+    the document index and unloads idle speech models. A routine is the one
+    thing on that list with no bound on how long it takes -- its steps go
+    through the Action Gate into real skills, and a step that opens IMAP has a
+    20-second timeout of its own. While one ran inline, every reminder was
+    late and the indexer did not advance, and because `_run_routines` caught
+    exceptions, slowness was the one failure mode nothing noticed.
+    """
+    import threading
+    import time
+
+    release = threading.Event()
+    started = threading.Event()
+
+    def slow(item):
+        started.set()
+        release.wait(timeout=10)
+        return []
+
+    monkeypatch.setattr(routines, "run", slow)
+    routines.create(label="Slow one", fire_at=past(), steps=[HARMLESS], approved=True)
+
+    began = time.monotonic()
+    service.tick()
+    elapsed = time.monotonic() - began
+
+    assert started.wait(timeout=5), "the routine never started"
+    # Inline, this tick could not have returned before the routine did.
+    assert elapsed < 1.0, f"tick blocked for {elapsed:.2f}s on a routine"
+
+    release.set()
+    assert service.wait_for_routines()
+
+
+def test_waiting_reports_a_routine_that_never_finishes(workspace, monkeypatch):
+    """`wait_for_routines` returns False rather than hanging its caller.
+
+    /reminders/tick calls it on a request someone is waiting on, so "still
+    running" has to be an answer it can give.
+    """
+    import threading
+
+    release = threading.Event()
+
+    def never(item):
+        release.wait(timeout=10)
+        return []
+
+    monkeypatch.setattr(routines, "run", never)
+    routines.create(label="Stuck", fire_at=past(), steps=[HARMLESS], approved=True)
+    service.tick()
+
+    assert service.wait_for_routines(timeout=0.3) is False
+
+    release.set()
+    assert service.wait_for_routines()
+
+
+def test_two_due_routines_do_not_interleave(workspace, monkeypatch):
+    """Each routine is one batch in the action journal and is undoable as one.
+    Two running at once would be undoable as neither, so the single worker is
+    load-bearing rather than an implementation detail."""
+    import threading
+
+    overlapping = []
+    inside = threading.Lock()
+
+    def run_one(item):
+        if not inside.acquire(blocking=False):
+            overlapping.append(item.label)
+            return []
+        try:
+            # Long enough that a second worker would be inside this too.
+            threading.Event().wait(0.15)
+        finally:
+            inside.release()
+        return []
+
+    monkeypatch.setattr(routines, "run", run_one)
+    routines.create(label="First", fire_at=past(), steps=[HARMLESS], approved=True)
+    routines.create(label="Second", fire_at=past(), steps=[HARMLESS], approved=True)
+
+    service.tick()
+    assert service.wait_for_routines()
+
+    assert overlapping == []
