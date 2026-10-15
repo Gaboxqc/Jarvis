@@ -16,7 +16,7 @@ fails long before the prompt reaches the context window again.
 
 from __future__ import annotations
 
-from app.brain import llm, prompts
+from app.brain import llm, orchestrator, prompts
 from app.settings import BrainSettings
 from app.skills.base import Skill, SkillParam
 from app.skills.registry import catalog, load_skills
@@ -106,7 +106,7 @@ def test_enums_are_kept():
 def test_the_real_prompt_fits_the_context_window():
     """The regression guard. This is the assertion that would have caught it."""
     load_skills()
-    prompt = prompts.router_prompt(catalog())
+    prompt = prompts.router_prompt(catalog(), orchestrator.MAX_SKILLS_PER_TURN)
     estimate = llm.estimate_tokens([{"role": "system", "content": prompt}])
 
     budget = int(BrainSettings.context_tokens * 0.75)

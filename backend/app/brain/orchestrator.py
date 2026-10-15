@@ -25,6 +25,17 @@ from . import llm, prompts
 
 log = logging.getLogger(__name__)
 
+# How many skills one turn may run.
+#
+# A bound on runaway tool loops, and worth keeping. What was not worth keeping
+# is how it was applied: `calls[:3]`, with no word to anyone. The router would
+# ask for five, three would run, and the synthesis pass -- which only ever sees
+# results -- would describe those three as though they were the whole request.
+# Nothing in the reply, the receipts or the logs said otherwise.
+#
+# Now the router is told the limit (prompts.router_prompt), so it usually does
+# not propose more; and when it does anyway, the ones left over are named in
+# the reply instead of vanishing.
 MAX_SKILLS_PER_TURN = 3
 
 _AFFIRMATIVE = {
@@ -107,6 +118,11 @@ class TurnResult:
     reply: str
     pending: PendingAction | None = None
     skill_calls: list[dict[str, Any]] = field(default_factory=list)
+    # Skills the user's message asked for that this turn did not run: over the
+    # per-turn limit, or behind an action still waiting for an answer. Carried
+    # out to the API so a caller can see the difference between "that is
+    # everything" and "that is what fitted".
+    not_run: list[str] = field(default_factory=list)
     error: str | None = None
 
     @property
@@ -119,6 +135,7 @@ class TurnResult:
             "needs_confirmation": self.needs_confirmation,
             "pending": self.pending.to_dict() if self.pending else None,
             "skill_calls": self.skill_calls,
+            "not_run": self.not_run,
             "error": self.error,
         }
 
@@ -253,6 +270,14 @@ def run_turn(
     yield {"type": "stage", "stage": "working"}
     batch_id = gate.new_batch_id()
     results: list[dict[str, Any]] = []
+    deferred = [call["name"] for call in calls[MAX_SKILLS_PER_TURN:]]
+    if deferred:
+        log.info(
+            "router asked for %d skills; running %d, deferring %s",
+            len(calls),
+            MAX_SKILLS_PER_TURN,
+            ", ".join(deferred),
+        )
     for call in calls[:MAX_SKILLS_PER_TURN]:
         outcome = gate.submit(call["name"], call.get("args") or {}, ctx, batch_id=batch_id)
         results.append(outcome.to_dict())
@@ -276,6 +301,7 @@ def run_turn(
                     reply=prompts.confirmation_prompt(outcome.preview, outcome.reversible),
                     pending=pending,
                     skill_calls=results,
+                    not_run=_not_run(calls, results, deferred),
                 ),
             )}
             return
@@ -285,7 +311,7 @@ def run_turn(
     written = ""
     try:
         for kind, payload in _generate(
-            _synthesis_messages(system, history, results), stream=stream
+            _synthesis_messages(system, history, results, deferred), stream=stream
         ):
             if kind == "delta":
                 yield {"type": "delta", "text": payload}
@@ -296,13 +322,14 @@ def run_turn(
         # because the phrasing pass could not run (REQ-27).
         written = ""
 
-    reply = _append_receipts(written or _fallback_summary(results), results)
+    reply = _append_receipts(written or _fallback_summary(results, deferred), results)
     reply = _guard_ungrounded_reply(text, reply, results)
 
     # Receipts and the guard can both change text already shown, so the final
     # result carries the authoritative version for clients to settle on.
     yield {"type": "done", "result": _finish(
-        session_id, TurnResult(reply=reply, skill_calls=results))}
+        session_id,
+        TurnResult(reply=reply, skill_calls=results, not_run=deferred))}
 
 
 def confirm_pending(action_id: str, session_id: str = "default") -> TurnResult:
@@ -413,7 +440,7 @@ def _route(system: str, history: list[dict[str, str]], text: str) -> dict[str, A
 
     messages = [
         {"role": "system", "content": system},
-        {"role": "system", "content": prompts.router_prompt(available)},
+        {"role": "system", "content": prompts.router_prompt(available, MAX_SKILLS_PER_TURN)},
         *history[-6:],
         {"role": "user", "content": text},
     ]
@@ -455,8 +482,29 @@ def _extract_calls(route: dict[str, Any] | None) -> list[dict[str, Any]]:
     return calls
 
 
+def _not_run(
+    calls: list[dict[str, Any]],
+    results: list[dict[str, Any]],
+    deferred: list[str],
+) -> list[str]:
+    """Everything asked for that this turn will not do.
+
+    Two sources, and the second is easy to miss. Stopping at an action that
+    needs approval abandons the rest of the batch as well -- deliberately, so
+    a "no" cannot have already done half the work -- but those calls are just
+    as absent from the reply as the ones over the limit, and until now just as
+    unmentioned.
+    """
+    ran = len(results)
+    abandoned = [call["name"] for call in calls[ran:MAX_SKILLS_PER_TURN]]
+    return abandoned + deferred
+
+
 def _synthesis_messages(
-    system: str, history: list[dict[str, str]], results: list[dict[str, Any]]
+    system: str,
+    history: list[dict[str, str]],
+    results: list[dict[str, Any]],
+    not_run: list[str] | None = None,
 ) -> list[dict[str, str]]:
     payload = [
         {
@@ -474,37 +522,8 @@ def _synthesis_messages(
     return [
         {"role": "system", "content": system},
         *history[-4:],
-        {"role": "user", "content": prompts.synthesis_prompt(payload)},
+        {"role": "user", "content": prompts.synthesis_prompt(payload, not_run)},
     ]
-
-
-def _synthesize(system: str, history: list[dict[str, str]], results: list[dict[str, Any]]) -> str:
-    payload = [
-        {
-            "skill": r["skill"],
-            "status": r["status"],
-            "result": r["message"],
-            "error": r.get("error"),
-        }
-        for r in results
-    ]
-    # The results go in as the final *user* turn, not a trailing system message.
-    # Small models reliably answer the last user message; a system message tacked
-    # on after the history tends to get treated as background and the model
-    # replays its previous answer instead.
-    messages = [
-        {"role": "system", "content": system},
-        *history[-4:],
-        {"role": "user", "content": prompts.synthesis_prompt(payload)},
-    ]
-    try:
-        reply = llm.chat(messages).text or _fallback_summary(results)
-    except llm.LLMUnavailable:
-        # The work already happened; report it verbatim rather than losing it
-        # because the phrasing pass could not run (REQ-27).
-        return _fallback_summary(results)
-
-    return _append_receipts(reply, results)
 
 
 def _append_receipts(reply: str, results: list[dict[str, Any]]) -> str:
@@ -546,8 +565,20 @@ def _conveys(reply: str, message: str) -> bool:
     return payload.lower() in reply.lower()
 
 
-def _fallback_summary(results: list[dict[str, Any]]) -> str:
-    return "\n".join(r["message"] for r in results if r.get("message")) or "Done."
+def _fallback_summary(
+    results: list[dict[str, Any]], not_run: list[str] | None = None
+) -> str:
+    """What the user is told when the phrasing pass could not run.
+
+    This is the path where honesty matters most: the model is unavailable, so
+    there is nothing to notice an omission on the user's behalf.
+    """
+    lines = [r["message"] for r in results if r.get("message")]
+    if not_run:
+        lines.append(
+            "I didn't get to " + ", ".join(not_run) + " — ask me and I'll do that next."
+        )
+    return "\n".join(lines) or "Done."
 
 
 def _guard_ungrounded_reply(user_text: str, reply: str, results: list[dict[str, Any]]) -> str:

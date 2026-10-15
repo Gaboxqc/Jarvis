@@ -33,7 +33,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.brain import llm, prompts  # noqa: E402
+from app.brain import llm, orchestrator, prompts  # noqa: E402
 from app.skills.registry import catalog, load_skills  # noqa: E402
 
 # Two phrasings per skill: one close to how the catalog describes it, one the
@@ -298,7 +298,7 @@ def main() -> int:
         entry["name"]: [n for n, s in (entry["parameters"] or {}).items() if s.get("required")]
         for entry in catalog()
     }
-    prompt = prompts.router_prompt(catalog())
+    prompt = prompts.router_prompt(catalog(), orchestrator.MAX_SKILLS_PER_TURN)
 
     source = HELDOUT if args.holdout else CASES
     cases = [c for c in source if args.only in str(c[1])] if args.only else source
