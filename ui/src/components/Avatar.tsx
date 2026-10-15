@@ -25,6 +25,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api, type AvatarLicence } from "../api";
+import { subscribeConnection } from "../events";
 import type { Key } from "../i18n";
 import { subscribe } from "../speechLevel";
 
@@ -209,8 +210,26 @@ function headBox(coreModel: any): { x: number; y: number; width: number; height:
  */
 type CoreProblem = "missing" | "blocked" | "failed";
 
-async function loadCore(): Promise<CoreProblem | null> {
+/** The cause, and the sentence that says which. */
+interface CoreFailure {
+  problem: CoreProblem;
+  detail: string;
+}
+
+async function loadCore(): Promise<CoreFailure | null> {
   if ("Live2DCubismCore" in window) return null;
+
+  // A policy that refuses the script fires `error` on the tag and nothing
+  // else, which from here is indistinguishable from a 404 -- so this reported
+  // "failed" with no detail at all, and the packaged app had no way to say
+  // what had happened. The violation event carries the directive that did it;
+  // it is recorded while the tag loads and repeated verbatim in the panel.
+  let violation = "";
+  const watch = (event: Event) => {
+    const e = event as SecurityPolicyViolationEvent;
+    violation = `${e.effectiveDirective || e.violatedDirective} blocked ${e.blockedURI || CORE}`;
+  };
+  document.addEventListener("securitypolicyviolation", watch);
 
   // The script tag goes first, with no preflight. An earlier version sent a
   // HEAD request to tell "missing" from "broken" before loading anything, which
@@ -229,14 +248,27 @@ async function loadCore(): Promise<CoreProblem | null> {
     tag.onerror = () => resolve(false);
     document.head.appendChild(tag);
   });
+  document.removeEventListener("securitypolicyviolation", watch);
   if (loaded) return null;
+
+  // "blocked" was in the type from the start and nothing ever returned it,
+  // so the one cause that had its own written answer could never show it.
+  if (violation) return { problem: "blocked", detail: violation };
 
   // It did not load. A GET rather than a HEAD, for the same reason.
   try {
     const probe = await fetch(CORE);
-    return probe.ok ? "failed" : "missing";
-  } catch {
-    return "missing";
+    return probe.ok
+      ? {
+          problem: "failed",
+          detail: `${CORE} fetched ${probe.status} but defined no Live2DCubismCore`,
+        }
+      : { problem: "missing", detail: `${CORE} fetched ${probe.status}` };
+  } catch (error) {
+    return {
+      problem: "missing",
+      detail: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+    };
   }
 }
 
@@ -257,23 +289,49 @@ export function Avatar({ state, t }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    void api
-      .avatarLicence()
-      .then((value) => {
-        if (!cancelled) setLicence(value);
-      })
-      .catch(() => {
-        // Without an answer the gate can never open, so the panel would sit
-        // empty forever waiting for a permission it will not be granted. Say
-        // that it failed instead -- a blank rectangle is the failure mode this
-        // whole change exists to stop.
-        if (!cancelled) {
+    // Whether the backend has ever answered. Before it has, a refused request
+    // is a cold start rather than a fault.
+    let connected = false;
+    let answered = false;
+
+    const ask = () =>
+      api
+        .avatarLicence()
+        .then((value) => {
+          if (cancelled) return;
+          answered = true;
+          setLicence(value);
+        })
+        .catch((error: unknown) => {
+          // The frontend is up well before the sidecar binds its port, so the
+          // first attempt of a packaged launch is refused every time. Treating
+          // that as the answer is what left the avatar off for the whole
+          // session while everything else recovered the moment the stream
+          // opened -- and it never reached the Cubism Core at all, so the
+          // panel blamed a runtime it had not tried to load.
+          //
+          // Only a refusal from a backend that is demonstrably there is a
+          // fault worth reporting.
+          if (cancelled || !connected) return;
+          setDetail(
+            error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+          );
           setProblem("failed");
           setReady(false);
-        }
-      });
+        });
+
+    // The same signal the prerequisite banner waits on, for the same reason.
+    const unwatch = subscribeConnection((status) => {
+      if (status !== "open") return;
+      connected = true;
+      if (!answered) void ask();
+    });
+
+    void ask();
+
     return () => {
       cancelled = true;
+      unwatch();
     };
   }, []);
 
@@ -305,7 +363,8 @@ export function Avatar({ state, t }: Props) {
       const blocker = await loadCore();
       if (blocker) {
         if (!cancelled) {
-          setProblem(blocker);
+          setProblem(blocker.problem);
+          setDetail(blocker.detail);
           setReady(false);
         }
         return;

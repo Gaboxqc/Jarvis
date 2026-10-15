@@ -446,6 +446,21 @@ def test_the_csp_stays_tight():
     # usual way a CSP stops meaning anything.
     assert "'unsafe-inline'" not in csp.replace("style-src 'self' 'unsafe-inline'", "")
 
+    # script-src has to be spelled out, and has to include 'self'.
+    #
+    # Not redundant with default-src, which is the trap this fell into. Tauri
+    # adds a nonce for its own injected scripts, and a CSP with no script-src
+    # gets one created -- holding the nonce and nothing else. An explicit
+    # script-src overrides default-src entirely, so 'self' silently stopped
+    # applying to scripts and the avatar's Cubism Core tag was refused:
+    # script-src-elem blocked, while fetch() of the same file still returned
+    # 200 because that is connect-src. The panel reported a file that could not
+    # be loaded as one that loaded and did nothing.
+    #
+    # Written out here so the nonce is appended to a directive that already
+    # says 'self' instead of replacing one that was never there.
+    assert "script-src 'self'" in csp
+
 
 # -- the origin the packaged app actually uses (REQ-26, REQ-27) -----------
 
