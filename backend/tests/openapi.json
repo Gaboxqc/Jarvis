@@ -1,0 +1,2890 @@
+{
+  "components": {
+    "schemas": {
+      "AccountRequest": {
+        "properties": {
+          "fields": {
+            "additionalProperties": true,
+            "title": "Fields",
+            "type": "object"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "provider"
+        ],
+        "title": "AccountRequest",
+        "type": "object"
+      },
+      "AvatarLicenceRequest": {
+        "properties": {
+          "accepted": {
+            "title": "Accepted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "accepted"
+        ],
+        "title": "AvatarLicenceRequest",
+        "type": "object"
+      },
+      "Body_upload_clone_reference_voice_clone_reference_post": {
+        "properties": {
+          "file": {
+            "format": "binary",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_clone_reference_voice_clone_reference_post",
+        "type": "object"
+      },
+      "ClientProblem": {
+        "description": "Something that went wrong in the desktop shell, not the backend.",
+        "properties": {
+          "context": {
+            "title": "Context",
+            "type": "string"
+          },
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "name": {
+            "default": "",
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "context"
+        ],
+        "title": "ClientProblem",
+        "type": "object"
+      },
+      "CloneConsentRequest": {
+        "properties": {
+          "consent": {
+            "title": "Consent",
+            "type": "boolean"
+          },
+          "enable": {
+            "default": false,
+            "title": "Enable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "consent"
+        ],
+        "title": "CloneConsentRequest",
+        "type": "object"
+      },
+      "CredentialRequest": {
+        "properties": {
+          "secret": {
+            "title": "Secret",
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret"
+        ],
+        "title": "CredentialRequest",
+        "type": "object"
+      },
+      "FocusRequest": {
+        "properties": {
+          "minutes": {
+            "default": 25,
+            "title": "Minutes",
+            "type": "integer"
+          }
+        },
+        "title": "FocusRequest",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "SettingsPatch": {
+        "properties": {
+          "changes": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Changes",
+            "type": "object"
+          }
+        },
+        "title": "SettingsPatch",
+        "type": "object"
+      },
+      "SkillCallRequest": {
+        "properties": {
+          "args": {
+            "additionalProperties": true,
+            "title": "Args",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "session_id": {
+            "default": "default",
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "SkillCallRequest",
+        "type": "object"
+      },
+      "SpeakRequest": {
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "SpeakRequest",
+        "type": "object"
+      },
+      "TaskRequest": {
+        "properties": {
+          "due": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due"
+          },
+          "kind": {
+            "default": "task",
+            "title": "Kind",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "TaskRequest",
+        "type": "object"
+      },
+      "TurnRequest": {
+        "properties": {
+          "pending_action_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending Action Id"
+          },
+          "session_id": {
+            "default": "default",
+            "title": "Session Id",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "TurnRequest",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "XttsLicenceRequest": {
+        "properties": {
+          "accepted": {
+            "title": "Accepted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "accepted"
+        ],
+        "title": "XttsLicenceRequest",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "Kai",
+    "version": "0.4.3"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/actions/history": {
+      "get": {
+        "operationId": "action_history_actions_history_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Action History Actions History Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Action History"
+      }
+    },
+    "/actions/pending": {
+      "get": {
+        "operationId": "list_pending_actions_pending_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Pending Actions Pending Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Pending"
+      }
+    },
+    "/actions/pre-approvals": {
+      "get": {
+        "operationId": "list_pre_approvals_actions_pre_approvals_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Pre Approvals Actions Pre Approvals Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Pre Approvals"
+      }
+    },
+    "/actions/pre-approvals/{skill_name}": {
+      "delete": {
+        "operationId": "revoke_pre_approval_actions_pre_approvals__skill_name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "skill_name",
+            "required": true,
+            "schema": {
+              "title": "Skill Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Revoke Pre Approval Actions Pre Approvals  Skill Name  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Pre Approval"
+      },
+      "post": {
+        "operationId": "grant_pre_approval_actions_pre_approvals__skill_name__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "skill_name",
+            "required": true,
+            "schema": {
+              "title": "Skill Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Grant Pre Approval Actions Pre Approvals  Skill Name  Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Grant Pre Approval"
+      }
+    },
+    "/actions/undo": {
+      "post": {
+        "operationId": "undo_last_actions_undo_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Undo Last Actions Undo Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Undo Last"
+      }
+    },
+    "/actions/{action_id}/confirm": {
+      "post": {
+        "operationId": "confirm_action_actions__action_id__confirm_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "action_id",
+            "required": true,
+            "schema": {
+              "title": "Action Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "session_id",
+            "required": false,
+            "schema": {
+              "default": "default",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Confirm Action Actions  Action Id  Confirm Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm Action"
+      }
+    },
+    "/actions/{action_id}/decline": {
+      "post": {
+        "operationId": "decline_action_actions__action_id__decline_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "action_id",
+            "required": true,
+            "schema": {
+              "title": "Action Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "session_id",
+            "required": false,
+            "schema": {
+              "default": "default",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Decline Action Actions  Action Id  Decline Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Decline Action"
+      }
+    },
+    "/actions/{action_id}/undo": {
+      "post": {
+        "operationId": "undo_action_actions__action_id__undo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "action_id",
+            "required": true,
+            "schema": {
+              "title": "Action Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Undo Action Actions  Action Id  Undo Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo Action"
+      }
+    },
+    "/avatar": {
+      "get": {
+        "description": "Whether the avatar's runtime may load.\n\nSays nothing about whether the Core file is actually present: it is a\nfront-end asset compiled into the desktop binary, which this process cannot\nsee. The window checks for it directly and reports that itself.",
+        "operationId": "avatar_status_avatar_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Avatar Status Avatar Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Avatar Status"
+      }
+    },
+    "/avatar/licence": {
+      "post": {
+        "description": "Record — or withdraw — acceptance of the Live2D runtime licence.\n\nStamped with the date so the record can be shown back rather than asserted.\nWithdrawing clears the date too: keeping \"accepted on the 3rd\" next to\n\"accepted: false\" is a config that contradicts itself.\n\nLogged at WARNING like the egress switches. This is not a privacy decision,\nbut it is a legal one made on this machine, and the point of writing it down\nis that it can be found later.",
+        "operationId": "avatar_licence_avatar_licence_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AvatarLicenceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Avatar Licence Avatar Licence Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Avatar Licence"
+      }
+    },
+    "/briefing": {
+      "get": {
+        "operationId": "briefing_briefing_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Briefing Briefing Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Briefing"
+      }
+    },
+    "/capture/start": {
+      "post": {
+        "operationId": "capture_start_capture_start_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "label",
+            "required": false,
+            "schema": {
+              "default": "Meeting",
+              "title": "Label",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Capture Start Capture Start Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Capture Start"
+      }
+    },
+    "/capture/status": {
+      "get": {
+        "operationId": "capture_status_capture_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Capture Status Capture Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Capture Status"
+      }
+    },
+    "/capture/stop": {
+      "post": {
+        "operationId": "capture_stop_capture_stop_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Capture Stop Capture Stop Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Capture Stop"
+      }
+    },
+    "/capture/transcripts": {
+      "get": {
+        "operationId": "list_transcripts_capture_transcripts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Transcripts Capture Transcripts Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Transcripts"
+      }
+    },
+    "/capture/transcripts/{transcript_id}": {
+      "delete": {
+        "operationId": "delete_transcript_capture_transcripts__transcript_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transcript_id",
+            "required": true,
+            "schema": {
+              "title": "Transcript Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Delete Transcript Capture Transcripts  Transcript Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Transcript"
+      },
+      "get": {
+        "operationId": "get_transcript_capture_transcripts__transcript_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transcript_id",
+            "required": true,
+            "schema": {
+              "title": "Transcript Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Transcript Capture Transcripts  Transcript Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Transcript"
+      }
+    },
+    "/connectors": {
+      "get": {
+        "description": "Account details only. Never returns a secret, by construction.",
+        "operationId": "connector_status_connectors_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Connector Status Connectors Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Connector Status"
+      }
+    },
+    "/connectors/accounts": {
+      "post": {
+        "description": "Add an account without hand-editing YAML (REQ-13, REQ-26).\n\nDetails only. No password crosses this boundary — `fields` is rejected\noutright if it carries anything that looks like one, and the response says\nto run `/connect`, which prompts at the terminal and writes to the OS\ncredential store.",
+        "operationId": "add_account_connectors_accounts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Add Account Connectors Accounts Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Account"
+      }
+    },
+    "/connectors/accounts/{kind}/{label}": {
+      "delete": {
+        "operationId": "remove_account_connectors_accounts__kind___label__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "label",
+            "required": true,
+            "schema": {
+              "title": "Label",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Remove Account Connectors Accounts  Kind   Label  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Account"
+      }
+    },
+    "/connectors/{kind}/{label}/check": {
+      "post": {
+        "description": "Try the account and say whether it works.\n\nWithout this, a wrong password is discovered the next time the user asks\nabout their mail, as an error about something they were not doing.",
+        "operationId": "check_connector_connectors__kind___label__check_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "label",
+            "required": true,
+            "schema": {
+              "title": "Label",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Check Connector Connectors  Kind   Label  Check Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Check Connector"
+      }
+    },
+    "/connectors/{kind}/{label}/credential": {
+      "delete": {
+        "operationId": "forget_credential_connectors__kind___label__credential_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "label",
+            "required": true,
+            "schema": {
+              "title": "Label",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Forget Credential Connectors  Kind   Label  Credential Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Forget Credential"
+      },
+      "put": {
+        "description": "Store the password (or an iCal URL) for an account — REQ-26.\n\nThis used to be terminal-only, on the reasoning that a secret typed into a\nform travels through a request body and a validation layer before it reaches\nanywhere safe, whereas one typed at a getpass prompt goes straight from the\nkeyboard to the OS store. That reasoning is sound and was still the wrong\ncall: an assistant whose accounts can only be set up by running commands in\na terminal is not configurable by the people it is for, and \"secure but\nunused\" is not secure.\n\nSo the secret crosses one loopback hop, and everything else is held tight\naround it. The API binds 127.0.0.1 only and CORS is an allow-list, so no\npage on the internet can reach this. The value is not logged here or in\ncredentials.store, is never returned by any endpoint, and never touches\nkai.config.yaml. What lands on disk is a reference.",
+        "operationId": "set_credential_connectors__kind___label__credential_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "label",
+            "required": true,
+            "schema": {
+              "title": "Label",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CredentialRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Set Credential Connectors  Kind   Label  Credential Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Credential"
+      }
+    },
+    "/diagnostics/client-problem": {
+      "post": {
+        "description": "Record a failure the frontend hit — REQ-27.\n\nThe window can reach things the backend cannot: the updater, the WebView,\nthe Live2D runtime. When one of those fails, the only account of it was a\nsentence in a card that disappears when the user clicks elsewhere, and the\nconsole it was also written to needs devtools that a packaged build does\nnot ship.\n\nThat is not a hypothetical gap. An update failed on a real install and the\nwhole investigation came down to asking the user to read the message back,\nbecause nothing had kept it. A failure nobody can retrieve ten minutes\nlater cannot be diagnosed, only guessed at.\n\nLogged, never stored in the database: it is a line in the same file\n/diagnostics/logs points at, and it goes through the same Redactor as\neverything else there.",
+        "operationId": "client_problem_diagnostics_client_problem_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientProblem"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "title": "Response Client Problem Diagnostics Client Problem Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Client Problem"
+      }
+    },
+    "/diagnostics/logs": {
+      "get": {
+        "description": "Where the log is and how big it is — REQ-27.\n\nNames and sizes, never contents. A log is a file to attach to a bug report,\nnot something to render in a chat window, and serving the text would put a\nsecond copy somewhere it was not already.",
+        "operationId": "diagnostic_logs_diagnostics_logs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Diagnostic Logs Diagnostics Logs Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Diagnostic Logs"
+      }
+    },
+    "/documents": {
+      "get": {
+        "operationId": "list_documents_documents_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Documents Documents Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Documents"
+      }
+    },
+    "/documents/index": {
+      "delete": {
+        "description": "REQ-16/REQ-26 — the user can see what is indexed and remove all of it.",
+        "operationId": "clear_document_index_documents_index_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Clear Document Index Documents Index Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Clear Document Index"
+      }
+    },
+    "/documents/reindex": {
+      "post": {
+        "operationId": "reindex_documents_documents_reindex_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "force",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Force",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Reindex Documents Documents Reindex Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reindex Documents"
+      }
+    },
+    "/documents/search": {
+      "get": {
+        "operationId": "search_documents_documents_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 500,
+              "minLength": 1,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 5,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Search Documents Documents Search Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Documents"
+      }
+    },
+    "/documents/semantic": {
+      "get": {
+        "description": "Whether meaning-based search is on, and how much of the index has it.\n\n\"Semantic search is enabled\" is not a useful claim on its own: the setting\ncan be on, the model absent, and every query still purely lexical. So the\nanswer carries the model, whether it is actually pulled, and the count.",
+        "operationId": "semantic_status_documents_semantic_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Semantic Status Documents Semantic Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Semantic Status"
+      }
+    },
+    "/documents/semantic/model": {
+      "post": {
+        "description": "Pull the embedding model. Explicit, and never on startup.\n\n274MB, which is small next to the language model already required but is\nstill hundreds of megabytes that must not move because somebody opened\nSettings. Same rule the voice models follow.",
+        "operationId": "install_embedding_model_documents_semantic_model_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Install Embedding Model Documents Semantic Model Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Install Embedding Model"
+      }
+    },
+    "/documents/status": {
+      "get": {
+        "operationId": "document_index_status_documents_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Document Index Status Documents Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Document Index Status"
+      }
+    },
+    "/events": {
+      "get": {
+        "description": "Everything the shell used to poll for, pushed instead — REQ-31, REQ-32.\n\nPresence, notifications and brain health arrived through three timers\nrunning for the life of the window: roughly 48 requests a minute with the\napp idle, to establish forty-seven times out of forty-eight that nothing had\nchanged. See app/events.py for what is sampled and how often.\n\n/state and /notifications stay. The CLI uses them, they are what this is\ntested against, and an endpoint that answers one question once is the right\nshape for a script.",
+        "operationId": "event_stream_events_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Event Stream"
+      }
+    },
+    "/focus": {
+      "get": {
+        "description": "Focus state, plus what starting one would cost right now.\n\n`would_close` is the whole reason this is not just a button. Starting a\nsession terminates the configured distracting apps, and unsaved work in them\nis gone. The skill decides its severity the same way -- consequential only\nwhen something is actually running -- so the UI can name the apps before\nasking instead of warning about a risk that does not exist today.",
+        "operationId": "focus_status_focus_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Focus Status Focus Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Focus Status"
+      }
+    },
+    "/focus/end": {
+      "post": {
+        "operationId": "end_focus_focus_end_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response End Focus Focus End Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "End Focus"
+      }
+    },
+    "/focus/start": {
+      "post": {
+        "operationId": "start_focus_focus_start_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FocusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Start Focus Focus Start Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Focus"
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Health Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
+      }
+    },
+    "/memory": {
+      "delete": {
+        "operationId": "delete_all_memory_memory_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Delete All Memory Memory Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Delete All Memory"
+      },
+      "get": {
+        "operationId": "list_memory_memory_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Memory Memory Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Memory"
+      }
+    },
+    "/memory/{fact_id}": {
+      "delete": {
+        "operationId": "delete_memory_memory__fact_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fact_id",
+            "required": true,
+            "schema": {
+              "title": "Fact Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Delete Memory Memory  Fact Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Memory"
+      }
+    },
+    "/notifications": {
+      "get": {
+        "description": "Drain queued notifications. Destructive: each is handed out once.",
+        "operationId": "take_notifications_notifications_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Take Notifications Notifications Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Take Notifications"
+      }
+    },
+    "/privacy/retention": {
+      "get": {
+        "description": "The window, and what is inside it right now — REQ-26.",
+        "operationId": "retention_status_privacy_retention_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Retention Status Privacy Retention Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Retention Status"
+      }
+    },
+    "/privacy/retention/sweep": {
+      "post": {
+        "description": "Apply the window now rather than waiting for the next start or stop.\n\nHere because shortening the window should visibly do something. Saving \"30\ndays\" and being told nothing happened until the next restart reads as a\nsetting that did not take.",
+        "operationId": "retention_sweep_privacy_retention_sweep_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Retention Sweep Privacy Retention Sweep Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Retention Sweep"
+      }
+    },
+    "/privacy/wipe": {
+      "post": {
+        "description": "REQ-26 — the single delete-everything action.",
+        "operationId": "wipe_privacy_wipe_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Wipe Privacy Wipe Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Wipe"
+      }
+    },
+    "/reminders": {
+      "get": {
+        "operationId": "list_reminders_reminders_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Reminders Reminders Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Reminders"
+      }
+    },
+    "/reminders/tick": {
+      "post": {
+        "description": "Deliver anything due right now. Used by tests and by the UI on wake.\n\nWaits for any routine the tick queued. Routines run on their own worker so\na slow one cannot hold up reminder delivery or the indexer -- but this\nendpoint exists to make the due thing happen while somebody is looking at\nit, so returning before the routine has run would report a tick that had\nonly been scheduled.",
+        "operationId": "force_tick_reminders_tick_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Force Tick Reminders Tick Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Force Tick"
+      }
+    },
+    "/reminders/{reminder_id}": {
+      "delete": {
+        "operationId": "cancel_reminder_reminders__reminder_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reminder_id",
+            "required": true,
+            "schema": {
+              "title": "Reminder Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Cancel Reminder Reminders  Reminder Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Reminder"
+      }
+    },
+    "/routines": {
+      "get": {
+        "operationId": "list_routines_routines_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Routines Routines Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Routines"
+      }
+    },
+    "/routines/{routine_id}": {
+      "delete": {
+        "operationId": "delete_routine_routines__routine_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "routine_id",
+            "required": true,
+            "schema": {
+              "title": "Routine Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Delete Routine Routines  Routine Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Routine"
+      }
+    },
+    "/routines/{routine_id}/approve": {
+      "post": {
+        "description": "Re-approve a routine whose steps changed — REQ-12, REQ-24.\n\nThe other half of \"re-prompt if the routine is later edited\". Editing\nrevokes the approval; this is where the user gives it again, having seen the\nsteps listed on the screen that offers this button.",
+        "operationId": "approve_routine_routines__routine_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "routine_id",
+            "required": true,
+            "schema": {
+              "title": "Routine Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Approve Routine Routines  Routine Id  Approve Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Approve Routine"
+      }
+    },
+    "/routines/{routine_id}/run": {
+      "post": {
+        "description": "Run a routine now. Useful for checking one does what you meant.",
+        "operationId": "run_routine_routines__routine_id__run_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "routine_id",
+            "required": true,
+            "schema": {
+              "title": "Routine Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Run Routine Routines  Routine Id  Run Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Routine"
+      }
+    },
+    "/session/{session_id}": {
+      "delete": {
+        "operationId": "clear_session_session__session_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Clear Session Session  Session Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clear Session"
+      }
+    },
+    "/settings": {
+      "get": {
+        "operationId": "read_settings_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Read Settings Settings Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Read Settings"
+      },
+      "patch": {
+        "description": "Change a setting (REQ-26).\n\nWhat may be changed is `preferences.WRITABLE` and nothing else — a section\nor key absent from it is a 403 whatever the caller asks for. `connectors.*`\nis absent because those carry secrets and go through\n/connectors/accounts, and `brain.ollama_host` is absent because redirecting\nthe model host would send every prompt somewhere else.\n\nEgress switches and folder lists *are* writable, which they were not\nbefore. Folder lists are validated against the filesystem, and every egress\nchange is logged with its previous value, so widening what the assistant can\nreach leaves a record even though it no longer needs a text editor.",
+        "operationId": "write_settings_settings_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Write Settings Settings Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Write Settings"
+      }
+    },
+    "/shortcuts": {
+      "get": {
+        "operationId": "list_shortcuts_shortcuts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Shortcuts Shortcuts Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Shortcuts"
+      }
+    },
+    "/shortcuts/{shortcut_id}": {
+      "delete": {
+        "operationId": "delete_shortcut_shortcuts__shortcut_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "shortcut_id",
+            "required": true,
+            "schema": {
+              "title": "Shortcut Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Delete Shortcut Shortcuts  Shortcut Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Shortcut"
+      }
+    },
+    "/shortcuts/{shortcut_id}/approve": {
+      "post": {
+        "description": "Re-approve a shortcut whose steps changed — REQ-22, REQ-24.",
+        "operationId": "approve_shortcut_shortcuts__shortcut_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "shortcut_id",
+            "required": true,
+            "schema": {
+              "title": "Shortcut Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Approve Shortcut Shortcuts  Shortcut Id  Approve Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Approve Shortcut"
+      }
+    },
+    "/shortcuts/{shortcut_id}/run": {
+      "post": {
+        "operationId": "run_shortcut_shortcuts__shortcut_id__run_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "shortcut_id",
+            "required": true,
+            "schema": {
+              "title": "Shortcut Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Run Shortcut Shortcuts  Shortcut Id  Run Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Shortcut"
+      }
+    },
+    "/skills": {
+      "get": {
+        "operationId": "list_skills_skills_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Skills Skills Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Skills"
+      }
+    },
+    "/skills/run": {
+      "post": {
+        "description": "Direct invocation, still through the gate — there is no bypass.",
+        "operationId": "run_skill_skills_run_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkillCallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Run Skill Skills Run Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Skill"
+      }
+    },
+    "/state": {
+      "get": {
+        "description": "What the presence indicator shows — REQ-32.\n\nDeliberately the whole contract: a state name, plus an optional emotion tag.\nThe UI is given nothing about the brain, the skills or the actions, which is\nwhat keeps the presentation layer replaceable.",
+        "operationId": "presence_state_state_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Presence State State Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Presence State"
+      }
+    },
+    "/tasks": {
+      "get": {
+        "operationId": "list_tasks_tasks_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "include_done",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Include Done",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Tasks Tasks Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Tasks"
+      },
+      "post": {
+        "operationId": "add_task_tasks_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Add Task Tasks Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Task"
+      }
+    },
+    "/tasks/{task_id}": {
+      "delete": {
+        "operationId": "remove_task_tasks__task_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Remove Task Tasks  Task Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Task"
+      },
+      "patch": {
+        "operationId": "complete_task_tasks__task_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "done",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Done",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Complete Task Tasks  Task Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Complete Task"
+      }
+    },
+    "/turn": {
+      "post": {
+        "operationId": "turn_turn_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TurnRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Turn Turn Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Turn"
+      }
+    },
+    "/turn/stream": {
+      "post": {
+        "description": "The same turn, delivered as it happens (REQ-27, REQ-32).\n\nServer-sent events rather than a WebSocket: this is one-way, short-lived,\nand survives a dropped connection by simply ending. A socket would add a\nlifecycle to manage for no capability the turn needs.\n\nEvery event is one `data:` line of JSON with a `type`:\n\n    stage  - which slow phase is running, so the UI can say so\n    delta  - a piece of the reply\n    done   - the finished TurnResult, identical to what POST /turn returns\n\n`done` always arrives, including on failure, and its reply is the\nauthoritative text: receipts and the ungrounded-answer guard can both revise\nwhat the deltas already showed, so a client renders deltas as they come and\nthen settles on `done`.",
+        "operationId": "turn_stream_turn_stream_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TurnRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Turn Stream"
+      }
+    },
+    "/voice/clone": {
+      "get": {
+        "operationId": "clone_status_voice_clone_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Clone Status Voice Clone Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Clone Status"
+      }
+    },
+    "/voice/clone/consent": {
+      "post": {
+        "description": "Record — or withdraw — the acknowledgement that gates cloning.\n\nWithdrawing switches the engine back to Piper in the same call. Leaving\n`tts_engine: xtts` set while consent is false would mean the setting said\none thing and the behaviour did another; tts.use_cloned_voice() would refuse\nanyway, but a config that lies about what it is doing is its own problem.",
+        "operationId": "clone_consent_voice_clone_consent_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloneConsentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Clone Consent Voice Clone Consent Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clone Consent"
+      }
+    },
+    "/voice/clone/engine": {
+      "delete": {
+        "description": "Give the disk space back. As easy as spending it.",
+        "operationId": "remove_clone_engine_voice_clone_engine_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Remove Clone Engine Voice Clone Engine Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Remove Clone Engine"
+      },
+      "get": {
+        "operationId": "clone_engine_progress_voice_clone_engine_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Clone Engine Progress Voice Clone Engine Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Clone Engine Progress"
+      },
+      "post": {
+        "description": "Start fetching the cloning engine. Explicit, and never on startup.\n\nReturns immediately rather than holding the request open for a download\nmeasured in hundreds of megabytes: the settings screen polls the GET above.\nA second call while one is running is refused by the installer's own lock\nrather than starting a competing download.",
+        "operationId": "install_clone_engine_voice_clone_engine_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Install Clone Engine Voice Clone Engine Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Install Clone Engine"
+      }
+    },
+    "/voice/clone/licence": {
+      "post": {
+        "description": "Record — or withdraw — acceptance of XTTS-v2's licence.\n\nKept separate from `clone_consent` on purpose. That switch is about the\nethics of copying somebody's voice; this is agreeing to a non-commercial\nsoftware licence. They are different questions with different answers, and\none switch meaning both would be an acceptance nobody was shown.\n\nWithdrawing clears the date, for the same reason the Live2D gate does: a\nconfig reading \"not accepted, accepted on the 3rd\" contradicts itself.",
+        "operationId": "xtts_licence_voice_clone_licence_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XttsLicenceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Xtts Licence Voice Clone Licence Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Xtts Licence"
+      }
+    },
+    "/voice/clone/reference": {
+      "delete": {
+        "description": "Delete the recording. It is a sample of somebody's voice (REQ-26).",
+        "operationId": "forget_clone_reference_voice_clone_reference_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Forget Clone Reference Voice Clone Reference Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Forget Clone Reference"
+      },
+      "post": {
+        "description": "Take the reference sample as an uploaded audio file.\n\nThis replaced recording from the microphone. The argument for recording was\nthat it put whoever is being cloned in the room -- but it is not enforcement\n(a phone held to a laptop defeats it) and it made the feature unusable for\nthe ordinary case of already having a clean recording of your own voice.\nSince it bought manners rather than safety, the consent acknowledgement is\ndoing the real work, and this is the more useful shape.\n\nAnything ffmpeg-free is accepted directly: WAV in, PCM out. Other formats\nare refused by name rather than half-decoded into noise that only reveals\nitself when the clone speaks.",
+        "operationId": "upload_clone_reference_voice_clone_reference_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_clone_reference_voice_clone_reference_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Upload Clone Reference Voice Clone Reference Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Clone Reference"
+      }
+    },
+    "/voice/listen": {
+      "post": {
+        "description": "Capture one utterance and run it as a normal turn.",
+        "operationId": "listen_once_voice_listen_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Listen Once Voice Listen Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Listen Once"
+      }
+    },
+    "/voice/models": {
+      "delete": {
+        "operationId": "delete_voice_models_voice_models_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Delete Voice Models Voice Models Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Delete Voice Models"
+      },
+      "get": {
+        "operationId": "voice_models_voice_models_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Voice Models Voice Models Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Voice Models"
+      },
+      "post": {
+        "description": "Explicit download. Hundreds of MB never move without being asked for.",
+        "operationId": "download_voice_models_voice_models_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "include_wake",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Wake",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Download Voice Models Voice Models Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download Voice Models"
+      }
+    },
+    "/voice/speak": {
+      "post": {
+        "description": "Say something out loud, and describe its shape for the avatar.\n\nThis used to call synthesize() and return the duration -- rendering the\naudio and discarding it. The CLI and the voice loop both call tts.speak(),\nwhich plays; this endpoint did not, so the desktop app's \"speak replies\naloud\" switch produced silence while every other path worked.\n\nPlayback is non-blocking so the response comes back at the moment sound\nstarts rather than when it finishes. That matters for the avatar: the\nenvelope below is walked from the moment this returns, so a blocking call\nwould put the mouth a whole sentence behind the voice.",
+        "operationId": "speak_voice_speak_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpeakRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Speak Voice Speak Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Speak"
+      }
+    },
+    "/voice/status": {
+      "get": {
+        "operationId": "voice_status_voice_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Voice Status Voice Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Voice Status"
+      }
+    }
+  }
+}
