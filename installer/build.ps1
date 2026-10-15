@@ -160,7 +160,15 @@ if (Test-Path $keyFile) {
 # ever shipped stops verifying the day the certificate expires. With one, old
 # installers keep working because the countersignature records that the
 # signature existed while the certificate was valid.
-$signArgs = @()
+# Tauri refuses to bundle at all when a pubkey is configured and no private key
+# is in the environment -- "A public key has been found, but no private key" --
+# so the key cannot simply be withheld to get an unsigned bundle. This is the
+# switch that actually turns bundle-time signing off. The pubkey itself stays
+# exactly where it is, compiled into the binary, which is what existing
+# installs verify against; all this says is "do not produce the .sig here",
+# because the step below produces it instead.
+$bundleOverride = @{ createUpdaterArtifacts = $false }
+
 $thumbprint = $env:KAI_SIGN_THUMBPRINT
 if (-not $thumbprint) {
     $found = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert -ErrorAction SilentlyContinue |
@@ -169,22 +177,20 @@ if (-not $thumbprint) {
 }
 
 if ($thumbprint) {
-    $config = @{
-        bundle = @{
-            windows = @{
-                certificateThumbprint = $thumbprint
-                digestAlgorithm       = "sha256"
-                timestampUrl          = "http://timestamp.digicert.com"
-            }
-        }
-    } | ConvertTo-Json -Depth 6 -Compress
-    $signArgs = @("--config", $config)
+    $bundleOverride.windows = @{
+        certificateThumbprint = $thumbprint
+        digestAlgorithm       = "sha256"
+        timestampUrl          = "http://timestamp.digicert.com"
+    }
     Write-Host "    signing with certificate $($thumbprint.Substring(0,8))..." -ForegroundColor Green
 } else {
     Write-Host "    NOT Authenticode signed - no code signing certificate found" -ForegroundColor Yellow
     Write-Host "    Windows will warn on install, and Smart App Control will refuse" -ForegroundColor Yellow
     Write-Host "    to run it at all. See docs/RELEASING.md." -ForegroundColor Yellow
 }
+
+# Merged into one --config: Tauri takes the last one when given several.
+$signArgs = @("--config", (@{ bundle = $bundleOverride } | ConvertTo-Json -Depth 6 -Compress))
 
 Push-Location (Join-Path $root "ui")
 try {
@@ -199,9 +205,15 @@ try {
 if (Test-Path $keyFile) {
     Write-Host "==> Signing the installer for the updater" -ForegroundColor Cyan
     $nsis = Join-Path $root "ui/src-tauri/target/release/bundle/nsis"
-    $installers = @(Get-ChildItem -Path $nsis -Filter "*-setup.exe" -ErrorAction SilentlyContinue)
+    # Scoped to the version just built. The bundle directory is not cleaned
+    # between releases, so a bare *-setup.exe also matches installers from
+    # every previous one -- the first run of this signed 0.3.5 again on its way
+    # past.
+    $version = (Get-Content (Join-Path $root "ui/src-tauri/tauri.conf.json") -Raw |
+        ConvertFrom-Json).version
+    $installers = @(Get-ChildItem -Path $nsis -Filter "*_${version}_*-setup.exe" -ErrorAction SilentlyContinue)
     if ($installers.Count -eq 0) {
-        throw "Bundling reported success but produced no installer in $nsis"
+        throw "Bundling reported success but produced no $version installer in $nsis"
     }
     Push-Location (Join-Path $root "ui")
     try {
