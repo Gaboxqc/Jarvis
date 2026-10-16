@@ -402,17 +402,47 @@ Fix: a verification pass that checks each quoted span against the chunks that
 were actually retrieved, and marks or drops what is not there. Sits next to
 `_guard_ungrounded_reply`, needs no model.
 
-### F6 — Timing surfaced in Diagnostics
+### F6 — Timing surfaced in Diagnostics — done
 
-There is no instrumentation in the turn loop at all (verified: no
+There was no instrumentation in the turn loop at all (verified: no
 `perf_counter`/`monotonic` anywhere in `brain/` or `main.py`). The performance
-numbers that justify the design live in comments; nothing measures the running
+numbers that justify the design lived in comments; nothing measured the running
 app.
 
-Fix: record routing / skill / synthesis milliseconds per turn into an
-in-memory ring, expose them on `/diagnostics/timings`, and show a small panel
-in Settings. Local only, no telemetry, nothing leaves the machine — consistent
-with the privacy posture, and it turns "it feels slow today" into a number.
+Shipped as specified: routing / skill / synthesis milliseconds per turn into a
+bounded in-memory ring (`app/timings.py`), `/diagnostics/timings` beside
+`/diagnostics/logs`, a panel in Settings. Local only, no telemetry, nothing
+persisted — the ring is empty again on restart, and the response carries six
+numbers per turn and no text, which is asserted rather than intended.
+
+What it turned up, on the first real run against a local qwen2.5, is worth more
+than the feature:
+
+    prompt                            route   skills   synth    total
+    "thanks"                              0        0    7224    10716
+    "what is the capital of spain"      3170        3     758     4563
+    "what's 17 times 23"                1153        1     734     2242
+    "remind me to call the dentist"     1502        6    1401     3322
+    "what my documents say about X"     1077        5    1272     2784
+
+The skills stage is *noise*. The Action Gate plus a real skill is one to six
+milliseconds against model calls of seconds, so none of the latency anybody
+complains about is the work being done — which also means the per-turn skill
+limit was never a performance control.
+
+Routing costs **more** than synthesis, two to three times more. Several
+comments in `brain/orchestrator.py` put a routing call at "half the latency of
+a turn", and that was the argument for making F1's second round opt-in and for
+the pleasantry fast path. The conclusions hold and the number was generous:
+routing is closer to two thirds.
+
+And 350-600ms of every turn is outside all three stages. 318ms of it is
+`long_term.relevant()`, which embeds the user's text through Ollama before
+routing starts (measured separately: 318.5ms median), plus 140ms once for skill
+discovery. A fourth stage is the honest fix and it changes the response shape,
+so it is a follow-up rather than something added here; the gap is documented in
+`app/timings.py` so a reader who subtracts does not think the arithmetic is
+broken.
 
 ### F7 — Cross-platform adapter layer
 
@@ -460,9 +490,18 @@ to move.
   have covered first. Next: `Settings` (it writes the config file),
   `Accounts` (a secret must never be echoed back into a field),
   `Documents`, `Planner`.
-- **T3 — A perf regression test.** The tables in `index/search.py` are the
-  spec. Generate 20k synthetic vectors, assert the resident path is taken and
-  the query is under a budget. Mark it slow.
+- **T3 — A perf regression test — done.** The tables in `index/search.py` were
+  the spec and nothing pinned them. `test_search_perf_slow.py` builds the
+  table's last row — 20,000 synthetic vectors at 768 dimensions, 58.6MiB, the
+  largest corpus that still fits the 64MiB resident budget — and asserts the
+  resident path is taken, that it is built once and reused until a write, and
+  that a warm query stays under 100ms. Measured there: 213.5ms to build the
+  matrix, **3.7ms** for a warm query, 219.6ms for the streaming fallback. The
+  budget is forty times the real number on purpose: what it has to catch is a
+  per-query rebuild (666ms by the table) or a fall through to streaming, and a
+  budget set near 3.7ms would go red on a shared runner for reasons nobody can
+  act on. The read is pinned by *counting* batches instead, which no machine
+  changes.
 - **T4 — OpenAPI snapshot — done.** A committed `openapi.json` and a test that fails
   on any diff. This is what makes **R1** safe to do in one commit, and what
   makes an accidental contract change visible in review.
@@ -506,7 +545,7 @@ negatives it never had.
 Still open in this phase: R2 generated types + CI drift check, R4 UI splits,
 T1 coverage floor.
 
-**Phase C — capability. F1, F2 and F3 done; F6, T3 and T2 remain.**
+**Phase C — capability. F1, F2, F3, F6 and T3 done; T2 remains.**
 
 F1 shipped in a shape the plan did not specify, and the difference is the
 interesting part. A bounded loop that re-routes unconditionally taxes *every*
@@ -523,7 +562,12 @@ returns `dict[str, Any]`, so the schema has nothing to say about it. The
 response half of the contract is genuinely unguarded, and this is what that
 looks like in practice rather than in principle.
 
-Still open in this phase: F6 timings, T3 perf test, T2 UI tests.
+F6 and T3 landed together, because both are about performance being a number
+rather than a claim, and between them they moved three of this document's own
+assertions from argued to measured — see F6 above for which, and for the 318ms
+per turn that nothing had been looking at.
+
+Still open in this phase: T2 UI tests.
 
 **Phase D — a product bet, pick one.**
 F7 cross-platform, or F4+F8 (multi-client plus a third-party skill contract).

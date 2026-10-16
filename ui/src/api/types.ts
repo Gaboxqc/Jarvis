@@ -132,4 +132,7 @@ export type FocusState = Schemas["FocusState"];
 export type Settings = Schemas["Settings"];
 export type RetentionStatus = Schemas["RetentionWindow"];
 export type LogSummary = Schemas["LogSummary"];
+/** Recent turns in milliseconds, by stage. In memory only — see backend/app/timings.py. */
+export type TimingSummary = Schemas["TimingSummary"];
+export type TurnTiming = Schemas["TurnTiming"];
 export type ExportPreview = Schemas["ExportPreview"];

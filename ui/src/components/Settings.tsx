@@ -15,7 +15,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type Health, type Settings as SettingsData } from "../api";
 import type { Key, Lang } from "../i18n";
 import type { Voice } from "../useVoice";
-import type { ExportPreview, LogSummary, RetentionStatus } from "../api";
+import type { ExportPreview, LogSummary, RetentionStatus, TimingSummary } from "../api";
 import { Accounts } from "./Accounts";
 import { FolderList } from "./FolderList";
 import { Startup } from "./Startup";
@@ -32,6 +32,17 @@ interface Props {
 
 // Injected by Vite from package.json, so it cannot drift from the build.
 const APP_VERSION = __APP_VERSION__;
+
+/** Milliseconds as something a person would say.
+ *
+ * Seconds past a thousand, because "2847 ms" is a number nobody reads as
+ * "nearly three seconds" -- and the whole reason this panel exists is that a
+ * turn's cost should be legible without arithmetic.
+ */
+function formatMs(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+  return `${(ms / 1000).toFixed(1)} s`;
+}
 
 /** Bytes as something a person would say. */
 function formatBytes(bytes: number): string {
@@ -57,6 +68,7 @@ export function Settings({ lang, setLang, t, voice }: Props) {
   const [saving, setSaving] = useState(false);
   const [logs, setLogs] = useState<LogSummary | null>(null);
   const [logNote, setLogNote] = useState<string | null>(null);
+  const [timings, setTimings] = useState<TimingSummary | null>(null);
   const [retention, setRetention] = useState<RetentionStatus | null>(null);
   const [retentionNote, setRetentionNote] = useState<string | null>(null);
 
@@ -112,13 +124,14 @@ export function Settings({ lang, setLang, t, voice }: Props) {
 
   const load = useCallback(async () => {
     try {
-      const [h, s, l, r] = await Promise.all([
-        api.health(), api.settings(), api.logs(), api.retention(),
+      const [h, s, l, r, p] = await Promise.all([
+        api.health(), api.settings(), api.logs(), api.retention(), api.timings(),
       ]);
       setHealth(h);
       setConfig(s.current);
       setLogs(l);
       setRetention(r);
+      setTimings(p);
       setError(null);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : t("common.error"));
@@ -189,8 +202,11 @@ export function Settings({ lang, setLang, t, voice }: Props) {
       const total = Object.values(result.removed).reduce((sum, n) => sum + n, 0);
       setNote(t("settings.wiped", { count: total }));
       // The wipe clears the logs as well, so the card above must stop claiming
-      // there is a folder worth opening.
+      // there is a folder worth opening. The timings ring goes with them: it is
+      // in memory rather than on disk, but a panel still reporting how long
+      // this morning's turns took would make "delete everything" look partial.
       setLogs(await api.logs().catch(() => null));
+      setTimings(await api.timings().catch(() => null));
     } catch (caught) {
       setNote(caught instanceof ApiError ? caught.message : t("common.error"));
     }
@@ -550,6 +566,45 @@ export function Settings({ lang, setLang, t, voice }: Props) {
           </>
         ) : (
           <p className="small muted">{t("settings.logsNone")}</p>
+        )}
+
+        {/* Beside the log, because it answers the other half of the same
+            question -- and with the same restraint. The log says how big it is
+            and not what is in it; this says how long a turn took and not what
+            was asked. Nothing here is stored or sent anywhere: see
+            backend/app/timings.py. */}
+        <h3 className="small">{t("settings.timings")}</h3>
+        <p className="small muted">{t("settings.timingsNote")}</p>
+        {timings && timings.count > 0 ? (
+          <>
+            <p className="small">
+              {t("settings.timingsCount", {
+                count: timings.count,
+                capacity: timings.capacity,
+              })}
+            </p>
+            <p className="small">
+              {t("settings.timingsRouting")} {formatMs(timings.median.routing_ms)}
+              {" · "}
+              {t("settings.timingsSkills")} {formatMs(timings.median.skills_ms)}
+              {" · "}
+              {t("settings.timingsSynthesis")} {formatMs(timings.median.synthesis_ms)}
+              {" · "}
+              {t("settings.timingsTotal")} {formatMs(timings.median.total_ms)}
+            </p>
+            {timings.slowest && (
+              <p className="small muted">
+                {t("settings.timingsSlowest", {
+                  total: formatMs(timings.slowest.total_ms),
+                  routing: formatMs(timings.slowest.routing_ms),
+                  skills: formatMs(timings.slowest.skills_ms),
+                  synthesis: formatMs(timings.slowest.synthesis_ms),
+                })}
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="small muted">{t("settings.timingsNone")}</p>
         )}
       </section>
 

@@ -231,6 +231,16 @@ export const en = {
   "settings.logsNone": "Nothing logged yet.",
   "settings.logsOpen": "Open log folder",
   "settings.logsOpenFailed": "Couldn't open the folder. The path is above.",
+  "settings.timings": "Speed",
+  "settings.timingsNote":
+    "How long your last few turns took, by stage. Measured in this session only: nothing is stored and nothing leaves this machine.",
+  "settings.timingsNone": "No turns yet.",
+  "settings.timingsCount": "Median of the last {count} turn(s) of {capacity}.",
+  "settings.timingsRouting": "Deciding",
+  "settings.timingsSkills": "Doing",
+  "settings.timingsSynthesis": "Replying",
+  "settings.timingsTotal": "Whole turn",
+  "settings.timingsSlowest": "Slowest: {total} ({routing} deciding, {skills} doing, {synthesis} replying).",
   "settings.export": "Your data",
   "settings.exportNote":
     "Download everything Kai has stored about you as a zip — memories, tasks, reminders, conversations, action history and meeting transcripts. No passwords, and not the text of your documents.",

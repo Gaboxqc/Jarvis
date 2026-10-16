@@ -16,6 +16,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
+from .. import timings
 from ..actions import gate, undo
 from ..memory import long_term, short_term
 from ..settings import ActionSettings, load_config
@@ -199,11 +200,17 @@ def run_turn(
         }
         return
 
+    timer = timings.Turn()
     try:
         yield from _run_turn(
-            text, session_id, pending_action_id=pending_action_id, stream=stream
+            text, session_id, pending_action_id=pending_action_id, stream=stream, timer=timer
         )
     finally:
+        # Recorded on every exit, including the GeneratorExit raised when a
+        # client disconnects mid-stream. An abandoned turn still cost what it
+        # cost, and dropping those would bias the window towards the turns that
+        # were waited for -- which is the opposite of the ones worth looking at.
+        timer.finish()
         lock.release()
 
 
@@ -213,6 +220,7 @@ def _run_turn(
     *,
     pending_action_id: str | None = None,
     stream: bool = True,
+    timer: timings.Turn,
 ) -> Iterator[dict[str, Any]]:
     """The turn loop, as a sequence of events.
 
@@ -282,13 +290,15 @@ def _run_turn(
         yield {"type": "stage", "stage": "writing"}
         yield from _emit_reply(
             session_id, [{"role": "system", "content": system}, *history],
-            stream=stream, guard=None, language=config.persona.language,
+            stream=stream, guard=None, language=config.persona.language, timer=timer,
         )
         return
 
     yield {"type": "stage", "stage": "routing"}
     try:
-        route = _route(system, history, text, config.actions.max_skills_per_turn)
+        route = _timed_route(
+            timer, system, history, text, config.actions.max_skills_per_turn
+        )
     except llm.LLMUnavailable as exc:
         # REQ-27: a dead model is reported plainly, and everything stored locally
         # is still reachable through the API and CLI commands.
@@ -311,7 +321,7 @@ def _run_turn(
         yield {"type": "stage", "stage": "writing"}
         yield from _emit_reply(
             session_id, [{"role": "system", "content": system}, *history],
-            stream=stream, guard=text, language=config.persona.language,
+            stream=stream, guard=text, language=config.persona.language, timer=timer,
         )
         return
 
@@ -346,7 +356,10 @@ def _run_turn(
         round_results: list[dict[str, Any]] = []
         parked: gate.GateOutcome | None = None
         for call in calls[:budget]:
-            outcome = gate.submit(call["name"], call.get("args") or {}, ctx, batch_id=batch_id)
+            with timer.stage(timings.SKILLS):
+                outcome = gate.submit(
+                    call["name"], call.get("args") or {}, ctx, batch_id=batch_id
+                )
             round_results.append(outcome.to_dict())
             results.append(outcome.to_dict())
 
@@ -357,6 +370,11 @@ def _run_turn(
                 # done half the work anyway.
                 parked = outcome
                 break
+            # Counted here rather than from `len(results)`, which includes the
+            # one that stopped to ask: a turn that proposed an action and ran
+            # nothing is not a turn that ran a skill, and the timings panel
+            # would otherwise attribute a confirmation prompt's latency to work.
+            timer.ran_skill()
 
         if parked is not None:
             # Emitted whole, never streamed: a question awaiting approval must
@@ -384,9 +402,7 @@ def _run_turn(
             break
 
         # Re-route, with what just happened in front of the model.
-        follow_on = _route(
-            system, history, text, budget, results=results
-        )
+        follow_on = _timed_route(timer, system, history, text, budget, results=results)
         next_calls = _extract_calls(follow_on)
         if not next_calls:
             # It looked at the results and had nothing more to ask for, which
@@ -400,8 +416,9 @@ def _run_turn(
     yield {"type": "stage", "stage": "writing"}
     written = ""
     try:
-        for kind, payload in _generate(
-            _synthesis_messages(system, history, results, not_run), stream=stream
+        for kind, payload in _timed(
+            timer,
+            _generate(_synthesis_messages(system, history, results, not_run), stream=stream),
         ):
             if kind == "delta":
                 yield {"type": "delta", "text": payload}
@@ -458,6 +475,47 @@ def _generate(
     yield ("text", "".join(parts))
 
 
+def _timed_route(
+    timer: timings.Turn,
+    system: str,
+    history: list[dict[str, str]],
+    text: str,
+    budget: int,
+    *,
+    results: list[dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
+    """`_route`, on the clock, counted as a round even when it raises.
+
+    Both call sites go through this so neither can be the one that forgets:
+    the follow-up round was added as an opt-in because a second routing call is
+    half the latency of a turn (see MAX_ROUNDS), and a timings panel that could
+    not see it would leave that claim exactly as unmeasured as before.
+    """
+    timer.routed()
+    with timer.stage(timings.ROUTING):
+        return _route(system, history, text, budget, results=results)
+
+
+def _timed(
+    timer: timings.Turn, source: Iterator[tuple[str, str]]
+) -> Iterator[tuple[str, str]]:
+    """Charge synthesis for the model's time, not the client's.
+
+    The clock runs while `next()` is in flight and stops while the value is
+    downstream. Wrapping the whole `for` in one `with` would have charged the
+    synthesis stage for the HTTP write of every delta -- over a slow connection
+    most of the number, and over the SSE endpoint a number that says more about
+    the reader than about the model.
+    """
+    while True:
+        with timer.stage(timings.SYNTHESIS):
+            try:
+                item = next(source)
+            except StopIteration:
+                return
+        yield item
+
+
 def _emit_reply(
     session_id: str,
     messages: list[dict[str, str]],
@@ -465,6 +523,7 @@ def _emit_reply(
     stream: bool,
     guard: str | None,
     language: str = "en",
+    timer: timings.Turn,
 ) -> Iterator[dict[str, Any]]:
     """A turn that answers in prose, with no skills involved.
 
@@ -474,7 +533,7 @@ def _emit_reply(
     """
     written = ""
     try:
-        for kind, payload in _generate(messages, stream=stream):
+        for kind, payload in _timed(timer, _generate(messages, stream=stream)):
             if kind == "delta":
                 yield {"type": "delta", "text": payload}
             else:
