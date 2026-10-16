@@ -182,6 +182,18 @@ class RetentionSettings:
 class ActionSettings:
     pre_approved: tuple[str, ...] = ()
     confirmation_ttl_minutes: int = 10
+    # How many skills one turn may run. A bound on runaway tool loops.
+    #
+    # Here rather than as a constant in the orchestrator because two things
+    # have to agree about it: the loop that enforces it, and the router prompt
+    # that tells the model what the limit is (prompts.router_prompt). While it
+    # was a module private, a reader had no way to find the second one, and the
+    # value could not be raised on a machine with a larger model without
+    # editing the turn loop.
+    #
+    # Three is the measured default: the sweep's held-out cases never need more
+    # than three tools, and a model given a higher ceiling starts padding.
+    max_skills_per_turn: int = 3
 
 
 @dataclass(frozen=True)
@@ -379,6 +391,12 @@ def _build(raw: dict[str, Any], source: Path | None) -> Config:
         actions=ActionSettings(
             pre_approved=tuple(actions_raw.get("pre_approved") or ()),
             confirmation_ttl_minutes=int(actions_raw.get("confirmation_ttl_minutes", 10)),
+            # Floored at 1: zero would mean a router that proposes a skill, a
+            # turn that runs none of them, and a reply explaining that it did
+            # not get to any of it -- a config value that turns the assistant
+            # off while looking like a tuning knob.
+            max_skills_per_turn=max(1, int(actions_raw.get(
+                "max_skills_per_turn", ActionSettings.max_skills_per_turn))),
         ),
         retention=RetentionSettings(
             conversation_days=max(0, int(retention_raw.get(

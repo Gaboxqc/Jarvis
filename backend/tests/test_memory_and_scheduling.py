@@ -44,6 +44,35 @@ def test_unrelated_facts_are_not_returned(workspace):
     assert long_term.relevant("what is the capital of France") == []
 
 
+def test_recall_stamps_only_the_facts_it_used(workspace):
+    """`last_used_at` is written for the facts a turn actually put in front of
+    the model, and for no others.
+
+    Pinned because the write was rewritten from a loop of one UPDATE per fact
+    into a single statement -- this runs on every turn, and `db.execute()`
+    commits each call, so six recalled facts were six commits. A batched write
+    that stamped the wrong rows, or none, would otherwise look identical from
+    the outside: nothing in the app reads this column yet.
+    """
+    used = long_term.add("The user's client work lives in D:/work/clients", "fact")
+    unused = long_term.add("The user is allergic to shellfish", "fact")
+
+    hits = long_term.relevant("where is my client work again")
+
+    assert [fact.id for fact in hits] == [used.id]
+    assert long_term.get(used.id).last_used_at is not None
+    assert long_term.get(unused.id).last_used_at is None
+
+
+def test_recall_with_no_match_writes_nothing(workspace):
+    """The batched statement is skipped on an empty list rather than being
+    sent with no placeholders, which is a syntax error in SQLite."""
+    fact = long_term.add("The user is allergic to shellfish", "fact")
+
+    assert long_term.relevant("what is the capital of France") == []
+    assert long_term.get(fact.id).last_used_at is None
+
+
 def test_forgetting_is_undoable(workspace):
     """Forgetting is not gated — it is reported and reversible instead."""
     long_term.add("Temporary fact about scheduling", "fact")

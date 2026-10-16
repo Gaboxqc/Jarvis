@@ -147,9 +147,26 @@ def relevant(query_text: str, limit: int = 6) -> list[MemoryFact]:
     semantic = _by_meaning(query_text, limit)
 
     top = lexical[:limit] if not semantic else _fuse(lexical, semantic)[:limit]
-    for fact in top:
-        db.execute("UPDATE memory_facts SET last_used_at = ? WHERE id = ?", (db.now(), fact.id))
+    _touch(top)
     return top
+
+
+def _touch(facts: list[MemoryFact]) -> None:
+    """Stamp `last_used_at` on the facts this turn used.
+
+    One statement rather than one per fact. This runs on every single turn, and
+    `db.execute()` commits each call -- so recalling six facts was six commits
+    before the model had even been asked anything. With synchronous=NORMAL that
+    is cheap and it was never free, and the loop it replaces grew with the
+    limit for no reason: the rows are known up front.
+    """
+    if not facts:
+        return
+    placeholders = ",".join("?" for _ in facts)
+    db.execute(
+        f"UPDATE memory_facts SET last_used_at = ? WHERE id IN ({placeholders})",
+        (db.now(), *[fact.id for fact in facts]),
+    )
 
 
 def _by_overlap(query_text: str, limit: int) -> list[MemoryFact]:

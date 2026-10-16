@@ -13,7 +13,9 @@ any of them exist.
 from __future__ import annotations
 
 import logging
+import queue
 import threading
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable
@@ -24,6 +26,14 @@ from . import store
 log = logging.getLogger(__name__)
 
 POLL_SECONDS = 5.0
+
+# How long `stop()` waits for a routine that is mid-execution.
+#
+# Generous, because what it is usually waiting for is a connector: a routine
+# step that opens IMAP has a 20-second timeout of its own, and killing it
+# halfway would leave the Action Gate's journal recording an action whose
+# outcome nobody knows.
+ROUTINE_SHUTDOWN_SECONDS = 30.0
 
 
 @dataclass
@@ -115,8 +125,52 @@ def collect_due() -> list[Delivery]:
     return deliveries
 
 
-def _run_routines(deliveries: list[Delivery]) -> None:
-    """Execute routines that have come due, and say what happened.
+# -- routine execution, off the poll loop ---------------------------------
+#
+# Routines used to run inline in `tick()`, which is the same 5-second loop that
+# delivers every reminder, advances the document index and unloads idle speech
+# models. A routine is the one thing on that list with no bound on how long it
+# takes: its steps go through the Action Gate into real skills, and a step that
+# opens IMAP has a 20-second timeout of its own. For as long as one ran, every
+# reminder was late and the indexer did not advance -- and `_run_routines`
+# caught exceptions, so slowness was the failure mode nothing noticed.
+#
+# One worker, with a queue, rather than a thread per tick. Routines must not
+# run concurrently with each other: each is a batch in the action journal and
+# is undoable as one, and two interleaved batches would be undoable as neither.
+# Serialised through a single consumer, that stays true without a second lock.
+_routine_queue: queue.Queue[Delivery | None] = queue.Queue()
+_routine_thread: threading.Thread | None = None
+_routine_lock = threading.Lock()
+
+# Outstanding routines, for the callers that need to know when the queue has
+# drained -- `POST /reminders/tick`, which exists to make something happen now,
+# and the tests. Counted here rather than read off the Queue's own
+# `unfinished_tasks`, which is an implementation detail and has no way to wait
+# with a timeout.
+_routines_idle = threading.Condition()
+_routines_pending = 0
+
+
+def _routine_worker() -> None:
+    while True:
+        delivery = _routine_queue.get()
+        if delivery is None:
+            return
+        try:
+            _execute_routine(delivery)
+        except Exception:  # noqa: BLE001 — one bad routine must not end the worker
+            log.exception("routine %s failed", delivery.label)
+        finally:
+            global _routines_pending
+            with _routines_idle:
+                _routines_pending -= 1
+                if _routines_pending <= 0:
+                    _routines_idle.notify_all()
+
+
+def _execute_routine(delivery: Delivery) -> None:
+    """Run one routine and say what happened.
 
     Imported here rather than at module scope: routines reach into the Action
     Gate, the gate reaches into the skill registry, and the registry is loaded
@@ -125,24 +179,58 @@ def _run_routines(deliveries: list[Delivery]) -> None:
     """
     from . import routines as routines_module
 
+    item = store.get(delivery.item_id)
+    if item is None:
+        return
+    outcome = routines_module.run(item)
+
+    from .. import notifications
+
+    notifications.publish(
+        kind="routine",
+        title=delivery.label,
+        body=routines_module.summarise(outcome),
+        identifier=delivery.item_id,
+    )
+
+
+def _queue_routines(deliveries: list[Delivery]) -> None:
+    """Hand due routines to the worker and return.
+
+    The store has already advanced them (`collect_due`), so a routine cannot be
+    queued twice by the next tick arriving before this one has run.
+    """
+    global _routine_thread, _routines_pending
+
+    with _routine_lock:
+        if _routine_thread is None or not _routine_thread.is_alive():
+            _routine_thread = threading.Thread(
+                target=_routine_worker, name="kai-routines", daemon=True
+            )
+            _routine_thread.start()
+
+    with _routines_idle:
+        _routines_pending += len(deliveries)
     for delivery in deliveries:
-        item = store.get(delivery.item_id)
-        if item is None:
-            continue
-        try:
-            outcome = routines_module.run(item)
-        except Exception:  # noqa: BLE001 — one bad routine must not stop the thread
-            log.exception("routine %s failed", delivery.label)
-            continue
+        _routine_queue.put(delivery)
 
-        from .. import notifications
 
-        notifications.publish(
-            kind="routine",
-            title=delivery.label,
-            body=routines_module.summarise(outcome),
-            identifier=delivery.item_id,
-        )
+def wait_for_routines(timeout: float = 10.0) -> bool:
+    """Block until every queued routine has finished. False on timeout.
+
+    For the callers that mean "now": `POST /reminders/tick`, whose whole
+    purpose is to make the due thing happen while someone is looking at it,
+    and the tests, which would otherwise assert against work that has been
+    handed to a thread and not yet done.
+    """
+    deadline = time.monotonic() + timeout
+    with _routines_idle:
+        while _routines_pending > 0:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            _routines_idle.wait(remaining)
+    return True
 
 
 def _dispatch(deliveries: list[Delivery]) -> None:
@@ -163,7 +251,7 @@ def tick() -> list[Delivery]:
     # it acts, and what the user wants told is what it did.
     routines_due = [d for d in deliveries if d.kind == store.KIND_ROUTINE]
     if routines_due:
-        _run_routines(routines_due)
+        _queue_routines(routines_due)
     rest = [d for d in deliveries if d.kind != store.KIND_ROUTINE]
     if rest:
         _dispatch(rest)
@@ -217,8 +305,21 @@ def start() -> None:
 
 
 def stop() -> None:
-    global _thread
+    global _thread, _routine_thread
     _stop.set()
     if _thread is not None:
         _thread.join(timeout=POLL_SECONDS + 1)
     _thread = None
+
+    # The routine worker goes down after the poll loop, not with it: the loop
+    # is what queues work, so stopping it first means nothing new arrives while
+    # this drains. A routine mid-execution is given time to finish rather than
+    # abandoned -- its steps are already in the action journal, and a journal
+    # entry whose outcome nobody recorded is worse than a slow shutdown.
+    with _routine_lock:
+        worker, _routine_thread = _routine_thread, None
+    if worker is not None and worker.is_alive():
+        _routine_queue.put(None)
+        worker.join(timeout=ROUTINE_SHUTDOWN_SECONDS)
+        if worker.is_alive():
+            log.warning("a routine was still running at shutdown; leaving it")

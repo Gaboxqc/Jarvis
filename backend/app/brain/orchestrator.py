@@ -11,17 +11,17 @@ Everything else routes through the LLM.
 from __future__ import annotations
 
 import logging
-import re
+import threading
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
 from ..actions import gate, undo
 from ..memory import long_term, short_term
-from ..settings import load_config
+from ..settings import ActionSettings, load_config
 from ..skills.base import SkillContext
 from ..skills.registry import catalog
-from . import llm, prompts
+from . import intents, llm, prompts
 
 log = logging.getLogger(__name__)
 
@@ -36,65 +36,52 @@ log = logging.getLogger(__name__)
 # Now the router is told the limit (prompts.router_prompt), so it usually does
 # not propose more; and when it does anyway, the ones left over are named in
 # the reply instead of vanishing.
-MAX_SKILLS_PER_TURN = 3
-
-_AFFIRMATIVE = {
-    "y", "yes", "yeah", "yep", "yup", "ok", "okay", "sure", "do it", "go ahead",
-    "go for it", "confirm", "confirmed", "please do", "proceed", "affirmative",
-    "sí", "si", "vale", "dale", "hazlo",
-}
-_NEGATIVE = {
-    "n", "no", "nope", "cancel", "stop", "don't", "dont", "nevermind",
-    "never mind", "forget it", "no thanks", "nah",
-}
-_UNDO = re.compile(
-    r"^\s*(undo|revert|roll ?back|take that back|put (them|it|those|that) back|deshaz)\b",
-    re.IGNORECASE,
-)
-
-# Turns that cannot possibly need a tool, so they do not pay for a routing call.
 #
-# Deliberately a fixed set of whole phrases rather than a pattern: the cost of
-# being wrong is asymmetric. Skipping the router on something that did need a
-# tool produces a confident answer with nothing behind it, which is the exact
-# failure _guard_ungrounded_reply exists to catch. Skipping it on "thanks" saves
-# half the turn. So the set only contains phrases that are complete in
-# themselves and carry no request — anything longer still routes.
-_PLEASANTRIES = {
-    "hi", "hello", "hey", "yo", "good morning", "good afternoon", "good evening",
-    "thanks", "thank you", "thanks a lot", "thank you very much", "ta", "cheers",
-    "ok", "okay", "cool", "nice", "great", "perfect", "got it", "understood",
-    "never mind", "nevermind", "no worries", "sorry",
-    "bye", "goodbye", "good night", "see you", "later",
-    # Spanish — the UI ships in both languages (REQ-28).
-    "hola", "buenos días", "buenos dias", "buenas tardes", "buenas noches",
-    "gracias", "muchas gracias", "vale", "genial", "perfecto", "entendido",
-    "adiós", "adios", "hasta luego", "buenas",
-}
+# The value lives in `actions.max_skills_per_turn`, because the loop and the
+# prompt both have to agree about it and a module private is not somewhere a
+# reader can find the second one. This name is kept, as the default, so the
+# sweep tooling and the prompt tests have one number to refer to.
+MAX_SKILLS_PER_TURN = ActionSettings.max_skills_per_turn
 
-# Sources the model cannot possibly know about without calling a tool. Memory
-# facts are deliberately absent: those are injected into the system prompt, so
-# answering from them without a tool call is legitimate.
-_EXTERNAL_DATA = re.compile(
-    r"\b(my|the)\s+("
-    r"calendar|schedule|agenda|diary|meetings?|appointments?|"
-    r"inbox|e-?mails?|mail|messages?|"
-    r"documents?|files?|folders?|"
-    r"tasks?|to-?dos?|reminders?"
-    r")\b",
-    re.IGNORECASE,
-)
+# Recognising what a user means, and what the model claimed, lives in
+# brain/intents/ -- one module per language, selected two different ways. See
+# its docstring: what the *user* typed is matched in every language at once,
+# because a persona set to English is not a promise about what the person will
+# type; what the *model* wrote is matched in the persona's language, because
+# that is the only language it could be in.
 
-# First-person claims that something was carried out. Kept tight and
-# action-specific: "I've noticed" and "I've got" must not match.
-_ACTION_CLAIM = re.compile(
-    r"\b(i(?:'ve| have)?\s+(?:just\s+)?"
-    r"(added|created|scheduled|booked|set(?: up)?|sent|deleted|removed|cancelled|"
-    r"canceled|moved|saved|stored|updated|marked|organi[sz]ed|reminded)"
-    r"|(?:has|have) been (added|created|scheduled|sent|deleted|removed|cancelled|"
-    r"canceled|moved|saved|updated|marked|set))\b",
-    re.IGNORECASE,
-)
+
+# One lock per session, taken for the whole of a turn.
+#
+# Two overlapping turns in one session interleave: both record the user's text,
+# both then read a window that contains the other's message, both route against
+# it, and both can park an action -- so the conversation the model sees is not
+# the conversation that happened, and a confirmation can be shown for an action
+# proposed in answer to a different question. The UI serializes by disabling
+# the composer, which is a property of one client rather than of the API, and
+# /turn/stream is long-lived enough for a second request to be ordinary.
+#
+# Held across the generator rather than around a function call, because the
+# turn *is* the generator: released in a `finally`, which runs on normal
+# completion and on the GeneratorExit raised when a client disconnects
+# mid-stream and the generator is closed.
+#
+# Sessions are created by name by whoever calls, so the dict is unbounded in
+# principle. In practice there are two ("default" and "ui") plus whatever a
+# script invents, each entry is a lock and a short string, and reaping them
+# would need to know that no turn is about to arrive for a session -- which is
+# exactly what the lock is for. Not worth the race.
+_session_locks: dict[str, threading.Lock] = {}
+_session_locks_guard = threading.Lock()
+
+
+def _session_lock(session_id: str) -> threading.Lock:
+    with _session_locks_guard:
+        lock = _session_locks.get(session_id)
+        if lock is None:
+            lock = threading.Lock()
+            _session_locks[session_id] = lock
+        return lock
 
 
 @dataclass
@@ -165,6 +152,53 @@ def run_turn(
     pending_action_id: str | None = None,
     stream: bool = True,
 ) -> Iterator[dict[str, Any]]:
+    """One turn at a time per session — see `_session_locks`.
+
+    A refusal rather than a queue, and deliberately. A queued turn answers a
+    question the user asked before they saw the answer to the previous one, by
+    which time they have usually rephrased it or moved on; and queueing behind
+    a model call that can take the full timeout means a request that is held
+    open for two minutes before anything happens. Being told to wait a moment
+    is the honest version of both.
+
+    Nothing is recorded for a refused turn. The user's text does not reach the
+    conversation window, so a retry sees exactly the history it would have
+    seen, and the refusal is not something the model is later asked to explain.
+
+    `confirm_pending` and `decline_pending` deliberately do not take this lock.
+    Answering a confirmation while the turn that proposed it is still finishing
+    its stream is ordinary -- the UI can show the buttons before the connection
+    closes -- and the gate already protects the thing that matters there, by
+    consuming the action id.
+    """
+    lock = _session_lock(session_id)
+    if not lock.acquire(blocking=False):
+        language = load_config().persona.language
+        log.info("refused a second concurrent turn for session %r", session_id)
+        yield {
+            "type": "done",
+            "result": TurnResult(
+                reply=intents.for_language(language).busy,
+                error="turn_in_progress",
+            ),
+        }
+        return
+
+    try:
+        yield from _run_turn(
+            text, session_id, pending_action_id=pending_action_id, stream=stream
+        )
+    finally:
+        lock.release()
+
+
+def _run_turn(
+    text: str,
+    session_id: str = "default",
+    *,
+    pending_action_id: str | None = None,
+    stream: bool = True,
+) -> Iterator[dict[str, Any]]:
     """The turn loop, as a sequence of events.
 
     Yields, in order:
@@ -200,11 +234,11 @@ def run_turn(
     # hand back the action_id it was given, and the gate re-checks that id's state.
     # A "yes" with no pending id is just conversation.
     if pending_action_id:
-        if normalized in _AFFIRMATIVE:
+        if intents.affirms(normalized):
             yield {"type": "done", "result": _finish(
                 session_id, _run_confirmation(pending_action_id, ctx))}
             return
-        if normalized in _NEGATIVE:
+        if intents.declines(normalized):
             outcome = gate.decline(pending_action_id)
             yield {"type": "done", "result": _finish(
                 session_id,
@@ -213,7 +247,7 @@ def run_turn(
             return
 
     # 2. Undo.
-    if _UNDO.match(text):
+    if intents.is_undo(text):
         result = undo.undo_last()
         yield {"type": "done", "result": _finish(
             session_id,
@@ -229,17 +263,17 @@ def run_turn(
     # 3a. A greeting needs an answer, but it never needs a tool. Routing it costs
     # a whole model call to be told so — half the latency of the turn, spent
     # establishing that "thanks" is not a request.
-    if normalized in _PLEASANTRIES:
+    if intents.is_pleasantry(normalized):
         yield {"type": "stage", "stage": "writing"}
         yield from _emit_reply(
             session_id, [{"role": "system", "content": system}, *history],
-            stream=stream, guard=None,
+            stream=stream, guard=None, language=config.persona.language,
         )
         return
 
     yield {"type": "stage", "stage": "routing"}
     try:
-        route = _route(system, history, text)
+        route = _route(system, history, text, config.actions.max_skills_per_turn)
     except llm.LLMUnavailable as exc:
         # REQ-27: a dead model is reported plainly, and everything stored locally
         # is still reachable through the API and CLI commands.
@@ -253,7 +287,7 @@ def run_turn(
         if direct:
             # The router already wrote an answer. Emitting it whole rather than
             # regenerating it keeps the turn to a single model call.
-            reply = _guard_ungrounded_reply(text, direct, [])
+            reply = _guard_ungrounded_reply(text, direct, [], config.persona.language)
             if stream:
                 yield {"type": "delta", "text": reply}
             yield {"type": "done", "result": _finish(session_id, TurnResult(reply=reply))}
@@ -262,7 +296,7 @@ def run_turn(
         yield {"type": "stage", "stage": "writing"}
         yield from _emit_reply(
             session_id, [{"role": "system", "content": system}, *history],
-            stream=stream, guard=text,
+            stream=stream, guard=text, language=config.persona.language,
         )
         return
 
@@ -270,15 +304,16 @@ def run_turn(
     yield {"type": "stage", "stage": "working"}
     batch_id = gate.new_batch_id()
     results: list[dict[str, Any]] = []
-    deferred = [call["name"] for call in calls[MAX_SKILLS_PER_TURN:]]
+    budget = config.actions.max_skills_per_turn
+    deferred = [call["name"] for call in calls[budget:]]
     if deferred:
         log.info(
             "router asked for %d skills; running %d, deferring %s",
             len(calls),
-            MAX_SKILLS_PER_TURN,
+            budget,
             ", ".join(deferred),
         )
-    for call in calls[:MAX_SKILLS_PER_TURN]:
+    for call in calls[:budget]:
         outcome = gate.submit(call["name"], call.get("args") or {}, ctx, batch_id=batch_id)
         results.append(outcome.to_dict())
 
@@ -301,7 +336,7 @@ def run_turn(
                     reply=prompts.confirmation_prompt(outcome.preview, outcome.reversible),
                     pending=pending,
                     skill_calls=results,
-                    not_run=_not_run(calls, results, deferred),
+                    not_run=_not_run(calls, results, deferred, budget),
                 ),
             )}
             return
@@ -323,7 +358,7 @@ def run_turn(
         written = ""
 
     reply = _append_receipts(written or _fallback_summary(results, deferred), results)
-    reply = _guard_ungrounded_reply(text, reply, results)
+    reply = _guard_ungrounded_reply(text, reply, results, config.persona.language)
 
     # Receipts and the guard can both change text already shown, so the final
     # result carries the authoritative version for clients to settle on.
@@ -374,6 +409,7 @@ def _emit_reply(
     *,
     stream: bool,
     guard: str | None,
+    language: str = "en",
 ) -> Iterator[dict[str, Any]]:
     """A turn that answers in prose, with no skills involved.
 
@@ -393,7 +429,11 @@ def _emit_reply(
             session_id, TurnResult(reply=str(exc), error="llm_unavailable"))}
         return
 
-    reply = _guard_ungrounded_reply(guard, written, []) if guard is not None else written
+    reply = (
+        _guard_ungrounded_reply(guard, written, [], language)
+        if guard is not None
+        else written
+    )
     yield {"type": "done", "result": _finish(session_id, TurnResult(reply=reply))}
 
 
@@ -409,7 +449,12 @@ def _run_confirmation(action_id: str, ctx: SkillContext) -> TurnResult:
     )
 
 
-def _route(system: str, history: list[dict[str, str]], text: str) -> dict[str, Any] | None:
+def _route(
+    system: str,
+    history: list[dict[str, str]],
+    text: str,
+    budget: int,
+) -> dict[str, Any] | None:
     """Decide which skills, if any, this turn needs.
 
     Two mechanisms, same return shape. Where the model advertises tool-calling
@@ -440,7 +485,7 @@ def _route(system: str, history: list[dict[str, str]], text: str) -> dict[str, A
 
     messages = [
         {"role": "system", "content": system},
-        {"role": "system", "content": prompts.router_prompt(available, MAX_SKILLS_PER_TURN)},
+        {"role": "system", "content": prompts.router_prompt(available, budget)},
         *history[-6:],
         {"role": "user", "content": text},
     ]
@@ -486,6 +531,7 @@ def _not_run(
     calls: list[dict[str, Any]],
     results: list[dict[str, Any]],
     deferred: list[str],
+    budget: int,
 ) -> list[str]:
     """Everything asked for that this turn will not do.
 
@@ -496,7 +542,7 @@ def _not_run(
     unmentioned.
     """
     ran = len(results)
-    abandoned = [call["name"] for call in calls[ran:MAX_SKILLS_PER_TURN]]
+    abandoned = [call["name"] for call in calls[ran:budget]]
     return abandoned + deferred
 
 
@@ -581,8 +627,13 @@ def _fallback_summary(
     return "\n".join(lines) or "Done."
 
 
-def _guard_ungrounded_reply(user_text: str, reply: str, results: list[dict[str, Any]]) -> str:
-    """Catch answers the model had no way to know — REQ-27.
+def _guard_ungrounded_reply(
+    user_text: str,
+    reply: str,
+    results: list[dict[str, Any]],
+    language: str = "en",
+) -> str:
+    """Catch answers the model had no way to know — REQ-27, REQ-28.
 
     When routing fails, a small model does not say "I can't check that". It
     invents a plausible answer: meetings with people who don't exist, or a
@@ -592,27 +643,28 @@ def _guard_ungrounded_reply(user_text: str, reply: str, results: list[dict[str, 
     The system prompt already forbids this and is ignored under pressure, so it
     is enforced here instead. Both checks require that *no skill executed*, which
     is what makes them safe: a grounded turn is never touched.
+
+    `language` is not decoration. The patterns were English-only for as long as
+    this existed, so a persona set to Spanish -- a language the app ships, with
+    its own system-prompt instruction to answer in it -- had no guard at all.
+    The model invented in Spanish and nothing looked.
     """
     if any(r.get("status") == gate.EXECUTED for r in results):
         return reply
     if not reply:
         return reply
 
+    guard = intents.for_language(language)
+
     # Claiming to have done something, having done nothing.
-    if _ACTION_CLAIM.search(reply):
+    if guard.action_claim.search(reply):
         log.warning("blocked an unperformed action claim: %r", reply[:120])
-        return (
-            "I didn't actually do that — I couldn't work out which action to run. "
-            "Could you say it again more plainly?"
-        )
+        return guard.unperformed
 
     # Answering about a data source that requires a tool it never called.
-    if _EXTERNAL_DATA.search(user_text):
+    if guard.external_data.search(user_text):
         log.warning("blocked an ungrounded answer about external data: %r", reply[:120])
-        return (
-            "I'd have to look that up and I wasn't able to — so I don't want to guess. "
-            "Check that the account or folder is connected, then ask me again."
-        )
+        return guard.ungrounded
 
     return reply
 

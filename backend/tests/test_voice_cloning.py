@@ -17,9 +17,12 @@ from __future__ import annotations
 
 import wave
 
+import anyio
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
+from app.api import voice as voice_api
 from app.main import app
 from app.settings import load_config, reset_config_cache
 from app.voice import cloning, tts
@@ -215,6 +218,68 @@ def test_a_corrupt_wav_is_refused(client):
     )
     assert response.status_code == 400
     assert "readable WAV" in response.json()["detail"]
+
+
+def test_an_oversized_upload_is_refused_before_it_is_decoded(client):
+    """The cap is enforced on the way in, not after the body has been taken.
+
+    This was `await file.read()` and then a check on the length, which is a
+    limit on what gets decoded rather than on what gets accepted: the whole
+    body was already spooled to disk by the time anything decided it was too
+    big. 413 rather than 400, because the request was well-formed and the
+    objection is to its size.
+
+    The declared size is checked first, so a client that says how large the
+    file is gets turned away without sending it.
+    """
+    consent(client)
+    oversized = b"RIFF" + b"\x00" * (voice_api.MAX_REFERENCE_BYTES + 1)
+
+    response = client.post(
+        "/voice/clone/reference",
+        files={"file": ("me.wav", oversized, "audio/wav")},
+    )
+
+    assert response.status_code == 413
+    assert "too large" in response.json()["detail"]
+    assert cloning.status()["has_reference"] is False
+
+
+def test_an_upload_that_understates_its_size_is_still_refused(workspace):
+    """`Content-Length` is a claim, not a fact.
+
+    The declared size is checked because it is free and lets an honest client
+    be turned away without sending anything -- but a client that understates
+    it must buy nothing by doing so, which is why the chunked read enforces
+    the same cap on the bytes that actually arrive.
+
+    Exercised against `_read_capped` directly with a file that lies: going
+    through the HTTP layer would have Starlette compute the real size and the
+    assertion would be about Starlette rather than about this.
+    """
+
+    class Liar:
+        """Reports a harmless size, delivers far more than the cap."""
+
+        size = 1024
+
+        def __init__(self) -> None:
+            self.served = 0
+
+        async def read(self, count: int) -> bytes:
+            # Endless, so the only thing that can stop this is the cap.
+            self.served += count
+            return b"\x00" * count
+
+    liar = Liar()
+
+    with pytest.raises(HTTPException) as refused:
+        anyio.run(voice_api._read_capped, liar, 4 * 1024 * 1024, "a voice sample")
+
+    assert refused.value.status_code == 413
+    # Stopped at the first chunk past the cap rather than reading an endless
+    # body to the end.
+    assert liar.served <= 4 * 1024 * 1024 + voice_api.UPLOAD_CHUNK_BYTES
 
 
 def test_a_short_upload_is_refused_with_the_length(client):
