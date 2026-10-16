@@ -278,23 +278,32 @@ def _run_turn(
         )}
         return
 
-    # 3. Everything else goes through the model.
-    facts = long_term.relevant(text)
-    system = prompts.system_prompt(config, facts)
     history = [turn.as_message() for turn in short_term.window(session_id)]
 
-    # 3a. A greeting needs an answer, but it never needs a tool. Routing it costs
+    # 3. A greeting needs an answer, but it never needs a tool. Routing it costs
     # a whole model call to be told so, and that call is the most expensive thing
     # in a turn: 2614ms median against 950ms of synthesis over four real turns
     # against a local qwen2.5 (app/timings.py), so roughly two thirds of the turn
     # spent establishing that "thanks" is not a request.
+    #
+    # It does not need memory either, and this is checked before recall rather
+    # than after it. Recall is not free -- it embeds the message through Ollama,
+    # measured at 350ms of every turn (memory/long_term.py) -- and it was being
+    # paid here to put the user's remembered facts into the prompt for "thanks".
+    # Nothing is lost that a reply to a pleasantry could have used: this branch
+    # already decided the turn needs no tool, no lookup and no grounding guard.
     if intents.is_pleasantry(normalized):
         yield {"type": "stage", "stage": "writing"}
         yield from _emit_reply(
-            session_id, [{"role": "system", "content": system}, *history],
+            session_id,
+            [{"role": "system", "content": prompts.system_prompt(config, [])}, *history],
             stream=stream, guard=None, language=config.persona.language, timer=timer,
         )
         return
+
+    # 3a. Everything else goes through the model, and gets what Kai remembers.
+    facts = long_term.relevant(text)
+    system = prompts.system_prompt(config, facts)
 
     yield {"type": "stage", "stage": "routing"}
     try:
