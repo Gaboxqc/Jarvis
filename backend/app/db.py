@@ -102,6 +102,21 @@ MIGRATIONS: dict[int, tuple[str, ...]] = {
 }
 
 
+class DatabaseUnavailable(Exception):
+    """The database could not be opened, and it is not damaged.
+
+    Raised instead of quarantining, for every reason that is not corruption:
+    a lock held by another process, a file the filesystem will not hand over,
+    a disk error. These pass. Treating them as corruption is how a healthy
+    database gets moved aside and replaced with an empty one, which is the
+    one outcome worse than not starting.
+
+    Like MigrationError, deliberately not a `sqlite3.DatabaseError`: that is
+    the class connect() quarantines on, and inheriting from it would feed this
+    straight back into the behaviour it exists to prevent.
+    """
+
+
 class MigrationError(Exception):
     """A migration could not be applied.
 
@@ -311,6 +326,28 @@ CREATE TABLE IF NOT EXISTS tasks (
 """
 
 
+# What SQLite says when the file really is damaged, as opposed to busy. Matched
+# on the message because sqlite3 exposes no error code for it: DatabaseError is
+# the same class for a malformed image and a locked file.
+_CORRUPTION = (
+    "malformed",            # database disk image is malformed
+    "not a database",       # file is not a database
+    "encrypted",            # file is encrypted or is not a database
+    "corrupt",              # database corruption / database is corrupt
+)
+
+
+def _is_corruption(exc: sqlite3.DatabaseError) -> bool:
+    """Whether this error means the file is damaged rather than unavailable.
+
+    Deliberately conservative: anything unrecognised is treated as *not*
+    corruption and propagates. The cost of being wrong in that direction is an
+    app that refuses to start and says why. The cost of being wrong the other
+    way is the user's database moved aside, or deleted.
+    """
+    return any(marker in str(exc).lower() for marker in _CORRUPTION)
+
+
 def _quarantine(path: Path, reason: str) -> Path:
     """Move a damaged database aside so a fresh one can be created.
 
@@ -324,21 +361,37 @@ def _quarantine(path: Path, reason: str) -> Path:
     quarantine = path.parent / f"corrupt-{stamp}"
     quarantine.mkdir(parents=True, exist_ok=True)
 
+    moved = 0
     for suffix in ("", "-wal", "-shm"):
         candidate = Path(str(path) + suffix)
         if candidate.exists():
             try:
                 candidate.replace(quarantine / candidate.name)
-            except OSError:
-                # Still held open by something; deleting is the only way past.
-                try:
-                    candidate.unlink()
-                except OSError:
-                    pass
+                moved += 1
+            except OSError as exc:
+                # Previously this deleted the file -- "the only way past" -- so
+                # the one promise this function makes, that nothing is
+                # destroyed, was broken in precisely the case where the file
+                # was being held open by something still running. A file we
+                # could not move is left exactly where it is, and the caller
+                # is told rather than stepped around.
+                raise DatabaseUnavailable(
+                    f"{candidate.name} could not be moved aside ({exc}). "
+                    "Something still has it open; nothing has been changed."
+                ) from exc
+
+    if not moved:
+        # Nothing was there to move, so a fresh database is about to appear
+        # under a "corrupt-" folder that documents nothing. Tidy it away.
+        try:
+            quarantine.rmdir()
+        except OSError:
+            pass
 
     log.error(
-        "database at %s was unusable (%s). Moved to %s and started a fresh one.",
-        path, reason, quarantine,
+        "database at %s was corrupt (%s). Moved %d file(s) to %s and started a "
+        "fresh one.",
+        path, reason, moved, quarantine,
     )
     return quarantine
 
@@ -356,8 +409,25 @@ def connect() -> sqlite3.Connection:
     try:
         conn = _open(path)
     except sqlite3.DatabaseError as exc:
-        # "database disk image is malformed" and friends. Retried once against a
-        # clean file; a second failure is the filesystem's problem, not ours.
+        # Only genuine corruption earns a quarantine. `sqlite3.DatabaseError`
+        # does not mean "corrupt": OperationalError inherits from it, and that
+        # is what SQLite raises for `database is locked`, `unable to open
+        # database file` and `disk I/O error` -- every one of them transient,
+        # and every one of them landing here. _prepare() takes locks to set
+        # its PRAGMAs, so another process holding the file for longer than the
+        # open timeout was enough to have a perfectly good database moved
+        # aside and replaced with an empty one.
+        #
+        # Not hypothetical. A database quarantined on this machine in August
+        # still reports `integrity_check: ok` and holds 3,329 chunks across 33
+        # documents, and the orphaned backends that outlive their parent on
+        # Windows are exactly the thing that holds a file open.
+        #
+        # A locked database is a reason to fail and say so. Losing an evening
+        # to "why will it not start" is recoverable; silently starting empty
+        # on top of someone's data is not.
+        if not _is_corruption(exc):
+            raise
         _quarantine(path, str(exc))
         conn = _open(path)
 
