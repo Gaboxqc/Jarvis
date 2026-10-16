@@ -11,7 +11,6 @@ Everything else routes through the LLM.
 from __future__ import annotations
 
 import logging
-import re
 import threading
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -22,7 +21,7 @@ from ..memory import long_term, short_term
 from ..settings import ActionSettings, load_config
 from ..skills.base import SkillContext
 from ..skills.registry import catalog
-from . import llm, prompts
+from . import intents, llm, prompts
 
 log = logging.getLogger(__name__)
 
@@ -44,191 +43,12 @@ log = logging.getLogger(__name__)
 # sweep tooling and the prompt tests have one number to refer to.
 MAX_SKILLS_PER_TURN = ActionSettings.max_skills_per_turn
 
-_AFFIRMATIVE = {
-    "y", "yes", "yeah", "yep", "yup", "ok", "okay", "sure", "do it", "go ahead",
-    "go for it", "confirm", "confirmed", "please do", "proceed", "affirmative",
-    "sí", "si", "vale", "dale", "hazlo",
-}
-_NEGATIVE = {
-    "n", "no", "nope", "cancel", "stop", "don't", "dont", "nevermind",
-    "never mind", "forget it", "no thanks", "nah",
-}
-_UNDO = re.compile(
-    r"^\s*(undo|revert|roll ?back|take that back|put (them|it|those|that) back|deshaz)\b",
-    re.IGNORECASE,
-)
-
-# Turns that cannot possibly need a tool, so they do not pay for a routing call.
-#
-# Deliberately a fixed set of whole phrases rather than a pattern: the cost of
-# being wrong is asymmetric. Skipping the router on something that did need a
-# tool produces a confident answer with nothing behind it, which is the exact
-# failure _guard_ungrounded_reply exists to catch. Skipping it on "thanks" saves
-# half the turn. So the set only contains phrases that are complete in
-# themselves and carry no request — anything longer still routes.
-_PLEASANTRIES = {
-    "hi", "hello", "hey", "yo", "good morning", "good afternoon", "good evening",
-    "thanks", "thank you", "thanks a lot", "thank you very much", "ta", "cheers",
-    "ok", "okay", "cool", "nice", "great", "perfect", "got it", "understood",
-    "never mind", "nevermind", "no worries", "sorry",
-    "bye", "goodbye", "good night", "see you", "later",
-    # Spanish — the UI ships in both languages (REQ-28).
-    "hola", "buenos días", "buenos dias", "buenas tardes", "buenas noches",
-    "gracias", "muchas gracias", "vale", "genial", "perfecto", "entendido",
-    "adiós", "adios", "hasta luego", "buenas",
-}
-
-# Sources the model cannot possibly know about without calling a tool. Memory
-# facts are deliberately absent: those are injected into the system prompt, so
-# answering from them without a tool call is legitimate.
-_EXTERNAL_DATA = re.compile(
-    r"\b(my|the)\s+("
-    r"calendar|schedule|agenda|diary|meetings?|appointments?|"
-    r"inbox|e-?mails?|mail|messages?|"
-    r"documents?|files?|folders?|"
-    r"tasks?|to-?dos?|reminders?"
-    r")\b",
-    re.IGNORECASE,
-)
-
-# The same, in Spanish. Articles as well as possessives, matching the English
-# pattern's `the`: "¿qué tengo en el calendario?" is the ordinary way to ask,
-# and requiring "mi" would miss most of the question shapes people use.
-#
-# A determiner is still required, which leaves "¿qué correos tengo?" unmatched.
-# That is the English pattern's limitation too ("what emails do I have" does not
-# match either) and it is kept deliberately rather than fixed here: matching a
-# bare noun would refuse "¿qué es un calendario?", and a guard that blocks
-# honest general answers gets switched off.
-_EXTERNAL_DATA_ES = re.compile(
-    r"\b(mis?|el|la|los|las)\s+("
-    r"calendario|agenda|horario|reuni[oó]n(?:es)?|citas?|"
-    r"bandeja(?:\s+de\s+entrada)?|buz[oó]n|correos?|e-?mails?|mensajes?|"
-    r"documentos?|archivos?|ficheros?|carpetas?|"
-    r"tareas?|pendientes|recordatorios?"
-    r")\b",
-    re.IGNORECASE,
-)
-
-# First-person claims that something was carried out. Kept tight and
-# action-specific: "I've noticed" and "I've got" must not match.
-_ACTION_CLAIM = re.compile(
-    r"\b(i(?:'ve| have)?\s+(?:just\s+)?"
-    r"(added|created|scheduled|booked|set(?: up)?|sent|deleted|removed|cancelled|"
-    r"canceled|moved|saved|stored|updated|marked|organi[sz]ed|reminded)"
-    r"|(?:has|have) been (added|created|scheduled|sent|deleted|removed|cancelled|"
-    r"canceled|moved|saved|updated|marked|set))\b",
-    re.IGNORECASE,
-)
-
-# The same, in Spanish, and it needs three forms rather than two. The perfect
-# ("he añadido") is what the model writes most often; the preterite ("guardé")
-# is how half the Spanish-speaking world says it; and the impersonal ("se ha
-# enviado", "ya está guardado") is the phrasing it falls back on when hedging,
-# which is exactly when it is inventing.
-#
-# Two things make this harder than the English pattern, and both were found by
-# writing it the obvious way first and then testing what it refused.
-#
-# The accent on the preterite is load-bearing. For every -ar verb here, the
-# first-person preterite and the present subjunctive differ by nothing else:
-# `guardé` is "I saved it" and `guarde` is "that I save it" -- and the
-# subjunctive is exactly how the assistant *offers* to do something.
-# "¿Quieres que guarde esto?" is the most useful sentence it can say, and with
-# the accent optional every single offer was answered with "I didn't actually
-# do that". So the preterite is matched accented only, and the cost is a
-# misspelled claim slipping through. `creé` is the sharpest case: unaccented
-# `cree` is the ordinary verb "believes". The perfect form carries no such
-# ambiguity and stays accent-free, which is where most of the coverage is.
-#
-# Negation has to be excluded explicitly, which English did not need: "I
-# haven't added" puts a word the pattern does not know between "I" and
-# "added", while "no he enviado" leaves "he enviado" sitting there intact. An
-# honest refusal is the one reply that must not be replaced by a refusal.
-# Three fixed-width lookbehinds cover the forms that appear in practice; "no te
-# he enviado", with a pronoun in between, still slips, and the cost of that is
-# one plain denial swapped for another.
-_ACTION_CLAIM_ES = re.compile(
-    r"\b(?<!no )(?<!nunca )(?<!tampoco )("
-    r"(?:ya\s+)?he\s+"
-    r"(a[ñn]adido|agregado|creado|programado|reservado|configurado|puesto|apuntado|"
-    r"enviado|mandado|borrado|eliminado|quitado|cancelado|movido|guardado|"
-    r"almacenado|actualizado|marcado|organizado)"
-    r"|(a[ñn]ad[ií]|agregué|creé|programé|reservé|configuré|puse|apunté|envié|"
-    r"mandé|borré|eliminé|quité|cancelé|moví|guardé|almacené|actualicé|marqué|"
-    r"organicé)"
-    r"|(?:se\s+ha|ha\s+sido|ya\s+est[áa]|queda)\s+"
-    r"(a[ñn]adid[oa]|agregad[oa]|cread[oa]|programad[oa]|reservad[oa]|configurad[oa]|"
-    r"enviad[oa]|mandad[oa]|borrad[oa]|eliminad[oa]|cancelad[oa]|movid[oa]|"
-    r"guardad[oa]|actualizad[oa]|marcad[oa]|organizad[oa])"
-    r")\b",
-    re.IGNORECASE,
-)
-
-
-@dataclass(frozen=True)
-class _Guard:
-    """One language's half of `_guard_ungrounded_reply`.
-
-    The patterns and the refusals belong together: a guard that fires in
-    Spanish and then answers in English is a different bug in the same place.
-
-    Grouped like this because the tables are per-language data and the turn
-    loop is not. When these move out of here into brain/intents/, they move as
-    one object rather than as six loose constants.
-    """
-
-    external_data: re.Pattern[str]
-    action_claim: re.Pattern[str]
-    unperformed: str
-    ungrounded: str
-
-
-_GUARDS: dict[str, _Guard] = {
-    "en": _Guard(
-        external_data=_EXTERNAL_DATA,
-        action_claim=_ACTION_CLAIM,
-        unperformed=(
-            "I didn't actually do that — I couldn't work out which action to run. "
-            "Could you say it again more plainly?"
-        ),
-        ungrounded=(
-            "I'd have to look that up and I wasn't able to — so I don't want to guess. "
-            "Check that the account or folder is connected, then ask me again."
-        ),
-    ),
-    "es": _Guard(
-        external_data=_EXTERNAL_DATA_ES,
-        action_claim=_ACTION_CLAIM_ES,
-        unperformed=(
-            "En realidad no lo he hecho: no he sabido qué acción ejecutar. "
-            "¿Puedes decírmelo de otra forma?"
-        ),
-        ungrounded=(
-            "Tendría que consultarlo y no he podido, así que prefiero no adivinar. "
-            "Comprueba que la cuenta o la carpeta esté conectada y vuelve a preguntarme."
-        ),
-    ),
-}
-
-
-def _guard_for(language: str) -> _Guard:
-    """The guard for a language, falling back to English.
-
-    English rather than "no guard": a persona set to a language nothing here
-    knows about should still be protected by the checks that do exist, even
-    though its refusals will be in the wrong language. Being told the truth in
-    English beats being told a lie in the right one.
-    """
-    return _GUARDS.get((language or "en").lower(), _GUARDS["en"])
-
-
-# What a caller is told when a turn for its session is already running. See
-# `run_turn` for why this is a refusal rather than a queue.
-_BUSY = {
-    "en": "I'm still working on the last thing you asked. Give me a moment.",
-    "es": "Todavía estoy con lo anterior. Dame un momento.",
-}
+# Recognising what a user means, and what the model claimed, lives in
+# brain/intents/ -- one module per language, selected two different ways. See
+# its docstring: what the *user* typed is matched in every language at once,
+# because a persona set to English is not a promise about what the person will
+# type; what the *model* wrote is matched in the persona's language, because
+# that is the only language it could be in.
 
 
 # One lock per session, taken for the whole of a turn.
@@ -358,7 +178,7 @@ def run_turn(
         yield {
             "type": "done",
             "result": TurnResult(
-                reply=_BUSY.get(language, _BUSY["en"]),
+                reply=intents.for_language(language).busy,
                 error="turn_in_progress",
             ),
         }
@@ -414,11 +234,11 @@ def _run_turn(
     # hand back the action_id it was given, and the gate re-checks that id's state.
     # A "yes" with no pending id is just conversation.
     if pending_action_id:
-        if normalized in _AFFIRMATIVE:
+        if intents.affirms(normalized):
             yield {"type": "done", "result": _finish(
                 session_id, _run_confirmation(pending_action_id, ctx))}
             return
-        if normalized in _NEGATIVE:
+        if intents.declines(normalized):
             outcome = gate.decline(pending_action_id)
             yield {"type": "done", "result": _finish(
                 session_id,
@@ -427,7 +247,7 @@ def _run_turn(
             return
 
     # 2. Undo.
-    if _UNDO.match(text):
+    if intents.is_undo(text):
         result = undo.undo_last()
         yield {"type": "done", "result": _finish(
             session_id,
@@ -443,7 +263,7 @@ def _run_turn(
     # 3a. A greeting needs an answer, but it never needs a tool. Routing it costs
     # a whole model call to be told so — half the latency of the turn, spent
     # establishing that "thanks" is not a request.
-    if normalized in _PLEASANTRIES:
+    if intents.is_pleasantry(normalized):
         yield {"type": "stage", "stage": "writing"}
         yield from _emit_reply(
             session_id, [{"role": "system", "content": system}, *history],
@@ -834,7 +654,7 @@ def _guard_ungrounded_reply(
     if not reply:
         return reply
 
-    guard = _guard_for(language)
+    guard = intents.for_language(language)
 
     # Claiming to have done something, having done nothing.
     if guard.action_claim.search(reply):

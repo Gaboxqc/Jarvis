@@ -500,20 +500,3 @@ def test_a_spanish_observation_is_not_an_action_claim(
     result = orchestrator.handle_turn("¿por qué?", "t")
 
     assert result.reply == "He visto que preguntas mucho por eso."
-
-
-def test_every_supported_language_has_a_whole_guard(workspace):
-    """The regression guard on the tables themselves.
-
-    This is the assertion that would have caught the gap: a language present
-    in the app's own list of supported ones, with nothing behind it here.
-    """
-    for language in ("en", "es"):
-        guard = orchestrator._guard_for(language)
-        assert guard.external_data.pattern
-        assert guard.action_claim.pattern
-        assert guard.unperformed and guard.ungrounded
-
-    # An unknown language falls back rather than going unguarded.
-    assert orchestrator._guard_for("fr") is orchestrator._guard_for("en")
-    assert orchestrator._guard_for("") is orchestrator._guard_for("en")

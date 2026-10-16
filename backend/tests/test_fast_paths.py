@@ -16,7 +16,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.brain import llm, orchestrator
+from app.brain import intents, llm, orchestrator
 
 
 @pytest.fixture
@@ -95,25 +95,31 @@ def test_the_set_holds_no_phrase_that_could_be_a_request():
 
     Someone adding "sure" or "do it" here would break confirmation handling, and
     a verb anywhere in the set means it could be an instruction.
+
+    Checked across every locale's set, because that is what the fast path
+    reads: a phrase is a pleasantry whatever language the persona is set to.
     """
+    phrases = {
+        phrase for locale in intents.LOCALES.values() for phrase in locale.pleasantries
+    }
     forbidden = {
         "yes", "no", "sure", "do it", "go ahead", "please", "help",
         "sí", "si", "dale", "hazlo",
     }
-    assert not (orchestrator._PLEASANTRIES & forbidden)
+    assert not (phrases & forbidden)
 
     # A short fixed phrase can be checked by eye; a long one cannot, and the
     # whole safety argument rests on someone having checked.
-    for phrase in orchestrator._PLEASANTRIES:
+    for phrase in phrases:
         assert len(phrase.split()) <= 4, f"{phrase!r} is long enough to hide a request"
 
 
 def test_a_pending_confirmation_still_wins(counted, workspace):
     """"ok" with something parked is an answer, not small talk.
 
-    _PLEASANTRIES contains "ok" and _AFFIRMATIVE contains it too. The
-    confirmation branch runs first and must keep doing so, or approving an
-    action would silently become a greeting.
+    The pleasantries hold "ok" and so do the affirmatives. The confirmation
+    branch runs first and must keep doing so, or approving an action would
+    silently become a greeting.
     """
     from app.skills.base import SkillResult
 
