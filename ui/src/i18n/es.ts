@@ -236,6 +236,14 @@ export const es: Record<keyof typeof en, string> = {
   "settings.logsNone": "Todavía no hay nada registrado.",
   "settings.logsOpen": "Abrir la carpeta del registro",
   "settings.logsOpenFailed": "No se pudo abrir la carpeta. La ruta está arriba.",
+  "settings.export": "Tus datos",
+  "settings.exportNote":
+    "Descarga en un zip todo lo que Kai ha guardado sobre ti: recuerdos, tareas, recordatorios, conversaciones, historial de acciones y transcripciones. Sin contraseñas, y sin el texto de tus documentos.",
+  "settings.exportCounts":
+    "{memory} recuerdo(s), {conversations} mensaje(s), {actions} acción(es), {transcripts} reunión(es).",
+  "settings.exportButton": "Exportar todo",
+  "settings.exporting": "Preparando…",
+  "settings.exported": "Guardado {file}. No se ha borrado nada de Kai.",
   "settings.danger": "Borrar todos los datos locales",
   "settings.dangerNote":
     "Elimina cada conversación, recuerdo, acción, recordatorio, tarea, transcripción e índice. No se puede deshacer.",
@@ -358,6 +366,10 @@ export const es: Record<keyof typeof en, string> = {
   "prereq.backendBody":
     "El servicio no responde en el puerto 8756. Si iniciaste Kai desde el código, arranca también el backend; si lo instalaste, ciérralo desde la bandeja y ábrelo de nuevo.",
   "prereq.modelTitle": "El modelo de lenguaje no está listo",
+  "prereq.substitutedTitle": "Usando otro modelo",
+  "prereq.substitutedBody":
+    "El modelo indicado en tus ajustes no está instalado, así que Kai responde con uno que sí lo está. Todo funciona; puede acertar algo menos al elegir qué acción ejecutar.",
+  "prereq.substitutedDismiss": "Entendido",
   "prereq.modelBody":
     "Todo lo demás está instalado, pero Kai necesita Ollama para el modelo de lenguaje: es la única pieza demasiado grande para incluir. Instálalo y descarga un modelo:",
 

@@ -15,7 +15,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type Health, type Settings as SettingsData } from "../api";
 import type { Key, Lang } from "../i18n";
 import type { Voice } from "../useVoice";
-import type { LogSummary, RetentionStatus } from "../api";
+import type { ExportPreview, LogSummary, RetentionStatus } from "../api";
 import { Accounts } from "./Accounts";
 import { FolderList } from "./FolderList";
 import { Startup } from "./Startup";
@@ -44,6 +44,9 @@ export function Settings({ lang, setLang, t, voice }: Props) {
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [exportable, setExportable] = useState<ExportPreview | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportNote, setExportNote] = useState("");
   // Kept apart from `note` on purpose. A shared one rendered folder errors in
   // the "Delete all local data" card at the foot of the page — 400px below the
   // control that produced them, and off-screen at the default window size, so
@@ -154,6 +157,30 @@ export function Settings({ lang, setLang, t, voice }: Props) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // The counts, so the button can say what it will hand over before it is
+  // pressed. Offering a download of an unknown thing is how people end up not
+  // pressing it. Failure is silent: the button still works, it just cannot
+  // promise a number.
+  useEffect(() => {
+    api
+      .exportPreview()
+      .then(setExportable)
+      .catch(() => setExportable(null));
+  }, []);
+
+  async function exportEverything() {
+    setExporting(true);
+    setExportNote("");
+    try {
+      const filename = await api.exportEverything();
+      setExportNote(t("settings.exported", { file: filename }));
+    } catch (error) {
+      setExportNote(error instanceof ApiError ? error.message : t("common.error"));
+    } finally {
+      setExporting(false);
+    }
+  }
 
   async function wipe() {
     if (!window.confirm(t("settings.wipeConfirm"))) return;
@@ -524,6 +551,33 @@ export function Settings({ lang, setLang, t, voice }: Props) {
         ) : (
           <p className="small muted">{t("settings.logsNone")}</p>
         )}
+      </section>
+
+      {/* Above the danger zone, deliberately. Taking your data with you is
+          not a destructive act and must not be styled as one -- it is the
+          other half of the control the wipe gives, and for a long time the
+          only half that existed pointed at deletion. */}
+      <section className="card">
+        <h2 className="small">{t("settings.export")}</h2>
+        <p className="small muted">{t("settings.exportNote")}</p>
+        {exportable && (
+          <p className="small muted">
+            {t("settings.exportCounts", {
+              memory: exportable.counts.memory,
+              conversations: exportable.counts.conversations,
+              actions: exportable.counts.actions,
+              transcripts: exportable.counts.transcripts,
+            })}
+          </p>
+        )}
+        {exportNote && (
+          <p className="small" role="status">
+            {exportNote}
+          </p>
+        )}
+        <button onClick={exportEverything} disabled={exporting}>
+          {exporting ? t("settings.exporting") : t("settings.exportButton")}
+        </button>
       </section>
 
       <section className="card danger-zone">

@@ -71,8 +71,22 @@ def presence() -> dict[str, Any]:
 
 
 def brain_health() -> dict[str, Any]:
+    """Enough for the window to say what is wrong, and no more.
+
+    `substituted` is here because of what it means for the banner: the
+    assistant works, so there is nothing to warn about -- and it is answering
+    from a model the user did not choose, which they have to be told once.
+    Those are two different states and the window cannot tell them apart from
+    `ok` alone.
+    """
     health = llm.health()
-    return {"ok": bool(health.get("ok")), "error": health.get("error")}
+    return {
+        "ok": bool(health.get("ok")),
+        "error": health.get("error"),
+        "model": health.get("model"),
+        "configured": health.get("configured"),
+        "substituted": bool(health.get("substituted")),
+    }
 
 
 def _frame(payload: dict[str, Any]) -> str:

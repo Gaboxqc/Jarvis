@@ -25,7 +25,23 @@ export type KaiEvent =
   | { type: "heartbeat" }
   | { type: "state"; state: string; emotion: string | null; recording: boolean; focus: boolean }
   | { type: "notifications"; items: { id: string; kind: string; title: string; body: string; at: string }[] }
-  | { type: "health"; ok: boolean; error: string | null };
+  | {
+      type: "health";
+      ok: boolean;
+      error: string | null;
+      /** The model that will actually answer. */
+      model?: string | null;
+      /** What the config asked for. Differs from `model` when substituted. */
+      configured?: string | null;
+      /**
+       * True when the configured model is not installed and another one is
+       * being used instead. `ok` is true in that case -- the assistant works
+       * -- so this is the only signal that it is not the model that was asked
+       * for, and the window has to say so once rather than let the answers
+       * quietly get worse.
+       */
+      substituted?: boolean;
+    };
 
 /** Whether the stream is up, so a component can say "backend unreachable". */
 export type Connection = "connecting" | "open" | "down";

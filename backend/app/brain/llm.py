@@ -81,6 +81,115 @@ def supports_tools(settings: BrainSettings | None = None) -> bool:
 def reset_capability_cache() -> None:
     """Test hook, and the escape hatch if a model is swapped under a running app."""
     _capabilities.clear()
+    _chosen.clear()
+
+
+# -- which model actually answers -----------------------------------------
+#
+# `brain.model` names one model, and if it is not pulled every single turn
+# fails with "run ollama pull qwen2.5". That is the most common first-run
+# failure there is -- the README spends a paragraph on it -- and it happens
+# with a perfectly good model sitting right there, because the configured name
+# did not match it.
+#
+# So: use what is installed, say which one, and fail only when there is
+# genuinely nothing to use.
+#
+# The substitution is not silent. It changes behaviour -- routing accuracy is
+# model-specific, and this project measured an 88%/62% gap between two of the
+# names below -- so /health reports the configured model, the model in use and
+# whether they differ, the events stream carries it, and the window says so.
+# "Working, and here is what changed" is the honest version; refusing to start
+# on a machine that can run is not.
+#
+# Order is the measured one where there is a measurement (qwen2.5 beat llama3
+# 88% to 62% on held-out routing, at the same speed) and a reasonable guess
+# after that. Anything installed beats nothing.
+PREFERRED_MODELS = (
+    "qwen2.5",
+    "qwen2",
+    "llama3.1",
+    "llama3.2",
+    "llama3",
+    "mistral",
+    "gemma2",
+    "phi3",
+)
+
+# configured name -> the name to send. Resolved once and refreshed by health(),
+# which the events stream already calls every ten seconds, so a turn never pays
+# for the lookup.
+_chosen: dict[str, str] = {}
+
+
+def _is(installed: str, model: str) -> bool:
+    """Whether an installed name is this model. Ollama reports tags."""
+    return installed == model or installed.startswith(f"{model}:")
+
+
+def _installed_models(settings: BrainSettings) -> list[str] | None:
+    """What Ollama has, or None if it could not be asked.
+
+    None and [] are different answers and the caller treats them differently:
+    an unreachable Ollama must not look like an empty one, or a connection
+    problem would be reported as "no models installed" and send somebody off
+    to download one they already have.
+    """
+    try:
+        response = httpx.get(f"{settings.ollama_host.rstrip('/')}/api/tags", timeout=5.0)
+        response.raise_for_status()
+        return [str(entry.get("name", "")) for entry in response.json().get("models", [])]
+    except (httpx.HTTPError, json.JSONDecodeError, ValueError):
+        return None
+
+
+def choose_model(settings: BrainSettings, installed: list[str] | None) -> str:
+    """The model to send, given what is installed. Pure, so it is testable."""
+    if installed is None:
+        # Cannot tell. Send what was asked for and let the call report the real
+        # problem, which is that Ollama is not answering.
+        return settings.model
+    if any(_is(name, settings.model) for name in installed):
+        return settings.model
+
+    for preferred in PREFERRED_MODELS:
+        for name in installed:
+            if _is(name, preferred):
+                return name
+
+    # Nothing recognised. Any model beats no model; sorted so two machines with
+    # the same models make the same choice.
+    others = sorted(name for name in installed if name)
+    if others:
+        return others[0]
+
+    # Genuinely nothing pulled. Returning the configured name means the failure
+    # says "run ollama pull <model>", which is the right instruction.
+    return settings.model
+
+
+def active_model(settings: BrainSettings | None = None) -> str:
+    """The model this process will actually send to, configured or substituted."""
+    settings = settings or load_config().brain
+    cached = _chosen.get(settings.model)
+    if cached is not None:
+        return cached
+    return _resolve_model(settings)
+
+
+def _resolve_model(settings: BrainSettings) -> str:
+    chosen = choose_model(settings, _installed_models(settings))
+    previous = _chosen.get(settings.model)
+    _chosen[settings.model] = chosen
+    if chosen != settings.model and previous != chosen:
+        # Once per change, not once per turn.
+        log.warning(
+            "the configured model %r is not installed; using %r instead. "
+            "Run `ollama pull %s` to use the one you asked for, or set "
+            "brain.model to %r.",
+            settings.model, chosen, settings.model, chosen,
+        )
+    return chosen
 
 
 def chat(
@@ -93,7 +202,10 @@ def chat(
 ) -> LLMReply:
     settings = settings or load_config().brain
     payload: dict[str, Any] = {
-        "model": settings.model,
+        # Not settings.model: the configured name may not be installed, and
+        # answering with what is there beats failing every turn. See
+        # active_model().
+        "model": active_model(settings),
         "messages": messages,
         "stream": False,
         "options": {
@@ -159,7 +271,10 @@ def stream(
     """
     settings = settings or load_config().brain
     payload: dict[str, Any] = {
-        "model": settings.model,
+        # Not settings.model: the configured name may not be installed, and
+        # answering with what is there beats failing every turn. See
+        # active_model().
+        "model": active_model(settings),
         "messages": messages,
         "stream": True,
         "options": {
@@ -309,21 +424,59 @@ def extract_json(text: str) -> dict[str, Any] | None:
 
 
 def health() -> dict[str, Any]:
-    """Whether the brain is reachable, for the CLI banner and /health."""
-    settings = load_config().brain
-    try:
-        response = httpx.get(f"{settings.ollama_host.rstrip('/')}/api/tags", timeout=5.0)
-        response.raise_for_status()
-        models = [m.get("name", "") for m in response.json().get("models", [])]
-    except httpx.HTTPError as exc:
-        return {"ok": False, "error": str(exc), "host": settings.ollama_host, "models": []}
+    """Whether the brain is reachable, for the CLI banner and /health.
 
-    installed = any(m == settings.model or m.startswith(f"{settings.model}:") for m in models)
+    Also where the model choice is refreshed. The events stream calls this
+    every ten seconds, so `active_model()` is answered from cache during a
+    turn and a model pulled while the app is running is picked up without a
+    restart.
+
+    `ok` means "a turn will get an answer", which is the question anyone
+    checking this is actually asking. It is true when the configured model is
+    installed and also when something else is -- with `model`, `configured`
+    and `substituted` saying which, because an assistant quietly answering
+    from a model you did not choose is the thing this must not be.
+    """
+    settings = load_config().brain
+    models = _installed_models(settings)
+    if models is None:
+        return {
+            "ok": False,
+            "error": f"can't reach Ollama at {settings.ollama_host}",
+            "host": settings.ollama_host,
+            "model": settings.model,
+            "configured": settings.model,
+            "substituted": False,
+            "model_installed": False,
+            "models": [],
+        }
+
+    chosen = _resolve_model(settings)
+    configured_installed = any(_is(name, settings.model) for name in models)
+    usable = bool(models) and (configured_installed or chosen != settings.model)
+    substituted = usable and not configured_installed
+
+    if substituted:
+        error = (
+            f"'{settings.model}' isn't installed, so I'm using '{chosen}'. "
+            f"Run `ollama pull {settings.model}` for the one you configured."
+        )
+    elif usable:
+        error = None
+    else:
+        error = f"model '{settings.model}' not installed"
+
     return {
-        "ok": installed,
+        "ok": usable,
         "host": settings.ollama_host,
-        "model": settings.model,
-        "model_installed": installed,
+        # What will actually answer, which is what every caller of this wants
+        # to know. `configured` is kept beside it rather than instead of it:
+        # the Settings screen shows what the file says, and this says what the
+        # file got.
+        "model": chosen,
+        "configured": settings.model,
+        "substituted": substituted,
+        "model_installed": configured_installed,
         "models": models,
-        "error": None if installed else f"model '{settings.model}' not installed",
+        "error": error,
     }

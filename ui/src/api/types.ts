@@ -352,3 +352,17 @@ export interface AddedAccount {
   /** "password" for mail and CalDAV; "url" for an iCal calendar. */
   secret_kind: "password" | "url";
 }
+
+export interface ExportPreview {
+  counts: {
+    memory: number;
+    tasks: number;
+    reminders: number;
+    conversations: number;
+    actions: number;
+    documents: number;
+    transcripts: number;
+  };
+  /** What the export deliberately leaves out, named so it can be shown. */
+  excludes: string[];
+}

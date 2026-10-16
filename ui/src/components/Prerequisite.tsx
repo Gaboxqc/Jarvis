@@ -15,7 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import { subscribe, subscribeConnection } from "../events";
 import type { Key } from "../i18n";
 
-type Problem = "none" | "starting" | "backend" | "model";
+type Problem = "none" | "starting" | "backend" | "model" | "substituted";
 
 // How long to call a silent backend "starting" rather than "not running".
 //
@@ -38,6 +38,9 @@ export function Prerequisite({ t }: { t: (key: Key) => string }) {
   const [problem, setProblem] = useState<Problem>("none");
   const [detail, setDetail] = useState("");
   const firstSeen = useRef(Date.now());
+  // The substitution notice is said once per session, not every ten seconds
+  // when the health sample comes round again.
+  const dismissed = useRef(false);
 
   // Two signals, from one connection rather than a ten-second poll (REQ-31).
   //
@@ -64,12 +67,21 @@ export function Prerequisite({ t }: { t: (key: Key) => string }) {
 
     const unsubscribe = subscribe((event) => {
       if (event.type !== "health") return;
-      if (event.ok) {
-        setProblem("none");
-      } else {
+      if (!event.ok) {
         setProblem("model");
         setDetail(event.error ?? "");
+        return;
       }
+      // Working -- but possibly not with the model that was configured. That
+      // is not a failure and must not be a banner, and it is not nothing
+      // either: routing accuracy is model-specific, so answers can be worse
+      // for a reason the user cannot see. A quiet card, dismissible.
+      if (event.substituted && !dismissed.current) {
+        setProblem("substituted");
+        setDetail(event.error ?? "");
+        return;
+      }
+      setProblem("none");
     });
 
     return () => {
@@ -80,23 +92,42 @@ export function Prerequisite({ t }: { t: (key: Key) => string }) {
 
   if (problem === "none") return null;
 
+  const quiet = problem === "starting" || problem === "substituted";
+
   return (
-    <div className={problem === "starting" ? "card" : "banner"} role="status">
+    <div className={quiet ? "card" : "banner"} role="status">
       <strong>
         {problem === "starting"
           ? t("prereq.startingTitle")
           : problem === "backend"
             ? t("prereq.backendTitle")
-            : t("prereq.modelTitle")}
+            : problem === "substituted"
+              ? t("prereq.substitutedTitle")
+              : t("prereq.modelTitle")}
       </strong>
       <p className="small" style={{ margin: "0.35rem 0 0" }}>
         {problem === "starting"
           ? t("prereq.startingBody")
           : problem === "backend"
             ? t("prereq.backendBody")
-            : t("prereq.modelBody")}
+            : problem === "substituted"
+              ? t("prereq.substitutedBody")
+              : t("prereq.modelBody")}
       </p>
       {detail && <p className="small muted" style={{ margin: "0.25rem 0 0" }}>{detail}</p>}
+      {problem === "substituted" && (
+        <button
+          type="button"
+          className="small"
+          style={{ marginTop: "0.35rem" }}
+          onClick={() => {
+            dismissed.current = true;
+            setProblem("none");
+          }}
+        >
+          {t("prereq.substitutedDismiss")}
+        </button>
+      )}
       {problem === "model" && (
         <p className="small" style={{ margin: "0.35rem 0 0" }}>
           <code>ollama pull qwen2.5</code> ·{" "}

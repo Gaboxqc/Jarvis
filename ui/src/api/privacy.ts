@@ -1,8 +1,8 @@
 /** Settings, retention, diagnostics and the wipe. */
 
-import { request } from "./client";
+import { ApiError, BASE, authHeaders, request } from "./client";
 import { body } from "./schema";
-import type { LogSummary, RetentionStatus, Settings } from "./types";
+import type { ExportPreview, LogSummary, RetentionStatus, Settings } from "./types";
 
 export const privacy = {
   // -- settings and notifications ------------------------------------------
@@ -78,4 +78,45 @@ export const privacy = {
   wipe: () => request<{ removed: Record<string, number> }>("/privacy/wipe", {
     method: "POST",
   }),
+
+  /** What an export would hold, so the button can say before it is pressed. */
+  exportPreview: () => request<ExportPreview>("/privacy/export/preview"),
+
+  /**
+   * Download everything the assistant has stored — the counterpart to wipe.
+   *
+   * Not through `request()`: the response is a zip, not JSON, and the point is
+   * to hand the bytes to the browser rather than parse them. The blob is
+   * revoked after the click because an un-revoked object URL holds the whole
+   * export in memory for the life of the window.
+   */
+  exportEverything: async (): Promise<string> => {
+    let response: Response;
+    try {
+      response = await fetch(`${BASE}/privacy/export`, {
+        method: "POST",
+        headers: { ...(await authHeaders()) },
+      });
+    } catch {
+      throw new ApiError("Can't reach Kai. Is the backend running on port 8756?");
+    }
+    if (!response.ok) {
+      throw new ApiError(`${response.status} ${response.statusText}`, response.status);
+    }
+
+    const disposition = response.headers.get("content-disposition") ?? "";
+    const named = /filename="?([^";]+)"?/.exec(disposition);
+    const filename = named?.[1] ?? "kai-export.zip";
+
+    const url = URL.createObjectURL(await response.blob());
+    try {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+    return filename;
+  },
 };
