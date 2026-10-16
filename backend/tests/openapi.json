@@ -1,6 +1,111 @@
 {
   "components": {
     "schemas": {
+      "Account": {
+        "description": "An account's details. Never a secret, by construction.\n\n`credential_stored` and `credential_ref` were being returned and were\nabsent from the hand-written type, so the screen could not tell a\nconfigured account from one still waiting for its password.",
+        "properties": {
+          "credential_ref": {
+            "title": "Credential Ref",
+            "type": "string"
+          },
+          "credential_stored": {
+            "title": "Credential Stored",
+            "type": "boolean"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          },
+          "writable": {
+            "title": "Writable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "label",
+          "provider",
+          "target",
+          "username",
+          "writable",
+          "enabled",
+          "credential_stored",
+          "credential_ref"
+        ],
+        "title": "Account",
+        "type": "object"
+      },
+      "AccountCheck": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "events": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Events"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "unread": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unread"
+          }
+        },
+        "required": [
+          "ok",
+          "label"
+        ],
+        "title": "AccountCheck",
+        "type": "object"
+      },
       "AccountRequest": {
         "properties": {
           "fields": {
@@ -22,6 +127,172 @@
           "provider"
         ],
         "title": "AccountRequest",
+        "type": "object"
+      },
+      "Acknowledged": {
+        "properties": {
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "Acknowledged",
+        "type": "object"
+      },
+      "ActionHistory": {
+        "properties": {
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/ActionRecord"
+            },
+            "title": "History",
+            "type": "array"
+          }
+        },
+        "required": [
+          "history"
+        ],
+        "title": "ActionHistory",
+        "type": "object"
+      },
+      "ActionRecord": {
+        "properties": {
+          "batch_id": {
+            "title": "Batch Id",
+            "type": "string"
+          },
+          "can_undo": {
+            "title": "Can Undo",
+            "type": "boolean"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "executed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Executed At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "preview": {
+            "title": "Preview",
+            "type": "string"
+          },
+          "severity": {
+            "title": "Severity",
+            "type": "string"
+          },
+          "skill": {
+            "title": "Skill",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "batch_id",
+          "skill",
+          "preview",
+          "severity",
+          "status",
+          "can_undo",
+          "executed_at",
+          "error"
+        ],
+        "title": "ActionRecord",
+        "type": "object"
+      },
+      "AddedAccount": {
+        "properties": {
+          "config_file": {
+            "title": "Config File",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "needs_secret": {
+            "title": "Needs Secret",
+            "type": "boolean"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "secret_kind": {
+            "enum": [
+              "password",
+              "url"
+            ],
+            "title": "Secret Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "label",
+          "provider",
+          "config_file",
+          "needs_secret",
+          "secret_kind"
+        ],
+        "title": "AddedAccount",
+        "type": "object"
+      },
+      "AvatarLicence": {
+        "properties": {
+          "licence_accepted": {
+            "title": "Licence Accepted",
+            "type": "boolean"
+          },
+          "licence_accepted_at": {
+            "title": "Licence Accepted At",
+            "type": "string"
+          },
+          "licence_summary": {
+            "title": "Licence Summary",
+            "type": "string"
+          },
+          "licence_url": {
+            "title": "Licence Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "licence_accepted",
+          "licence_accepted_at",
+          "licence_summary",
+          "licence_url"
+        ],
+        "title": "AvatarLicence",
         "type": "object"
       },
       "AvatarLicenceRequest": {
@@ -49,6 +320,229 @@
           "file"
         ],
         "title": "Body_upload_clone_reference_voice_clone_reference_post",
+        "type": "object"
+      },
+      "BrainHealth": {
+        "properties": {
+          "configured": {
+            "title": "Configured",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "model_installed": {
+            "title": "Model Installed",
+            "type": "boolean"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "substituted": {
+            "title": "Substituted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "host",
+          "model",
+          "configured",
+          "substituted",
+          "model_installed",
+          "models",
+          "error"
+        ],
+        "title": "BrainHealth",
+        "type": "object"
+      },
+      "Briefing": {
+        "properties": {
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/BriefingSection"
+            },
+            "title": "Sections",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sections"
+        ],
+        "title": "Briefing",
+        "type": "object"
+      },
+      "BriefingSection": {
+        "properties": {
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "lines": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "lines",
+          "configured"
+        ],
+        "title": "BriefingSection",
+        "type": "object"
+      },
+      "CaptureStatus": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "recording": {
+            "title": "Recording",
+            "type": "boolean"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "transcript_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcript Id"
+          },
+          "words": {
+            "title": "Words",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "recording",
+          "transcript_id",
+          "label",
+          "seconds",
+          "sources",
+          "words",
+          "note"
+        ],
+        "title": "CaptureStatus",
+        "type": "object"
+      },
+      "CaptureSummary": {
+        "properties": {
+          "actions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Actions",
+            "type": "array"
+          },
+          "decisions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Decisions",
+            "type": "array"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "summary",
+          "decisions",
+          "actions",
+          "truncated",
+          "error"
+        ],
+        "title": "CaptureSummary",
+        "type": "object"
+      },
+      "ClearedSession": {
+        "properties": {
+          "cleared_turns": {
+            "title": "Cleared Turns",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cleared_turns"
+        ],
+        "title": "ClearedSession",
         "type": "object"
       },
       "ClientProblem": {
@@ -98,6 +592,159 @@
         "title": "CloneConsentRequest",
         "type": "object"
       },
+      "CloneStatus": {
+        "properties": {
+          "consented": {
+            "title": "Consented",
+            "type": "boolean"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "engine_installed": {
+            "title": "Engine Installed",
+            "type": "boolean"
+          },
+          "has_reference": {
+            "title": "Has Reference",
+            "type": "boolean"
+          },
+          "installed": {
+            "title": "Installed",
+            "type": "boolean"
+          },
+          "licence": {
+            "title": "Licence",
+            "type": "string"
+          },
+          "licence_accepted": {
+            "title": "Licence Accepted",
+            "type": "boolean"
+          },
+          "licence_accepted_at": {
+            "title": "Licence Accepted At",
+            "type": "string"
+          },
+          "loaded": {
+            "title": "Loaded",
+            "type": "boolean"
+          },
+          "min_seconds": {
+            "title": "Min Seconds",
+            "type": "integer"
+          },
+          "packaged": {
+            "title": "Packaged",
+            "type": "boolean"
+          },
+          "reference_seconds": {
+            "title": "Reference Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "installed",
+          "engine_installed",
+          "packaged",
+          "enabled",
+          "consented",
+          "has_reference",
+          "reference_seconds",
+          "loaded",
+          "min_seconds",
+          "licence",
+          "licence_accepted",
+          "licence_accepted_at"
+        ],
+        "title": "CloneStatus",
+        "type": "object"
+      },
+      "Connectors": {
+        "properties": {
+          "calendar": {
+            "items": {
+              "$ref": "#/components/schemas/Account"
+            },
+            "title": "Calendar",
+            "type": "array"
+          },
+          "credential_store": {
+            "$ref": "#/components/schemas/CredentialStore"
+          },
+          "mail": {
+            "items": {
+              "$ref": "#/components/schemas/Account"
+            },
+            "title": "Mail",
+            "type": "array"
+          }
+        },
+        "required": [
+          "credential_store",
+          "calendar",
+          "mail"
+        ],
+        "title": "Connectors",
+        "type": "object"
+      },
+      "CreatedTask": {
+        "description": "What POST /tasks answers with, which is not a `Task`.\n\ncreate_task() returns the five fields it just decided, and not `kind`\nor `created_at`. The client typed this as a full Task, so two of its\nfields were a fiction -- nothing reads them today, which is the only\nreason it never bit.",
+        "properties": {
+          "done": {
+            "title": "Done",
+            "type": "boolean"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "tags",
+          "due",
+          "done"
+        ],
+        "title": "CreatedTask",
+        "type": "object"
+      },
+      "CredentialForgotten": {
+        "properties": {
+          "removed": {
+            "title": "Removed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "removed"
+        ],
+        "title": "CredentialForgotten",
+        "type": "object"
+      },
       "CredentialRequest": {
         "properties": {
           "secret": {
@@ -111,6 +758,334 @@
         "title": "CredentialRequest",
         "type": "object"
       },
+      "CredentialStore": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "backend": {
+            "title": "Backend",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "available",
+          "backend",
+          "detail"
+        ],
+        "title": "CredentialStore",
+        "type": "object"
+      },
+      "CredentialStored": {
+        "description": "The reference, never the value.",
+        "properties": {
+          "credential_ref": {
+            "title": "Credential Ref",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "stored": {
+            "title": "Stored",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "stored",
+          "kind",
+          "label",
+          "credential_ref"
+        ],
+        "title": "CredentialStored",
+        "type": "object"
+      },
+      "Deleted": {
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "string"
+          }
+        },
+        "required": [
+          "deleted"
+        ],
+        "title": "Deleted",
+        "type": "object"
+      },
+      "DeletedFact": {
+        "properties": {
+          "deleted": {
+            "$ref": "#/components/schemas/MemoryFact"
+          }
+        },
+        "required": [
+          "deleted"
+        ],
+        "title": "DeletedFact",
+        "type": "object"
+      },
+      "DeletedFacts": {
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "deleted"
+        ],
+        "title": "DeletedFacts",
+        "type": "object"
+      },
+      "DeletedTranscript": {
+        "properties": {
+          "deleted": {
+            "$ref": "#/components/schemas/Transcript"
+          }
+        },
+        "required": [
+          "deleted"
+        ],
+        "title": "DeletedTranscript",
+        "type": "object"
+      },
+      "Delivered": {
+        "properties": {
+          "delivered": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Delivered",
+            "type": "array"
+          }
+        },
+        "required": [
+          "delivered"
+        ],
+        "title": "Delivered",
+        "type": "object"
+      },
+      "DocumentHit": {
+        "properties": {
+          "citation": {
+            "title": "Citation",
+            "type": "string"
+          },
+          "file": {
+            "title": "File",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "section": {
+            "title": "Section",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "path",
+          "section",
+          "citation",
+          "text"
+        ],
+        "title": "DocumentHit",
+        "type": "object"
+      },
+      "DocumentHits": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentHit"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "title": "DocumentHits",
+        "type": "object"
+      },
+      "EngineProgress": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "installed": {
+            "title": "Installed",
+            "type": "boolean"
+          },
+          "received": {
+            "title": "Received",
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "idle",
+              "downloading",
+              "verifying",
+              "installing",
+              "installed",
+              "failed"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "installed",
+          "state",
+          "received",
+          "total",
+          "error"
+        ],
+        "title": "EngineProgress",
+        "type": "object"
+      },
+      "EngineRemoved": {
+        "properties": {
+          "installed": {
+            "title": "Installed",
+            "type": "boolean"
+          },
+          "removed": {
+            "title": "Removed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "removed",
+          "installed"
+        ],
+        "title": "EngineRemoved",
+        "type": "object"
+      },
+      "ExportCounts": {
+        "properties": {
+          "actions": {
+            "title": "Actions",
+            "type": "integer"
+          },
+          "conversations": {
+            "title": "Conversations",
+            "type": "integer"
+          },
+          "documents": {
+            "title": "Documents",
+            "type": "integer"
+          },
+          "memory": {
+            "title": "Memory",
+            "type": "integer"
+          },
+          "reminders": {
+            "title": "Reminders",
+            "type": "integer"
+          },
+          "tasks": {
+            "title": "Tasks",
+            "type": "integer"
+          },
+          "transcripts": {
+            "title": "Transcripts",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "memory",
+          "tasks",
+          "reminders",
+          "conversations",
+          "actions",
+          "documents",
+          "transcripts"
+        ],
+        "title": "ExportCounts",
+        "type": "object"
+      },
+      "ExportPreview": {
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/ExportCounts"
+          },
+          "excludes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Excludes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "counts",
+          "excludes"
+        ],
+        "title": "ExportPreview",
+        "type": "object"
+      },
+      "FailedDownload": {
+        "properties": {
+          "error": {
+            "title": "Error",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "error"
+        ],
+        "title": "FailedDownload",
+        "type": "object"
+      },
+      "FocusEnded": {
+        "description": "Ending a session answers with the one fact that changed.",
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "active"
+        ],
+        "title": "FocusEnded",
+        "type": "object"
+      },
       "FocusRequest": {
         "properties": {
           "minutes": {
@@ -120,6 +1095,53 @@
           }
         },
         "title": "FocusRequest",
+        "type": "object"
+      },
+      "FocusState": {
+        "description": "One shape for GET /focus and POST /focus/start.\n\nThey returned two: the first carried `would_close` and not `message`,\nthe second the reverse. The Today screen stores the result of both in\nthe same state and reads `minutes_left` and `closed_apps` off either,\nso the shapes were already required to agree and simply did not.\nMaking them one is the fix; the alternative is a client-side union\ndescribing a difference with no reason behind it.",
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "closed_apps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Closed Apps",
+            "type": "array"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "minutes_left": {
+            "title": "Minutes Left",
+            "type": "integer"
+          },
+          "would_close": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Would Close",
+            "type": "array"
+          }
+        },
+        "required": [
+          "active",
+          "minutes_left",
+          "closed_apps",
+          "would_close",
+          "message"
+        ],
+        "title": "FocusState",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -135,6 +1157,1232 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "Health": {
+        "properties": {
+          "brain": {
+            "$ref": "#/components/schemas/BrainHealth"
+          },
+          "config_file": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config File"
+          },
+          "data_dir": {
+            "title": "Data Dir",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "persona": {
+            "title": "Persona",
+            "type": "string"
+          },
+          "privacy": {
+            "$ref": "#/components/schemas/PrivacyFlags"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          },
+          "skills": {
+            "title": "Skills",
+            "type": "integer"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "version",
+          "problem",
+          "brain",
+          "skills",
+          "persona",
+          "config_file",
+          "data_dir",
+          "privacy"
+        ],
+        "title": "Health",
+        "type": "object"
+      },
+      "IndexCleared": {
+        "properties": {
+          "cleared_documents": {
+            "title": "Cleared Documents",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cleared_documents"
+        ],
+        "title": "IndexCleared",
+        "type": "object"
+      },
+      "IndexFailure": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "file": {
+            "title": "File",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "path",
+          "error"
+        ],
+        "title": "IndexFailure",
+        "type": "object"
+      },
+      "IndexStatus": {
+        "properties": {
+          "chunks": {
+            "title": "Chunks",
+            "type": "integer"
+          },
+          "deferred_because": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deferred Because"
+          },
+          "documents": {
+            "title": "Documents",
+            "type": "integer"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "failures": {
+            "items": {
+              "$ref": "#/components/schemas/IndexFailure"
+            },
+            "title": "Failures",
+            "type": "array"
+          },
+          "folders": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Folders",
+            "type": "array"
+          },
+          "last_indexed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Indexed"
+          },
+          "last_scan": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Scan"
+          },
+          "paused": {
+            "title": "Paused",
+            "type": "boolean"
+          },
+          "running": {
+            "title": "Running",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "folders",
+          "running",
+          "paused",
+          "deferred_because",
+          "last_scan",
+          "documents",
+          "chunks",
+          "failed",
+          "last_indexed",
+          "failures"
+        ],
+        "title": "IndexStatus",
+        "type": "object"
+      },
+      "IndexedDocument": {
+        "properties": {
+          "chunks": {
+            "title": "Chunks",
+            "type": "integer"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "file": {
+            "title": "File",
+            "type": "string"
+          },
+          "indexed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Indexed At"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "path",
+          "chunks",
+          "indexed_at",
+          "error"
+        ],
+        "title": "IndexedDocument",
+        "type": "object"
+      },
+      "IndexedDocuments": {
+        "properties": {
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/IndexedDocument"
+            },
+            "title": "Documents",
+            "type": "array"
+          }
+        },
+        "required": [
+          "documents"
+        ],
+        "title": "IndexedDocuments",
+        "type": "object"
+      },
+      "LogFile": {
+        "properties": {
+          "modified": {
+            "title": "Modified",
+            "type": "number"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "size_bytes",
+          "modified"
+        ],
+        "title": "LogFile",
+        "type": "object"
+      },
+      "LogSummary": {
+        "properties": {
+          "directory": {
+            "title": "Directory",
+            "type": "string"
+          },
+          "exists": {
+            "title": "Exists",
+            "type": "boolean"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/LogFile"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "total_bytes": {
+            "title": "Total Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "directory",
+          "files",
+          "total_bytes",
+          "exists"
+        ],
+        "title": "LogSummary",
+        "type": "object"
+      },
+      "MemoryFact": {
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "category",
+          "created_at"
+        ],
+        "title": "MemoryFact",
+        "type": "object"
+      },
+      "MemoryFacts": {
+        "properties": {
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/MemoryFact"
+            },
+            "title": "Facts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "facts"
+        ],
+        "title": "MemoryFacts",
+        "type": "object"
+      },
+      "Notification": {
+        "properties": {
+          "at": {
+            "title": "At",
+            "type": "string"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "body",
+          "at"
+        ],
+        "title": "Notification",
+        "type": "object"
+      },
+      "Notifications": {
+        "properties": {
+          "notifications": {
+            "items": {
+              "$ref": "#/components/schemas/Notification"
+            },
+            "title": "Notifications",
+            "type": "array"
+          }
+        },
+        "required": [
+          "notifications"
+        ],
+        "title": "Notifications",
+        "type": "object"
+      },
+      "ParkedAction": {
+        "description": "A pending action as /actions/pending lists it.\n\nNot `PendingAction`: this one carries `expires_at` and that one does not,\nand they were the same name on the wire until this file made the\ndifference visible. A confirmation has a TTL and a client that cannot see\nit cannot tell a live question from a dead one.",
+        "properties": {
+          "action_id": {
+            "title": "Action Id",
+            "type": "string"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "preview": {
+            "title": "Preview",
+            "type": "string"
+          },
+          "reversible": {
+            "title": "Reversible",
+            "type": "boolean"
+          },
+          "skill": {
+            "title": "Skill",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action_id",
+          "skill",
+          "preview",
+          "reversible",
+          "expires_at"
+        ],
+        "title": "ParkedAction",
+        "type": "object"
+      },
+      "PendingAction": {
+        "description": "An action waiting for a yes. The id is the whole contract (REQ-24).",
+        "properties": {
+          "action_id": {
+            "title": "Action Id",
+            "type": "string"
+          },
+          "preview": {
+            "title": "Preview",
+            "type": "string"
+          },
+          "reversible": {
+            "title": "Reversible",
+            "type": "boolean"
+          },
+          "skill": {
+            "title": "Skill",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action_id",
+          "skill",
+          "preview",
+          "reversible"
+        ],
+        "title": "PendingAction",
+        "type": "object"
+      },
+      "PendingActions": {
+        "properties": {
+          "pending": {
+            "items": {
+              "$ref": "#/components/schemas/ParkedAction"
+            },
+            "title": "Pending",
+            "type": "array"
+          }
+        },
+        "required": [
+          "pending"
+        ],
+        "title": "PendingActions",
+        "type": "object"
+      },
+      "PreApproval": {
+        "properties": {
+          "granted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Granted At"
+          },
+          "skill": {
+            "title": "Skill",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "skill",
+          "source",
+          "granted_at"
+        ],
+        "title": "PreApproval",
+        "type": "object"
+      },
+      "PreApprovalGranted": {
+        "properties": {
+          "granted": {
+            "title": "Granted",
+            "type": "string"
+          },
+          "pre_approvals": {
+            "items": {
+              "$ref": "#/components/schemas/PreApproval"
+            },
+            "title": "Pre Approvals",
+            "type": "array"
+          }
+        },
+        "required": [
+          "granted",
+          "pre_approvals"
+        ],
+        "title": "PreApprovalGranted",
+        "type": "object"
+      },
+      "PreApprovalRevoked": {
+        "properties": {
+          "pre_approvals": {
+            "items": {
+              "$ref": "#/components/schemas/PreApproval"
+            },
+            "title": "Pre Approvals",
+            "type": "array"
+          },
+          "revoked": {
+            "title": "Revoked",
+            "type": "string"
+          }
+        },
+        "required": [
+          "revoked",
+          "pre_approvals"
+        ],
+        "title": "PreApprovalRevoked",
+        "type": "object"
+      },
+      "PreApprovals": {
+        "properties": {
+          "pre_approvals": {
+            "items": {
+              "$ref": "#/components/schemas/PreApproval"
+            },
+            "title": "Pre Approvals",
+            "type": "array"
+          }
+        },
+        "required": [
+          "pre_approvals"
+        ],
+        "title": "PreApprovals",
+        "type": "object"
+      },
+      "PresenceState": {
+        "properties": {
+          "emotion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emotion"
+          },
+          "focus": {
+            "title": "Focus",
+            "type": "boolean"
+          },
+          "recording": {
+            "title": "Recording",
+            "type": "boolean"
+          },
+          "state": {
+            "enum": [
+              "idle",
+              "listening",
+              "thinking",
+              "speaking",
+              "recording"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "emotion",
+          "recording",
+          "focus"
+        ],
+        "title": "PresenceState",
+        "type": "object"
+      },
+      "PrivacyFlags": {
+        "properties": {
+          "cloud_llm": {
+            "title": "Cloud Llm",
+            "type": "boolean"
+          },
+          "live_data": {
+            "title": "Live Data",
+            "type": "boolean"
+          },
+          "web_search": {
+            "title": "Web Search",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "web_search",
+          "live_data",
+          "cloud_llm"
+        ],
+        "title": "PrivacyFlags",
+        "type": "object"
+      },
+      "ReferenceForgotten": {
+        "properties": {
+          "consented": {
+            "title": "Consented",
+            "type": "boolean"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "engine_installed": {
+            "title": "Engine Installed",
+            "type": "boolean"
+          },
+          "has_reference": {
+            "title": "Has Reference",
+            "type": "boolean"
+          },
+          "installed": {
+            "title": "Installed",
+            "type": "boolean"
+          },
+          "licence": {
+            "title": "Licence",
+            "type": "string"
+          },
+          "licence_accepted": {
+            "title": "Licence Accepted",
+            "type": "boolean"
+          },
+          "licence_accepted_at": {
+            "title": "Licence Accepted At",
+            "type": "string"
+          },
+          "loaded": {
+            "title": "Loaded",
+            "type": "boolean"
+          },
+          "min_seconds": {
+            "title": "Min Seconds",
+            "type": "integer"
+          },
+          "packaged": {
+            "title": "Packaged",
+            "type": "boolean"
+          },
+          "reference_seconds": {
+            "title": "Reference Seconds",
+            "type": "number"
+          },
+          "removed": {
+            "title": "Removed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "installed",
+          "engine_installed",
+          "packaged",
+          "enabled",
+          "consented",
+          "has_reference",
+          "reference_seconds",
+          "loaded",
+          "min_seconds",
+          "licence",
+          "licence_accepted",
+          "licence_accepted_at",
+          "removed"
+        ],
+        "title": "ReferenceForgotten",
+        "type": "object"
+      },
+      "ReferenceSaved": {
+        "description": "The clone status, plus what the upload itself produced.",
+        "properties": {
+          "consented": {
+            "title": "Consented",
+            "type": "boolean"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "engine_installed": {
+            "title": "Engine Installed",
+            "type": "boolean"
+          },
+          "has_reference": {
+            "title": "Has Reference",
+            "type": "boolean"
+          },
+          "installed": {
+            "title": "Installed",
+            "type": "boolean"
+          },
+          "licence": {
+            "title": "Licence",
+            "type": "string"
+          },
+          "licence_accepted": {
+            "title": "Licence Accepted",
+            "type": "boolean"
+          },
+          "licence_accepted_at": {
+            "title": "Licence Accepted At",
+            "type": "string"
+          },
+          "loaded": {
+            "title": "Loaded",
+            "type": "boolean"
+          },
+          "min_seconds": {
+            "title": "Min Seconds",
+            "type": "integer"
+          },
+          "packaged": {
+            "title": "Packaged",
+            "type": "boolean"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "reference_seconds": {
+            "title": "Reference Seconds",
+            "type": "number"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "installed",
+          "engine_installed",
+          "packaged",
+          "enabled",
+          "consented",
+          "has_reference",
+          "reference_seconds",
+          "loaded",
+          "min_seconds",
+          "licence",
+          "licence_accepted",
+          "licence_accepted_at",
+          "seconds",
+          "path"
+        ],
+        "title": "ReferenceSaved",
+        "type": "object"
+      },
+      "ReminderCancelled": {
+        "properties": {
+          "cancelled": {
+            "title": "Cancelled",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cancelled",
+          "label"
+        ],
+        "title": "ReminderCancelled",
+        "type": "object"
+      },
+      "Reminders": {
+        "properties": {
+          "reminders": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduledItem"
+            },
+            "title": "Reminders",
+            "type": "array"
+          }
+        },
+        "required": [
+          "reminders"
+        ],
+        "title": "Reminders",
+        "type": "object"
+      },
+      "RemovedAccount": {
+        "properties": {
+          "config_file": {
+            "title": "Config File",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "removed": {
+            "title": "Removed",
+            "type": "string"
+          }
+        },
+        "required": [
+          "removed",
+          "kind",
+          "config_file"
+        ],
+        "title": "RemovedAccount",
+        "type": "object"
+      },
+      "RetentionSwept": {
+        "properties": {
+          "removed": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Removed",
+            "type": "object"
+          }
+        },
+        "required": [
+          "removed"
+        ],
+        "title": "RetentionSwept",
+        "type": "object"
+      },
+      "RetentionWindow": {
+        "description": "The window, and what is inside it right now (REQ-26).\n\nFour fields, and the first draft of this model had five: an `oldest_turn`\nthat retention.describe() does not return and never has. Pydantic refused\nthe response and the endpoint answered 500, which is the right failure --\na response model that invents a field is a contract the server cannot\nkeep, and it is better to find that in a test than to have the field\nquietly default itself into the schema.",
+        "properties": {
+          "action_records": {
+            "title": "Action Records",
+            "type": "integer"
+          },
+          "conversation_days": {
+            "title": "Conversation Days",
+            "type": "integer"
+          },
+          "conversation_turns": {
+            "title": "Conversation Turns",
+            "type": "integer"
+          },
+          "history_days": {
+            "title": "History Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "conversation_days",
+          "history_days",
+          "conversation_turns",
+          "action_records"
+        ],
+        "title": "RetentionWindow",
+        "type": "object"
+      },
+      "Routine": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "needs_approval": {
+            "title": "Needs Approval",
+            "type": "boolean"
+          },
+          "next_fire_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Fire At"
+          },
+          "recurring": {
+            "title": "Recurring",
+            "type": "boolean"
+          },
+          "steps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "next_fire_at",
+          "recurring",
+          "active",
+          "steps",
+          "needs_approval"
+        ],
+        "title": "Routine",
+        "type": "object"
+      },
+      "RoutineApproved": {
+        "properties": {
+          "approved": {
+            "title": "Approved",
+            "type": "boolean"
+          },
+          "routine": {
+            "$ref": "#/components/schemas/ScheduledItem"
+          }
+        },
+        "required": [
+          "approved",
+          "routine"
+        ],
+        "title": "RoutineApproved",
+        "type": "object"
+      },
+      "Routines": {
+        "properties": {
+          "routines": {
+            "items": {
+              "$ref": "#/components/schemas/Routine"
+            },
+            "title": "Routines",
+            "type": "array"
+          }
+        },
+        "required": [
+          "routines"
+        ],
+        "title": "Routines",
+        "type": "object"
+      },
+      "ScanResult": {
+        "properties": {
+          "duration_seconds": {
+            "title": "Duration Seconds",
+            "type": "number"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "indexed": {
+            "title": "Indexed",
+            "type": "integer"
+          },
+          "removed": {
+            "title": "Removed",
+            "type": "integer"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          },
+          "updated": {
+            "title": "Updated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "indexed",
+          "updated",
+          "removed",
+          "failed",
+          "skipped",
+          "errors",
+          "duration_seconds"
+        ],
+        "title": "ScanResult",
+        "type": "object"
+      },
+      "ScheduledItem": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "next_fire_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Fire At"
+          },
+          "recurring": {
+            "title": "Recurring",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "next_fire_at",
+          "recurring",
+          "active"
+        ],
+        "title": "ScheduledItem",
+        "type": "object"
+      },
+      "SemanticStatus": {
+        "properties": {
+          "chunks": {
+            "title": "Chunks",
+            "type": "integer"
+          },
+          "download_mb": {
+            "title": "Download Mb",
+            "type": "integer"
+          },
+          "embedded": {
+            "title": "Embedded",
+            "type": "integer"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "model_installed": {
+            "title": "Model Installed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled",
+          "model",
+          "model_installed",
+          "download_mb",
+          "chunks",
+          "embedded"
+        ],
+        "title": "SemanticStatus",
+        "type": "object"
+      },
+      "SequenceRun": {
+        "description": "What running a routine or a shortcut did, per step.\n\n`routine_id` duplicates `id` and is kept: it is the name routines used\nbefore shortcuts existed, and dropping it from the schema would be a\nbreaking change dressed up as tidying.",
+        "properties": {
+          "batch_id": {
+            "title": "Batch Id",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "needs_approval": {
+            "title": "Needs Approval",
+            "type": "boolean"
+          },
+          "ran": {
+            "title": "Ran",
+            "type": "integer"
+          },
+          "routine_id": {
+            "title": "Routine Id",
+            "type": "string"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/SequenceStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "routine_id",
+          "label",
+          "batch_id",
+          "steps",
+          "ran",
+          "skipped",
+          "needs_approval"
+        ],
+        "title": "SequenceRun",
+        "type": "object"
+      },
+      "SequenceStep": {
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "skill": {
+            "title": "Skill",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "skill",
+          "status",
+          "message"
+        ],
+        "title": "SequenceStep",
+        "type": "object"
+      },
+      "Settings": {
+        "properties": {
+          "current": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Current",
+            "type": "object"
+          },
+          "writable": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Writable",
+            "type": "object"
+          }
+        },
+        "required": [
+          "current",
+          "writable"
+        ],
+        "title": "Settings",
+        "type": "object"
+      },
       "SettingsPatch": {
         "properties": {
           "changes": {
@@ -147,6 +2395,162 @@
           }
         },
         "title": "SettingsPatch",
+        "type": "object"
+      },
+      "SettingsUpdated": {
+        "properties": {
+          "changed": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Changed",
+            "type": "object"
+          },
+          "config_file": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config File"
+          }
+        },
+        "required": [
+          "changed"
+        ],
+        "title": "SettingsUpdated",
+        "type": "object"
+      },
+      "Shortcut": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "needs_approval": {
+            "title": "Needs Approval",
+            "type": "boolean"
+          },
+          "steps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "steps",
+          "needs_approval"
+        ],
+        "title": "Shortcut",
+        "type": "object"
+      },
+      "ShortcutApproved": {
+        "properties": {
+          "approved": {
+            "title": "Approved",
+            "type": "boolean"
+          },
+          "shortcut": {
+            "$ref": "#/components/schemas/ScheduledItem"
+          }
+        },
+        "required": [
+          "approved",
+          "shortcut"
+        ],
+        "title": "ShortcutApproved",
+        "type": "object"
+      },
+      "Shortcuts": {
+        "properties": {
+          "shortcuts": {
+            "items": {
+              "$ref": "#/components/schemas/Shortcut"
+            },
+            "title": "Shortcuts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "shortcuts"
+        ],
+        "title": "Shortcuts",
+        "type": "object"
+      },
+      "SkillCall": {
+        "description": "One gate outcome, as GateOutcome.to_dict() produces it.\n\nThe hand-written TypeScript described three of these eight fields. That\nwas not wrong -- TypeScript does not object to fields it was not told\nabout -- but it meant `data` and `action_id` were being used from the\nwire with no type behind them.",
+        "properties": {
+          "action_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action Id"
+          },
+          "data": {
+            "additionalProperties": true,
+            "title": "Data",
+            "type": "object"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "preview": {
+            "title": "Preview",
+            "type": "string"
+          },
+          "reversible": {
+            "title": "Reversible",
+            "type": "boolean"
+          },
+          "skill": {
+            "title": "Skill",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "skill",
+          "action_id",
+          "preview",
+          "reversible",
+          "message",
+          "data",
+          "error"
+        ],
+        "title": "SkillCall",
         "type": "object"
       },
       "SkillCallRequest": {
@@ -172,6 +2576,91 @@
         "title": "SkillCallRequest",
         "type": "object"
       },
+      "SkillCatalog": {
+        "properties": {
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/SkillEntry"
+            },
+            "title": "Skills",
+            "type": "array"
+          }
+        },
+        "required": [
+          "skills"
+        ],
+        "title": "SkillCatalog",
+        "type": "object"
+      },
+      "SkillEntry": {
+        "description": "One catalog entry, as the router sees it.",
+        "properties": {
+          "consequential": {
+            "title": "Consequential",
+            "type": "boolean"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "parameters": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SkillParameter"
+            },
+            "title": "Parameters",
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "consequential",
+          "parameters"
+        ],
+        "title": "SkillEntry",
+        "type": "object"
+      },
+      "SkillParameter": {
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "enum": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enum"
+          },
+          "required": {
+            "title": "Required",
+            "type": "boolean"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "description",
+          "required"
+        ],
+        "title": "SkillParameter",
+        "type": "object"
+      },
       "SpeakRequest": {
         "properties": {
           "text": {
@@ -183,6 +2672,250 @@
           "text"
         ],
         "title": "SpeakRequest",
+        "type": "object"
+      },
+      "SpeechShape": {
+        "properties": {
+          "envelope": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Envelope",
+            "type": "array"
+          },
+          "sample_rate": {
+            "title": "Sample Rate",
+            "type": "integer"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          },
+          "spoke": {
+            "title": "Spoke",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "spoke",
+          "seconds",
+          "sample_rate",
+          "envelope"
+        ],
+        "title": "SpeechShape",
+        "type": "object"
+      },
+      "StoppedCapture": {
+        "description": "A finished recording, with the summary this call just produced.\n\nNot a subclass of `Transcript`: that one's `summary` is whatever was\nstored and so is open-ended, and narrowing a field in a subclass is a\npromise the parent did not make. Here the shape *is* known, because\nsummarize.summarise() produced it one line above -- so it is spelled out,\nand the duplication is the price of the two being genuinely different.",
+        "properties": {
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "minutes": {
+            "title": "Minutes",
+            "type": "number"
+          },
+          "running": {
+            "title": "Running",
+            "type": "boolean"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaptureSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "words": {
+            "title": "Words",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "started_at",
+          "ended_at",
+          "sources",
+          "minutes",
+          "words",
+          "summary",
+          "running"
+        ],
+        "title": "StoppedCapture",
+        "type": "object"
+      },
+      "SttStatus": {
+        "properties": {
+          "idle_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idle Seconds"
+          },
+          "installed": {
+            "title": "Installed",
+            "type": "boolean"
+          },
+          "loaded": {
+            "title": "Loaded",
+            "type": "boolean"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "installed",
+          "loaded",
+          "idle_seconds"
+        ],
+        "title": "SttStatus",
+        "type": "object"
+      },
+      "Task": {
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "done": {
+            "title": "Done",
+            "type": "boolean"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "kind",
+          "tags",
+          "due",
+          "done",
+          "created_at"
+        ],
+        "title": "Task",
+        "type": "object"
+      },
+      "TaskDone": {
+        "properties": {
+          "done": {
+            "title": "Done",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "done"
+        ],
+        "title": "TaskDone",
+        "type": "object"
+      },
+      "TaskRemoved": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text"
+        ],
+        "title": "TaskRemoved",
         "type": "object"
       },
       "TaskRequest": {
@@ -214,6 +2947,231 @@
         "title": "TaskRequest",
         "type": "object"
       },
+      "Tasks": {
+        "properties": {
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/Task"
+            },
+            "title": "Tasks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tasks"
+        ],
+        "title": "Tasks",
+        "type": "object"
+      },
+      "Transcript": {
+        "properties": {
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "minutes": {
+            "title": "Minutes",
+            "type": "number"
+          },
+          "running": {
+            "title": "Running",
+            "type": "boolean"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaptureSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "words": {
+            "title": "Words",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "started_at",
+          "ended_at",
+          "sources",
+          "minutes",
+          "words",
+          "summary",
+          "running"
+        ],
+        "title": "Transcript",
+        "type": "object"
+      },
+      "TranscriptDetail": {
+        "properties": {
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "minutes": {
+            "title": "Minutes",
+            "type": "number"
+          },
+          "running": {
+            "title": "Running",
+            "type": "boolean"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaptureSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "words": {
+            "title": "Words",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "started_at",
+          "ended_at",
+          "sources",
+          "minutes",
+          "words",
+          "summary",
+          "running",
+          "text"
+        ],
+        "title": "TranscriptDetail",
+        "type": "object"
+      },
+      "Transcripts": {
+        "properties": {
+          "transcripts": {
+            "items": {
+              "$ref": "#/components/schemas/Transcript"
+            },
+            "title": "Transcripts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "transcripts"
+        ],
+        "title": "Transcripts",
+        "type": "object"
+      },
+      "TtsStatus": {
+        "properties": {
+          "available": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Available",
+            "type": "array"
+          },
+          "installed": {
+            "title": "Installed",
+            "type": "boolean"
+          },
+          "loaded": {
+            "title": "Loaded",
+            "type": "boolean"
+          },
+          "muted": {
+            "title": "Muted",
+            "type": "boolean"
+          },
+          "voice": {
+            "title": "Voice",
+            "type": "string"
+          }
+        },
+        "required": [
+          "voice",
+          "installed",
+          "loaded",
+          "muted",
+          "available"
+        ],
+        "title": "TtsStatus",
+        "type": "object"
+      },
       "TurnRequest": {
         "properties": {
           "pending_action_id": {
@@ -241,6 +3199,97 @@
           "text"
         ],
         "title": "TurnRequest",
+        "type": "object"
+      },
+      "TurnResult": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "needs_confirmation": {
+            "title": "Needs Confirmation",
+            "type": "boolean"
+          },
+          "not_run": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Not Run",
+            "type": "array"
+          },
+          "pending": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PendingAction"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reply": {
+            "title": "Reply",
+            "type": "string"
+          },
+          "skill_calls": {
+            "items": {
+              "$ref": "#/components/schemas/SkillCall"
+            },
+            "title": "Skill Calls",
+            "type": "array"
+          }
+        },
+        "required": [
+          "reply",
+          "needs_confirmation",
+          "pending",
+          "skill_calls",
+          "not_run",
+          "error"
+        ],
+        "title": "TurnResult",
+        "type": "object"
+      },
+      "UndoOutcome": {
+        "properties": {
+          "failed": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Failed",
+            "type": "array"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "undone": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Undone",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "message",
+          "undone",
+          "failed"
+        ],
+        "title": "UndoOutcome",
         "type": "object"
       },
       "ValidationError": {
@@ -274,6 +3323,255 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "VoiceModel": {
+        "properties": {
+          "approx_mb": {
+            "default": 0,
+            "title": "Approx Mb",
+            "type": "integer"
+          },
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "present": {
+            "title": "Present",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "present"
+        ],
+        "title": "VoiceModel",
+        "type": "object"
+      },
+      "VoiceModels": {
+        "properties": {
+          "location": {
+            "title": "Location",
+            "type": "string"
+          },
+          "missing_mb": {
+            "title": "Missing Mb",
+            "type": "integer"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/VoiceModel"
+            },
+            "title": "Models",
+            "type": "array"
+          }
+        },
+        "required": [
+          "models",
+          "missing_mb",
+          "location"
+        ],
+        "title": "VoiceModels",
+        "type": "object"
+      },
+      "VoiceModelsDownloaded": {
+        "properties": {
+          "downloaded": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Downloaded",
+            "type": "array"
+          },
+          "failed": {
+            "items": {
+              "$ref": "#/components/schemas/FailedDownload"
+            },
+            "title": "Failed",
+            "type": "array"
+          },
+          "location": {
+            "title": "Location",
+            "type": "string"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "downloaded",
+          "failed",
+          "ready",
+          "location"
+        ],
+        "title": "VoiceModelsDownloaded",
+        "type": "object"
+      },
+      "VoiceModelsRemoved": {
+        "properties": {
+          "freed_mb": {
+            "title": "Freed Mb",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "freed_mb"
+        ],
+        "title": "VoiceModelsRemoved",
+        "type": "object"
+      },
+      "VoiceStatus": {
+        "properties": {
+          "download_mb": {
+            "title": "Download Mb",
+            "type": "integer"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "input_enabled": {
+            "title": "Input Enabled",
+            "type": "boolean"
+          },
+          "microphone": {
+            "title": "Microphone",
+            "type": "boolean"
+          },
+          "models_ready": {
+            "title": "Models Ready",
+            "type": "boolean"
+          },
+          "output_enabled": {
+            "title": "Output Enabled",
+            "type": "boolean"
+          },
+          "stt": {
+            "$ref": "#/components/schemas/SttStatus"
+          },
+          "tts": {
+            "$ref": "#/components/schemas/TtsStatus"
+          },
+          "wake": {
+            "$ref": "#/components/schemas/WakeStatus"
+          }
+        },
+        "required": [
+          "enabled",
+          "input_enabled",
+          "output_enabled",
+          "microphone",
+          "stt",
+          "tts",
+          "wake",
+          "models_ready",
+          "download_mb"
+        ],
+        "title": "VoiceStatus",
+        "type": "object"
+      },
+      "VoiceTurn": {
+        "properties": {
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "heard": {
+            "title": "Heard",
+            "type": "string"
+          },
+          "needs_confirmation": {
+            "title": "Needs Confirmation",
+            "type": "boolean"
+          },
+          "reply": {
+            "title": "Reply",
+            "type": "string"
+          },
+          "spoke": {
+            "title": "Spoke",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "heard",
+          "confidence",
+          "reply",
+          "spoke",
+          "needs_confirmation"
+        ],
+        "title": "VoiceTurn",
+        "type": "object"
+      },
+      "WakeStatus": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "installed": {
+            "title": "Installed",
+            "type": "boolean"
+          },
+          "phrase": {
+            "title": "Phrase",
+            "type": "string"
+          },
+          "threshold": {
+            "title": "Threshold",
+            "type": "number"
+          }
+        },
+        "required": [
+          "phrase",
+          "enabled",
+          "installed",
+          "available",
+          "threshold"
+        ],
+        "title": "WakeStatus",
+        "type": "object"
+      },
+      "Wiped": {
+        "properties": {
+          "removed": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Removed",
+            "type": "object"
+          }
+        },
+        "required": [
+          "removed"
+        ],
+        "title": "Wiped",
         "type": "object"
       },
       "XttsLicenceRequest": {
@@ -319,9 +3617,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Action History Actions History Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ActionHistory"
                 }
               }
             },
@@ -349,9 +3645,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Pending Actions Pending Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/PendingActions"
                 }
               }
             },
@@ -369,9 +3663,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Pre Approvals Actions Pre Approvals Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/PreApprovals"
                 }
               }
             },
@@ -400,9 +3692,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Revoke Pre Approval Actions Pre Approvals  Skill Name  Delete",
-                  "type": "object"
+                  "$ref": "#/components/schemas/PreApprovalRevoked"
                 }
               }
             },
@@ -439,9 +3729,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Grant Pre Approval Actions Pre Approvals  Skill Name  Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/PreApprovalGranted"
                 }
               }
             },
@@ -469,9 +3757,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Undo Last Actions Undo Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/UndoOutcome"
                 }
               }
             },
@@ -510,9 +3796,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Confirm Action Actions  Action Id  Confirm Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/TurnResult"
                 }
               }
             },
@@ -561,9 +3845,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Decline Action Actions  Action Id  Decline Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/TurnResult"
                 }
               }
             },
@@ -602,9 +3884,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Undo Action Actions  Action Id  Undo Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/UndoOutcome"
                 }
               }
             },
@@ -633,9 +3913,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Avatar Status Avatar Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AvatarLicence"
                 }
               }
             },
@@ -664,9 +3942,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Avatar Licence Avatar Licence Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AvatarLicence"
                 }
               }
             },
@@ -694,9 +3970,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Briefing Briefing Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/Briefing"
                 }
               }
             },
@@ -726,9 +4000,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Capture Start Capture Start Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CaptureStatus"
                 }
               }
             },
@@ -756,9 +4028,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Capture Status Capture Status Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CaptureStatus"
                 }
               }
             },
@@ -776,9 +4046,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Capture Stop Capture Stop Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/StoppedCapture"
                 }
               }
             },
@@ -796,9 +4064,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Transcripts Capture Transcripts Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/Transcripts"
                 }
               }
             },
@@ -827,9 +4093,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Delete Transcript Capture Transcripts  Transcript Id  Delete",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DeletedTranscript"
                 }
               }
             },
@@ -866,9 +4130,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Transcript Capture Transcripts  Transcript Id  Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/TranscriptDetail"
                 }
               }
             },
@@ -897,9 +4159,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Connector Status Connectors Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/Connectors"
                 }
               }
             },
@@ -928,9 +4188,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Add Account Connectors Accounts Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AddedAccount"
                 }
               }
             },
@@ -978,9 +4236,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Remove Account Connectors Accounts  Kind   Label  Delete",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RemovedAccount"
                 }
               }
             },
@@ -1029,9 +4285,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Check Connector Connectors  Kind   Label  Check Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AccountCheck"
                 }
               }
             },
@@ -1079,9 +4333,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Forget Credential Connectors  Kind   Label  Credential Delete",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CredentialForgotten"
                 }
               }
             },
@@ -1138,9 +4390,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Set Credential Connectors  Kind   Label  Credential Put",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CredentialStored"
                 }
               }
             },
@@ -1179,11 +4429,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "type": "boolean"
-                  },
-                  "title": "Response Client Problem Diagnostics Client Problem Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/Acknowledged"
                 }
               }
             },
@@ -1212,9 +4458,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Diagnostic Logs Diagnostics Logs Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/LogSummary"
                 }
               }
             },
@@ -1232,9 +4476,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Documents Documents Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/IndexedDocuments"
                 }
               }
             },
@@ -1253,9 +4495,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Clear Document Index Documents Index Delete",
-                  "type": "object"
+                  "$ref": "#/components/schemas/IndexCleared"
                 }
               }
             },
@@ -1285,9 +4525,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Reindex Documents Documents Reindex Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ScanResult"
                 }
               }
             },
@@ -1340,9 +4578,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Search Documents Documents Search Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DocumentHits"
                 }
               }
             },
@@ -1371,9 +4607,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Semantic Status Documents Semantic Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/SemanticStatus"
                 }
               }
             },
@@ -1392,9 +4626,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Install Embedding Model Documents Semantic Model Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/SemanticStatus"
                 }
               }
             },
@@ -1412,9 +4644,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Document Index Status Documents Status Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/IndexStatus"
                 }
               }
             },
@@ -1450,9 +4680,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Focus Status Focus Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/FocusState"
                 }
               }
             },
@@ -1470,9 +4698,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response End Focus Focus End Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/FocusEnded"
                 }
               }
             },
@@ -1500,9 +4726,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Start Focus Focus Start Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/FocusState"
                 }
               }
             },
@@ -1530,9 +4754,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Health Health Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/Health"
                 }
               }
             },
@@ -1550,9 +4772,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Delete All Memory Memory Delete",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DeletedFacts"
                 }
               }
             },
@@ -1568,9 +4788,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Memory Memory Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/MemoryFacts"
                 }
               }
             },
@@ -1599,9 +4817,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Delete Memory Memory  Fact Id  Delete",
-                  "type": "object"
+                  "$ref": "#/components/schemas/DeletedFact"
                 }
               }
             },
@@ -1630,9 +4846,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Take Notifications Notifications Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/Notifications"
                 }
               }
             },
@@ -1668,9 +4882,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Export Preview Privacy Export Preview Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ExportPreview"
                 }
               }
             },
@@ -1689,9 +4901,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Retention Status Privacy Retention Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RetentionWindow"
                 }
               }
             },
@@ -1710,9 +4920,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Retention Sweep Privacy Retention Sweep Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RetentionSwept"
                 }
               }
             },
@@ -1731,9 +4939,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Wipe Privacy Wipe Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/Wiped"
                 }
               }
             },
@@ -1751,9 +4957,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Reminders Reminders Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/Reminders"
                 }
               }
             },
@@ -1772,9 +4976,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Force Tick Reminders Tick Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/Delivered"
                 }
               }
             },
@@ -1803,9 +5005,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Cancel Reminder Reminders  Reminder Id  Delete",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ReminderCancelled"
                 }
               }
             },
@@ -1833,9 +5033,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Routines Routines Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/Routines"
                 }
               }
             },
@@ -1864,9 +5062,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Delete Routine Routines  Routine Id  Delete",
-                  "type": "object"
+                  "$ref": "#/components/schemas/Deleted"
                 }
               }
             },
@@ -1906,9 +5102,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Approve Routine Routines  Routine Id  Approve Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RoutineApproved"
                 }
               }
             },
@@ -1948,9 +5142,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Run Routine Routines  Routine Id  Run Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/SequenceRun"
                 }
               }
             },
@@ -1989,9 +5181,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Clear Session Session  Session Id  Delete",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ClearedSession"
                 }
               }
             },
@@ -2019,9 +5209,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Read Settings Settings Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/Settings"
                 }
               }
             },
@@ -2048,9 +5236,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Write Settings Settings Patch",
-                  "type": "object"
+                  "$ref": "#/components/schemas/SettingsUpdated"
                 }
               }
             },
@@ -2078,9 +5264,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Shortcuts Shortcuts Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/Shortcuts"
                 }
               }
             },
@@ -2109,9 +5293,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Delete Shortcut Shortcuts  Shortcut Id  Delete",
-                  "type": "object"
+                  "$ref": "#/components/schemas/Deleted"
                 }
               }
             },
@@ -2151,9 +5333,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Approve Shortcut Shortcuts  Shortcut Id  Approve Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ShortcutApproved"
                 }
               }
             },
@@ -2192,9 +5372,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Run Shortcut Shortcuts  Shortcut Id  Run Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/SequenceRun"
                 }
               }
             },
@@ -2222,9 +5400,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Skills Skills Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/SkillCatalog"
                 }
               }
             },
@@ -2253,9 +5429,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Run Skill Skills Run Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/SkillCall"
                 }
               }
             },
@@ -2284,9 +5458,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Presence State State Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/PresenceState"
                 }
               }
             },
@@ -2316,9 +5488,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Tasks Tasks Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/Tasks"
                 }
               }
             },
@@ -2354,9 +5524,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Add Task Tasks Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CreatedTask"
                 }
               }
             },
@@ -2395,9 +5563,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Remove Task Tasks  Task Id  Delete",
-                  "type": "object"
+                  "$ref": "#/components/schemas/TaskRemoved"
                 }
               }
             },
@@ -2444,9 +5610,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Complete Task Tasks  Task Id  Patch",
-                  "type": "object"
+                  "$ref": "#/components/schemas/TaskDone"
                 }
               }
             },
@@ -2484,9 +5648,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Turn Turn Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/TurnResult"
                 }
               }
             },
@@ -2551,9 +5713,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Clone Status Voice Clone Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CloneStatus"
                 }
               }
             },
@@ -2582,9 +5742,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Clone Consent Voice Clone Consent Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CloneStatus"
                 }
               }
             },
@@ -2613,9 +5771,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Remove Clone Engine Voice Clone Engine Delete",
-                  "type": "object"
+                  "$ref": "#/components/schemas/EngineRemoved"
                 }
               }
             },
@@ -2631,9 +5787,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Clone Engine Progress Voice Clone Engine Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/EngineProgress"
                 }
               }
             },
@@ -2650,9 +5804,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Install Clone Engine Voice Clone Engine Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/EngineProgress"
                 }
               }
             },
@@ -2681,9 +5833,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Xtts Licence Voice Clone Licence Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CloneStatus"
                 }
               }
             },
@@ -2712,9 +5862,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Forget Clone Reference Voice Clone Reference Delete",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ReferenceForgotten"
                 }
               }
             },
@@ -2741,9 +5889,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Upload Clone Reference Voice Clone Reference Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ReferenceSaved"
                 }
               }
             },
@@ -2772,9 +5918,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Listen Once Voice Listen Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/VoiceTurn"
                 }
               }
             },
@@ -2792,9 +5936,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Delete Voice Models Voice Models Delete",
-                  "type": "object"
+                  "$ref": "#/components/schemas/VoiceModelsRemoved"
                 }
               }
             },
@@ -2810,9 +5952,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Voice Models Voice Models Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/VoiceModels"
                 }
               }
             },
@@ -2841,9 +5981,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Download Voice Models Voice Models Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/VoiceModelsDownloaded"
                 }
               }
             },
@@ -2882,9 +6020,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Speak Voice Speak Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/SpeechShape"
                 }
               }
             },
@@ -2912,9 +6048,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Voice Status Voice Status Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/VoiceStatus"
                 }
               }
             },

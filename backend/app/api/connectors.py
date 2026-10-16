@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from ..connectors import setup as connector_setup
+from . import schemas
 
 router = APIRouter()
 
@@ -23,7 +24,7 @@ class AccountRequest(BaseModel):
     fields: dict[str, Any] = Field(default_factory=dict)
 
 
-@router.post("/connectors/accounts")
+@router.post("/connectors/accounts", response_model=schemas.AddedAccount)
 def add_account(request: AccountRequest) -> dict[str, Any]:
     """Add an account without hand-editing YAML (REQ-13, REQ-26).
 
@@ -38,7 +39,7 @@ def add_account(request: AccountRequest) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.delete("/connectors/accounts/{kind}/{label}")
+@router.delete("/connectors/accounts/{kind}/{label}", response_model=schemas.RemovedAccount)
 def remove_account(kind: str, label: str) -> dict[str, Any]:
     try:
         return connector_setup.remove_account(kind, label)
@@ -46,7 +47,7 @@ def remove_account(kind: str, label: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.get("/connectors")
+@router.get("/connectors", response_model=schemas.Connectors)
 def connector_status() -> dict[str, Any]:
     """Account details only. Never returns a secret, by construction."""
     from ..connectors import base as connectors
@@ -60,7 +61,7 @@ class CredentialRequest(BaseModel):
     secret: str
 
 
-@router.put("/connectors/{kind}/{label}/credential")
+@router.put("/connectors/{kind}/{label}/credential", response_model=schemas.CredentialStored)
 def set_credential(kind: str, label: str, request: CredentialRequest) -> dict[str, Any]:
     """Store the password (or an iCal URL) for an account — REQ-26.
 
@@ -99,7 +100,7 @@ def set_credential(kind: str, label: str, request: CredentialRequest) -> dict[st
     return {"stored": True, "kind": kind, "label": label, "credential_ref": account.credential_ref}
 
 
-@router.post("/connectors/{kind}/{label}/check")
+@router.post("/connectors/{kind}/{label}/check", response_model=schemas.AccountCheck)
 def check_connector(kind: str, label: str) -> dict[str, Any]:
     """Try the account and say whether it works.
 
@@ -114,14 +115,14 @@ def check_connector(kind: str, label: str) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.delete("/connectors/{kind}/{label}/credential")
+@router.delete("/connectors/{kind}/{label}/credential", response_model=schemas.CredentialForgotten)
 def forget_credential(kind: str, label: str) -> dict[str, Any]:
     from ..connectors import credentials
 
     return {"removed": credentials.delete(credentials.reference(kind, label))}
 
 
-@router.get("/briefing")
+@router.get("/briefing", response_model=schemas.Briefing)
 def briefing() -> dict[str, Any]:
     from ..skills.planning.briefing import build
 

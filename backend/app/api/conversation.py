@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import json
 import logging
 from collections.abc import Iterator
-from typing import Any
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
@@ -13,6 +14,7 @@ from pydantic import BaseModel
 
 from ..brain import orchestrator
 from ..memory import short_term
+from . import schemas
 
 log = logging.getLogger("kai")
 
@@ -27,7 +29,7 @@ class TurnRequest(BaseModel):
     pending_action_id: str | None = None
 
 
-@router.post("/turn")
+@router.post("/turn", response_model=schemas.TurnResult)
 def turn(request: TurnRequest) -> dict[str, Any]:
     result = orchestrator.handle_turn(
         request.text,
@@ -95,6 +97,6 @@ def turn_stream(request: TurnRequest) -> StreamingResponse:
     )
 
 
-@router.delete("/session/{session_id}")
+@router.delete("/session/{session_id}", response_model=schemas.ClearedSession)
 def clear_session(session_id: str) -> dict[str, Any]:
     return {"cleared_turns": short_term.clear(session_id)}

@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from .. import preferences
 from ..settings import load_config
+from . import schemas
 
 log = logging.getLogger("kai")
 
@@ -88,14 +89,14 @@ class XttsLicenceRequest(BaseModel):
     accepted: bool
 
 
-@router.get("/voice/status")
+@router.get("/voice/status", response_model=schemas.VoiceStatus)
 def voice_status() -> dict[str, Any]:
     from ..voice import session as voice_session
 
     return voice_session.status()
 
 
-@router.get("/voice/models")
+@router.get("/voice/models", response_model=schemas.VoiceModels)
 def voice_models() -> dict[str, Any]:
     from ..voice import models as voice_models_module
 
@@ -106,7 +107,7 @@ def voice_models() -> dict[str, Any]:
     }
 
 
-@router.post("/voice/models")
+@router.post("/voice/models", response_model=schemas.VoiceModelsDownloaded)
 def download_voice_models(include_wake: bool = False) -> dict[str, Any]:
     """Explicit download. Hundreds of MB never move without being asked for."""
     from ..voice import models as voice_models_module
@@ -114,14 +115,14 @@ def download_voice_models(include_wake: bool = False) -> dict[str, Any]:
     return voice_models_module.ensure_all(include_wake=include_wake)
 
 
-@router.delete("/voice/models")
+@router.delete("/voice/models", response_model=schemas.VoiceModelsRemoved)
 def delete_voice_models() -> dict[str, Any]:
     from ..voice import models as voice_models_module
 
     return {"freed_mb": voice_models_module.remove_all()}
 
 
-@router.post("/voice/speak")
+@router.post("/voice/speak", response_model=schemas.SpeechShape)
 def speak(request: SpeakRequest) -> dict[str, Any]:
     """Say something out loud, and describe its shape for the avatar.
 
@@ -168,14 +169,14 @@ def speak(request: SpeakRequest) -> dict[str, Any]:
     }
 
 
-@router.get("/voice/clone")
+@router.get("/voice/clone", response_model=schemas.CloneStatus)
 def clone_status() -> dict[str, Any]:
     from ..voice import cloning
 
     return cloning.status()
 
 
-@router.post("/voice/clone/consent")
+@router.post("/voice/clone/consent", response_model=schemas.CloneStatus)
 def clone_consent(request: CloneConsentRequest) -> dict[str, Any]:
     """Record — or withdraw — the acknowledgement that gates cloning.
 
@@ -199,14 +200,14 @@ def clone_consent(request: CloneConsentRequest) -> dict[str, Any]:
     return cloning.status()
 
 
-@router.get("/voice/clone/engine")
+@router.get("/voice/clone/engine", response_model=schemas.EngineProgress)
 def clone_engine_progress() -> dict[str, Any]:
     from ..voice import engines
 
     return {"installed": engines.xtts_installed(), **engines.progress()}
 
 
-@router.post("/voice/clone/engine")
+@router.post("/voice/clone/engine", response_model=schemas.EngineProgress)
 def install_clone_engine() -> dict[str, Any]:
     """Start fetching the cloning engine. Explicit, and never on startup.
 
@@ -234,7 +235,7 @@ def install_clone_engine() -> dict[str, Any]:
     return {"installed": False, **engines.progress()}
 
 
-@router.delete("/voice/clone/engine")
+@router.delete("/voice/clone/engine", response_model=schemas.EngineRemoved)
 def remove_clone_engine() -> dict[str, Any]:
     """Give the disk space back. As easy as spending it."""
     from ..voice import engines
@@ -243,7 +244,7 @@ def remove_clone_engine() -> dict[str, Any]:
     return {"removed": removed, "installed": engines.xtts_installed()}
 
 
-@router.post("/voice/clone/licence")
+@router.post("/voice/clone/licence", response_model=schemas.CloneStatus)
 def xtts_licence(request: XttsLicenceRequest) -> dict[str, Any]:
     """Record — or withdraw — acceptance of XTTS-v2's licence.
 
@@ -277,7 +278,7 @@ def xtts_licence(request: XttsLicenceRequest) -> dict[str, Any]:
     return cloning.status()
 
 
-@router.post("/voice/clone/reference")
+@router.post("/voice/clone/reference", response_model=schemas.ReferenceSaved)
 async def upload_clone_reference(file: UploadFile = File(...)) -> dict[str, Any]:
     """Take the reference sample as an uploaded audio file.
 
@@ -323,7 +324,7 @@ async def upload_clone_reference(file: UploadFile = File(...)) -> dict[str, Any]
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.delete("/voice/clone/reference")
+@router.delete("/voice/clone/reference", response_model=schemas.ReferenceForgotten)
 def forget_clone_reference() -> dict[str, Any]:
     """Delete the recording. It is a sample of somebody's voice (REQ-26)."""
     from ..voice import cloning
@@ -331,7 +332,7 @@ def forget_clone_reference() -> dict[str, Any]:
     return {"removed": cloning.forget_reference(), **cloning.status()}
 
 
-@router.post("/voice/listen")
+@router.post("/voice/listen", response_model=schemas.VoiceTurn)
 def listen_once() -> dict[str, Any]:
     """Capture one utterance and run it as a normal turn."""
     from ..voice.session import VoiceSession

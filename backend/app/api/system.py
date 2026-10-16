@@ -21,6 +21,7 @@ from .. import notifications
 from ..brain import llm
 from ..settings import load_config
 from ..skills.registry import catalog
+from . import schemas
 
 router = APIRouter()
 
@@ -29,7 +30,7 @@ class FocusRequest(BaseModel):
     minutes: int = 25
 
 
-@router.get("/focus")
+@router.get("/focus", response_model=schemas.FocusState)
 def focus_status() -> dict[str, Any]:
     """Focus state, plus what starting one would cost right now.
 
@@ -44,10 +45,12 @@ def focus_status() -> dict[str, Any]:
     state = focus.state()
     return {"active": state.active, "minutes_left": state.minutes_left,
             "closed_apps": list(state.closed_apps),
-            "would_close": focus_skills.would_close()}
+            "would_close": focus_skills.would_close(),
+            # Nothing was started by asking, so there is nothing to report.
+            "message": None}
 
 
-@router.post("/focus/start")
+@router.post("/focus/start", response_model=schemas.FocusState)
 def start_focus(request: FocusRequest) -> dict[str, Any]:
     from ..skills.base import SkillContext, SkillError
     from ..skills.system.focus import StartFocusSkill
@@ -60,12 +63,20 @@ def start_focus(request: FocusRequest) -> dict[str, Any]:
     except SkillError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    from ..skills.system import focus as focus_skills
+
     state = focus.state()
     return {"active": state.active, "minutes_left": state.minutes_left,
-            "closed_apps": list(state.closed_apps), "message": result.message}
+            "closed_apps": list(state.closed_apps),
+            # Recomputed after the session started, so it is what is *still*
+            # running -- normally nothing. Present because GET /focus returns
+            # it and the Today screen keeps both answers in one piece of
+            # state; two shapes for one thing was the bug, not a feature.
+            "would_close": focus_skills.would_close(),
+            "message": result.message}
 
 
-@router.post("/focus/end")
+@router.post("/focus/end", response_model=schemas.FocusEnded)
 def end_focus() -> dict[str, Any]:
     state = focus.end()
     return {"active": state.active}
@@ -94,7 +105,7 @@ async def event_stream() -> StreamingResponse:
     )
 
 
-@router.get("/state")
+@router.get("/state", response_model=schemas.PresenceState)
 def presence_state() -> dict[str, Any]:
     """What the presence indicator shows — REQ-32.
 
@@ -120,13 +131,13 @@ def presence_state() -> dict[str, Any]:
     }
 
 
-@router.get("/notifications")
+@router.get("/notifications", response_model=schemas.Notifications)
 def take_notifications() -> dict[str, Any]:
     """Drain queued notifications. Destructive: each is handed out once."""
     return {"notifications": [n.to_dict() for n in notifications.drain()]}
 
 
-@router.get("/health")
+@router.get("/health", response_model=schemas.Health)
 def health() -> dict[str, Any]:
     config = load_config()
     skill_count = len(catalog())

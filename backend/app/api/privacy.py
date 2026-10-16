@@ -16,6 +16,7 @@ from .. import preferences
 from .. import privacy_export
 from .. import retention
 from ..settings import data_dir
+from . import schemas
 
 log = logging.getLogger("kai")
 
@@ -35,12 +36,12 @@ class ClientProblem(BaseModel):
     detail: str = ""
 
 
-@router.get("/settings")
+@router.get("/settings", response_model=schemas.Settings)
 def read_settings() -> dict[str, Any]:
     return {"current": preferences.current(), "writable": preferences.writable_keys()}
 
 
-@router.patch("/settings")
+@router.patch("/settings", response_model=schemas.SettingsUpdated)
 def write_settings(patch: SettingsPatch) -> dict[str, Any]:
     """Change a setting (REQ-26).
 
@@ -61,13 +62,13 @@ def write_settings(patch: SettingsPatch) -> dict[str, Any]:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
-@router.get("/privacy/retention")
+@router.get("/privacy/retention", response_model=schemas.RetentionWindow)
 def retention_status() -> dict[str, Any]:
     """The window, and what is inside it right now — REQ-26."""
     return retention.describe()
 
 
-@router.post("/privacy/retention/sweep")
+@router.post("/privacy/retention/sweep", response_model=schemas.RetentionSwept)
 def retention_sweep() -> dict[str, Any]:
     """Apply the window now rather than waiting for the next start or stop.
 
@@ -78,7 +79,7 @@ def retention_sweep() -> dict[str, Any]:
     return {"removed": retention.sweep()}
 
 
-@router.get("/diagnostics/logs")
+@router.get("/diagnostics/logs", response_model=schemas.LogSummary)
 def diagnostic_logs() -> dict[str, Any]:
     """Where the log is and how big it is — REQ-27.
 
@@ -89,8 +90,8 @@ def diagnostic_logs() -> dict[str, Any]:
     return diagnostics.summary()
 
 
-@router.post("/diagnostics/client-problem")
-def client_problem(problem: ClientProblem) -> dict[str, bool]:
+@router.post("/diagnostics/client-problem", response_model=schemas.Acknowledged)
+def client_problem(problem: ClientProblem) -> dict[str, Any]:
     """Record a failure the frontend hit — REQ-27.
 
     The window can reach things the backend cannot: the updater, the WebView,
@@ -118,7 +119,7 @@ def client_problem(problem: ClientProblem) -> dict[str, bool]:
     return {"ok": True}
 
 
-@router.post("/privacy/wipe")
+@router.post("/privacy/wipe", response_model=schemas.Wiped)
 def wipe() -> dict[str, Any]:
     """REQ-26 — the single delete-everything action."""
     removed = db.wipe_all_local_data()
@@ -132,7 +133,7 @@ def wipe() -> dict[str, Any]:
 # -- taking it with you (REQ-26) ------------------------------------------
 
 
-@router.get("/privacy/export/preview")
+@router.get("/privacy/export/preview", response_model=schemas.ExportPreview)
 def export_preview() -> dict[str, Any]:
     """What an export would hold, without building one.
 

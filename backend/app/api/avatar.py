@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 from .. import preferences
 from ..settings import load_config
+from . import schemas
 
 log = logging.getLogger("kai")
 
@@ -46,7 +47,7 @@ def _avatar_state() -> dict[str, Any]:
     }
 
 
-@router.get("/avatar")
+@router.get("/avatar", response_model=schemas.AvatarLicence)
 def avatar_status() -> dict[str, Any]:
     """Whether the avatar's runtime may load.
 
@@ -57,7 +58,7 @@ def avatar_status() -> dict[str, Any]:
     return _avatar_state()
 
 
-@router.post("/avatar/licence")
+@router.post("/avatar/licence", response_model=schemas.AvatarLicence)
 def avatar_licence(request: AvatarLicenceRequest) -> dict[str, Any]:
     """Record — or withdraw — acceptance of the Live2D runtime licence.
 
