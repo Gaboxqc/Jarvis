@@ -237,7 +237,7 @@ Mechanical, fully covered by the 662 existing tests, and it must not change a
 single path or response shape. Do it in one commit, verify with an OpenAPI
 schema diff (see **T4**), and make that diff empty.
 
-### R2 — Generate the TypeScript client from OpenAPI
+### R2 — Generate the TypeScript client from OpenAPI — **done, with a caveat worth reading**
 
 `ui/src/api.ts` hand-maintains ~40 interfaces mirroring Python dataclasses
 (`TurnResult`, `VoiceStatus`, `ActionRecord`, …). A backend field rename passes
@@ -251,6 +251,34 @@ replace only the type declarations.
 
 Note this pairs with **C3**: bounded `limit` parameters show up in the
 generated types as real constraints.
+
+**What it turned out not to cover, and why.** Generated types describe request
+bodies, parameters and paths. They do *not* describe responses, because every
+handler is annotated `dict[str, Any]` — so the schema says each 200 is
+`{"type": "object", "additionalProperties": true}` and the generated response
+type is `{[key: string]: unknown}`: true, and useless.
+
+That matters because the gap this item was written to close was stated in terms
+of a *response* field rename, and generated types alone do not close it. What
+shipped does close three real classes of drift — a renamed path, a renamed
+request field, a parameter that loses its bounds — and the first of those is
+now covered by a test that reads the client source rather than a list somebody
+maintains. The response half needs **R2b**.
+
+### R2b — Response models on the Python side
+
+The real fix for response drift, and the reason R2 stops short of it.
+
+`response_model=` on each handler would put the response shapes in the schema,
+which makes the generated TypeScript describe them, which makes
+`ui/src/api/types.ts` deletable — 354 lines of hand-written interfaces that
+today are the only description of what the backend returns.
+
+Seventy handlers, and the OpenAPI snapshot moves substantially (deliberately,
+in one commit, with the generator run). Worth doing in one pass rather than
+drifting into it a handler at a time, because a half-typed surface reads as a
+fully-typed one. Sequence it after Phase C: it is mechanical but large, and
+the capability work is worth more per day.
 
 ### R3 — Lift the intent tables out of the turn loop — **done**
 
@@ -269,7 +297,7 @@ app/brain/intents/es.py
 the one matching `config.persona.language` and falls back to `en`. A test
 asserts every locale defines every field — which is what would have caught C1.
 
-### R4 — Split `ui/src/api.ts` and `ui/src/i18n.ts`
+### R4 — Split `ui/src/api.ts` and `ui/src/i18n.ts` — **done**
 
 921 and 751 lines. `api.ts` splits by domain behind one barrel export, so no
 call site changes. `i18n.ts` splits to `i18n/en.ts` + `i18n/es.ts` with the
@@ -388,9 +416,18 @@ to move.
 
 ## 5. Test and CI hardening
 
-- **T1 — Coverage with a floor.** 662 tests and no number. `pytest-cov` plus
+- **T1 — Coverage with a floor — done.** 662 tests and no number. `pytest-cov` plus
   `--cov-fail-under` set at whatever today measures, minus nothing. The point
   is the ratchet, not the number.
+- **T7 — `app/cli.py` has no test at all.** Found by measuring: 388
+  statements, 0% covered. It is one of the three front ends, it is what the
+  README tells people to run first, and every `/command` in it is untested.
+  Not a gap anyone would have guessed at — the suite *looks* thorough — which
+  is the argument for measuring rather than estimating.
+- **T8 — Raise the coverage floor to what CI reports.** It is set at 65
+  against 70.56% measured locally, because this runner has no audio device and a
+  floor set to the local number would have arrived red. One release of slack,
+  then tighten.
 - **T2 — UI tests.** 3 test files (`api`, `Avatar`, `Chat`) for 25 components.
   `Chat.test.tsx` covers the confirmation contract, which is the right thing to
   have covered first. Next: `Settings` (it writes the config file),
