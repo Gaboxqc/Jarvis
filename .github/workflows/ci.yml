@@ -57,7 +57,28 @@ jobs:
         # No Ollama here, and none needed: the turn loop is tested against a
         # stubbed model, and the tests that would touch a real one are marked
         # slow and skip themselves when the models are absent.
-        run: python -m pytest
+        #
+        # There were 700 tests and no number. The floor is a ratchet rather
+        # than a target: it exists so coverage cannot quietly fall while the
+        # suite stays green, which is what happens when a module is added with
+        # tests for the easy half.
+        #
+        # 65 against 70.56% measured locally, and the gap is deliberate for
+        # exactly one release: this runner has no audio device, no microphone
+        # and no credential store, so voice/audio.py, voice/wake.py and
+        # system/apps.py cover fewer lines here than they do on a developer's
+        # machine -- about 700 statements' worth, which is enough to move the
+        # total a few points. A floor set to the local number would have
+        # arrived red, and a gate that is red on arrival gets deleted rather
+        # than fixed. Raise it to what this step reports once it has reported
+        # it; the plan has the item.
+        run: python -m pytest --cov=app --cov-fail-under=65
+
+      - name: Coverage summary
+        # Printed even when the floor passes, because the number is the point.
+        working-directory: backend
+        if: always()
+        run: python -m coverage report --skip-covered --sort=cover | Select-Object -Last 25
 
   ui:
     name: Desktop UI
@@ -77,6 +98,18 @@ jobs:
 
       - name: Install
         run: npm ci
+
+      - name: Generated API types are current
+        # The client's request bodies and parameter bounds are generated from
+        # backend/tests/openapi.json, which a backend test holds equal to the
+        # live FastAPI app. So this is the step that makes a backend change
+        # the UI has not followed into a red build rather than a 404 somebody
+        # finds by opening the screen that needs it.
+        #
+        # Before `tsc`, on purpose: regenerating is what produces the type
+        # errors worth reading, and a stale file makes the typecheck a
+        # statement about yesterday's API.
+        run: npm run api:types:check
 
       - name: Types
         run: npx tsc --noEmit

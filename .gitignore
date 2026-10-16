@@ -91,3 +91,9 @@ ui/public/live2d/live2dcubismcore.min.js
 # shared on purpose -- it is how the dev server gets started -- so this ignores
 # the one file rather than the directory.
 .claude/settings.local.json
+
+# Coverage artefacts. The number belongs in CI's output, not in the tree.
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml

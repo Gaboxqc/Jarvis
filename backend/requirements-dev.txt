@@ -19,3 +19,7 @@ ruff==0.15.4
 mypy==1.19.0
 types-PyYAML==6.0.12.20260815
 types-python-dateutil==2.9.0.20260807
+
+# Coverage, for the floor CI enforces. Not in requirements.txt: it is a
+# measuring tool, and that file is what the frozen build is analysed against.
+pytest-cov==7.0.0
