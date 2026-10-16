@@ -1,0 +1,23 @@
+# Line endings for files a tool writes and a tool then checks.
+#
+# This exists because of one CI failure that could not happen locally. The
+# generated API types are written by openapi-typescript with LF endings;
+# `core.autocrlf=true` is the Windows default and checks text files out as
+# CRLF; and `npm run api:types:check` compares the file on disk against what
+# the generator would write. So a freshly checked-out tree disagreed with the
+# generator about 4,021 carriage returns, and the drift gate reported drift
+# that did not exist.
+#
+# It passed on the machine that wrote the file -- because that file had never
+# been through a checkout -- and failed for everybody else, which is the worst
+# shape a check can have.
+#
+# Pinning the generated file to LF makes the two agree. Scoped to the files
+# that are machine-written and machine-compared rather than applied to the
+# whole tree: normalising everything else would rewrite every file in the repo
+# for no reason anybody asked for.
+ui/src/api-types.gen.ts text eol=lf
+
+# The OpenAPI snapshot is the other half of the same pair: written by
+# tools/openapi_snapshot.py and compared byte-for-byte by a test.
+backend/tests/openapi.json text eol=lf
