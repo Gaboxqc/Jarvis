@@ -56,6 +56,7 @@ for package in (
     "app.skills.planning",
     "app.skills.system",
     "app.skills.comms",
+    "app.api",
     "app.connectors",
     "app.capture",
     "app.index",

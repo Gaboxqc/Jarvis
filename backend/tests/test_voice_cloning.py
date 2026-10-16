@@ -22,7 +22,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app import main
+from app.api import voice as voice_api
 from app.main import app
 from app.settings import load_config, reset_config_cache
 from app.voice import cloning, tts
@@ -233,7 +233,7 @@ def test_an_oversized_upload_is_refused_before_it_is_decoded(client):
     file is gets turned away without sending it.
     """
     consent(client)
-    oversized = b"RIFF" + b"\x00" * (main.MAX_REFERENCE_BYTES + 1)
+    oversized = b"RIFF" + b"\x00" * (voice_api.MAX_REFERENCE_BYTES + 1)
 
     response = client.post(
         "/voice/clone/reference",
@@ -274,12 +274,12 @@ def test_an_upload_that_understates_its_size_is_still_refused(workspace):
     liar = Liar()
 
     with pytest.raises(HTTPException) as refused:
-        anyio.run(main._read_capped, liar, 4 * 1024 * 1024, "a voice sample")
+        anyio.run(voice_api._read_capped, liar, 4 * 1024 * 1024, "a voice sample")
 
     assert refused.value.status_code == 413
     # Stopped at the first chunk past the cap rather than reading an endless
     # body to the end.
-    assert liar.served <= 4 * 1024 * 1024 + main.UPLOAD_CHUNK_BYTES
+    assert liar.served <= 4 * 1024 * 1024 + voice_api.UPLOAD_CHUNK_BYTES
 
 
 def test_a_short_upload_is_refused_with_the_length(client):

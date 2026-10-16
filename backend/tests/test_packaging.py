@@ -297,8 +297,14 @@ def test_health_reports_not_ok_when_no_skills_loaded(workspace, monkeypatch):
     from fastapi.testclient import TestClient
 
     from app import main as main_module
+    from app.api import system as system_api
 
-    monkeypatch.setattr(main_module, "catalog", lambda: [])
+    # Patched where /health reads it, which is app/api/system.py since the
+    # endpoints moved out of main.py. This test is how that move was caught:
+    # patching `main.catalog` still succeeded -- the lifespan imports it to log
+    # the count -- and no longer reached the handler, so the assertion failed
+    # rather than passing for the wrong reason.
+    monkeypatch.setattr(system_api, "catalog", lambda: [])
 
     with TestClient(main_module.app) as client:
         health = client.get("/health").json()

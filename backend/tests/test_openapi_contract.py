@@ -94,3 +94,56 @@ def test_the_bounded_parameters_reached_the_schema():
     query = parameter("/documents/search", "q")
     assert query["maxLength"] == 500
     assert query["minLength"] == 1
+
+
+# -- the split that snapshot made safe ------------------------------------
+
+
+def test_no_endpoint_is_declared_in_main():
+    """`main.py` owns the app's lifetime and its front door, not its routes.
+
+    It was 1,413 lines and seventy endpoints, which is more than anyone can
+    own: every new capability landed in the same file, and the middleware
+    ordering comment that genuinely has to be read was buried a thousand lines
+    above the thing it warns about.
+
+    This is the assertion that keeps it that way. A new endpoint goes in the
+    app/api/ module for its area, or in a new one.
+    """
+    source = (ROOT / "app" / "main.py").read_text(encoding="utf-8")
+
+    assert "@app.get" not in source
+    assert "@app.post" not in source
+    assert "@app.put" not in source
+    assert "@app.patch" not in source
+    assert "@app.delete" not in source
+
+
+def test_every_router_is_included():
+    """A module in app/api/ that nobody includes is a set of endpoints that
+    silently do not exist -- and the snapshot above would only notice if the
+    paths had been there before."""
+    from app.api import ROUTERS
+    from app.main import app
+
+    declared = {
+        route.path for router in ROUTERS for route in router.routes
+    }
+    served = {getattr(route, "path", None) for route in app.routes}
+
+    missing = sorted(declared - served)
+    assert not missing, f"routers declare paths the app does not serve: {missing}"
+
+
+def test_no_router_adds_a_prefix_or_a_tag():
+    """Both would show up in the snapshot as a change to the API.
+
+    A prefix moves every path in the router; a tag adds a key to every
+    operation. Neither is a thing this project's clients asked for, and the
+    reason to say so here is that adding one looks like tidying.
+    """
+    from app.api import ROUTERS
+
+    for router in ROUTERS:
+        assert router.prefix == "", f"{router} carries a prefix"
+        assert not router.tags, f"{router} carries tags"
