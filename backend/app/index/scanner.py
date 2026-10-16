@@ -16,6 +16,7 @@ off entirely on battery or during a focus session (REQ-31).
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
 from dataclasses import dataclass, field
@@ -235,7 +236,21 @@ def scan_in_background(force: bool = False) -> threading.Thread:
 
 
 def maybe_scan() -> None:
-    """Called from the scheduler tick; cheap when there is nothing to do."""
+    """Called from the scheduler tick; cheap when there is nothing to do.
+
+    `KAI_NO_BACKGROUND_SCAN` is honoured here as well as in the API's lifespan,
+    and it was a gap that it was not. The flag exists so a test is not racing a
+    scanner thread writing to the same SQLite file -- and every TestClient
+    starts the scheduler, which calls this every five seconds, so suppressing
+    only the lifespan's own scan left the same race arriving by a slower door.
+
+    It is a real race rather than a tidiness point: reconciliation *removes*
+    index rows for files that are no longer on disk, which is correct and
+    which quietly deleted a row a test had just written. It reproduced about
+    one run in three.
+    """
+    if os.environ.get("KAI_NO_BACKGROUND_SCAN") == "1":
+        return
     if _running or not is_due() or should_defer():
         return
     scan_in_background()

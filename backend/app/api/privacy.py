@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from .. import db
 from .. import diagnostics
 from .. import preferences
+from .. import privacy_export
 from .. import retention
+from ..settings import data_dir
 
 log = logging.getLogger("kai")
 
@@ -123,3 +127,71 @@ def wipe() -> dict[str, Any]:
     # it removed them.
     removed["logs"] = diagnostics.wipe_logs()
     return {"removed": removed}
+
+
+# -- taking it with you (REQ-26) ------------------------------------------
+
+
+@router.get("/privacy/export/preview")
+def export_preview() -> dict[str, Any]:
+    """What an export would hold, without building one.
+
+    So the button can say "4 facts, 112 turns, 3 meetings" before it is
+    pressed. Offering a download of an unknown thing is how people end up not
+    pressing it.
+    """
+    return privacy_export.describe()
+
+
+@router.post("/privacy/export")
+def export_everything(background: BackgroundTasks) -> FileResponse:
+    """Everything the database holds about you, as one zip — REQ-26.
+
+    The counterpart to /privacy/wipe, and the reason it needed one: until now
+    the only control over the record was destroying it. REQ-26 asks for local
+    data *control*, and a switch that only points one way is not a dial.
+
+    No secrets, by construction: `credentials.fetch` is never called, and the
+    connectors section is removed from the exported config rather than emptied,
+    so there is no field left to wonder about. app/privacy_export.py lists what
+    else is left out and why.
+
+    Written to a file and streamed rather than assembled in memory. Transcripts
+    are the one table with no bound on their size, so an endpoint that holds
+    the whole export in RAM to hand it over is one that fails on exactly the
+    install that most wants it.
+
+    The temporary file is deleted after the response is sent, which is what
+    BackgroundTasks is for -- deleting it before would race the download, and
+    leaving it would put a second copy of everything in the data directory
+    under a button about data control.
+    """
+    target = data_dir() / "export" / privacy_export.suggested_filename()
+    try:
+        privacy_export.write_export(target)
+    except OSError as exc:
+        raise HTTPException(
+            status_code=507,
+            detail=f"Could not write the export: {exc}",
+        ) from exc
+
+    background.add_task(_discard, target)
+    log.info("exported local data to %s (%d bytes)", target.name, target.stat().st_size)
+    return FileResponse(
+        target,
+        media_type="application/zip",
+        filename=target.name,
+        background=background,
+    )
+
+
+def _discard(path: Path) -> None:
+    try:
+        path.unlink(missing_ok=True)
+        # Tidy the folder too, so a data directory does not accumulate an
+        # empty `export/` nobody put there.
+        path.parent.rmdir()
+    except OSError:
+        # A file we cannot remove is not worth failing a finished download
+        # over; the next export overwrites nothing and the folder is one entry.
+        log.debug("could not clean up %s", path, exc_info=True)

@@ -772,6 +772,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/privacy/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export Everything
+         * @description Everything the database holds about you, as one zip — REQ-26.
+         *
+         *     The counterpart to /privacy/wipe, and the reason it needed one: until now
+         *     the only control over the record was destroying it. REQ-26 asks for local
+         *     data *control*, and a switch that only points one way is not a dial.
+         *
+         *     No secrets, by construction: `credentials.fetch` is never called, and the
+         *     connectors section is removed from the exported config rather than emptied,
+         *     so there is no field left to wonder about. app/privacy_export.py lists what
+         *     else is left out and why.
+         *
+         *     Written to a file and streamed rather than assembled in memory. Transcripts
+         *     are the one table with no bound on their size, so an endpoint that holds
+         *     the whole export in RAM to hand it over is one that fails on exactly the
+         *     install that most wants it.
+         *
+         *     The temporary file is deleted after the response is sent, which is what
+         *     BackgroundTasks is for -- deleting it before would race the download, and
+         *     leaving it would put a second copy of everything in the data directory
+         *     under a button about data control.
+         */
+        post: operations["export_everything_privacy_export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/privacy/export/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Preview
+         * @description What an export would hold, without building one.
+         *
+         *     So the button can say "4 facts, 112 turns, 3 meetings" before it is
+         *     pressed. Offering a download of an unknown thing is how people end up not
+         *     pressing it.
+         */
+        get: operations["export_preview_privacy_export_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/privacy/retention": {
         parameters: {
             query?: never;
@@ -2763,6 +2826,48 @@ export interface operations {
         };
     };
     take_notifications_notifications_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    export_everything_privacy_export_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    export_preview_privacy_export_preview_get: {
         parameters: {
             query?: never;
             header?: never;

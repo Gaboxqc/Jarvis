@@ -1642,6 +1642,44 @@
         "summary": "Take Notifications"
       }
     },
+    "/privacy/export": {
+      "post": {
+        "description": "Everything the database holds about you, as one zip — REQ-26.\n\nThe counterpart to /privacy/wipe, and the reason it needed one: until now\nthe only control over the record was destroying it. REQ-26 asks for local\ndata *control*, and a switch that only points one way is not a dial.\n\nNo secrets, by construction: `credentials.fetch` is never called, and the\nconnectors section is removed from the exported config rather than emptied,\nso there is no field left to wonder about. app/privacy_export.py lists what\nelse is left out and why.\n\nWritten to a file and streamed rather than assembled in memory. Transcripts\nare the one table with no bound on their size, so an endpoint that holds\nthe whole export in RAM to hand it over is one that fails on exactly the\ninstall that most wants it.\n\nThe temporary file is deleted after the response is sent, which is what\nBackgroundTasks is for -- deleting it before would race the download, and\nleaving it would put a second copy of everything in the data directory\nunder a button about data control.",
+        "operationId": "export_everything_privacy_export_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Export Everything"
+      }
+    },
+    "/privacy/export/preview": {
+      "get": {
+        "description": "What an export would hold, without building one.\n\nSo the button can say \"4 facts, 112 turns, 3 meetings\" before it is\npressed. Offering a download of an unknown thing is how people end up not\npressing it.",
+        "operationId": "export_preview_privacy_export_preview_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Export Preview Privacy Export Preview Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Export Preview"
+      }
+    },
     "/privacy/retention": {
       "get": {
         "description": "The window, and what is inside it right now — REQ-26.",
