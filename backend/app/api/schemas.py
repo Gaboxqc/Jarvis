@@ -831,6 +831,48 @@ class LogSummary(BaseModel):
     exists: bool
 
 
+class TurnTiming(BaseModel):
+    """One turn's milliseconds, as timings.TurnTiming.to_dict() produces it."""
+
+    at: float
+    routing_ms: float
+    skills_ms: float
+    synthesis_ms: float
+    #: The whole turn, and deliberately more than the three stages added up:
+    #: fact recall embeds the user's text before routing starts, measured at a
+    #: 318ms median on the machine that wrote this. See app/timings.py.
+    total_ms: float
+    skills: int
+    rounds: int
+
+
+class StageMedians(BaseModel):
+    """Medians over the window. Zeroes when it is empty, which is honest for a
+    median of nothing and saves the panel a null check per field."""
+
+    routing_ms: float
+    skills_ms: float
+    synthesis_ms: float
+    total_ms: float
+
+
+class TimingSummary(BaseModel):
+    """What /diagnostics/timings answers (REQ-27).
+
+    `turns` is newest first and at most `capacity` long -- a ring in memory,
+    never written down. The medians and the slowest turn are computed in
+    app/timings.py rather than in the UI, so the CLI can ask the same question
+    and get the same number.
+    """
+
+    capacity: int
+    count: int
+    turns: list[TurnTiming]
+    median: StageMedians
+    #: Null on a fresh start: no worst turn yet, rather than a zero one.
+    slowest: TurnTiming | None = None
+
+
 class Acknowledged(BaseModel):
     ok: bool
 

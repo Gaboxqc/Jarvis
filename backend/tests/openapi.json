@@ -2705,6 +2705,35 @@
         "title": "SpeechShape",
         "type": "object"
       },
+      "StageMedians": {
+        "description": "Medians over the window. Zeroes when it is empty, which is honest for a\nmedian of nothing and saves the panel a null check per field.",
+        "properties": {
+          "routing_ms": {
+            "title": "Routing Ms",
+            "type": "number"
+          },
+          "skills_ms": {
+            "title": "Skills Ms",
+            "type": "number"
+          },
+          "synthesis_ms": {
+            "title": "Synthesis Ms",
+            "type": "number"
+          },
+          "total_ms": {
+            "title": "Total Ms",
+            "type": "number"
+          }
+        },
+        "required": [
+          "routing_ms",
+          "skills_ms",
+          "synthesis_ms",
+          "total_ms"
+        ],
+        "title": "StageMedians",
+        "type": "object"
+      },
       "StoppedCapture": {
         "description": "A finished recording, with the summary this call just produced.\n\nNot a subclass of `Transcript`: that one's `summary` is whatever was\nstored and so is open-ended, and narrowing a field in a subclass is a\npromise the parent did not make. Here the shape *is* known, because\nsummarize.summarise() produced it one line above -- so it is spelled out,\nand the duplication is the price of the two being genuinely different.",
         "properties": {
@@ -2961,6 +2990,47 @@
           "tasks"
         ],
         "title": "Tasks",
+        "type": "object"
+      },
+      "TimingSummary": {
+        "description": "What /diagnostics/timings answers (REQ-27).\n\n`turns` is newest first and at most `capacity` long -- a ring in memory,\nnever written down. The medians and the slowest turn are computed in\napp/timings.py rather than in the UI, so the CLI can ask the same question\nand get the same number.",
+        "properties": {
+          "capacity": {
+            "title": "Capacity",
+            "type": "integer"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "median": {
+            "$ref": "#/components/schemas/StageMedians"
+          },
+          "slowest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TurnTiming"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/TurnTiming"
+            },
+            "title": "Turns",
+            "type": "array"
+          }
+        },
+        "required": [
+          "capacity",
+          "count",
+          "turns",
+          "median"
+        ],
+        "title": "TimingSummary",
         "type": "object"
       },
       "Transcript": {
@@ -3256,6 +3326,50 @@
           "error"
         ],
         "title": "TurnResult",
+        "type": "object"
+      },
+      "TurnTiming": {
+        "description": "One turn's milliseconds, as timings.TurnTiming.to_dict() produces it.",
+        "properties": {
+          "at": {
+            "title": "At",
+            "type": "number"
+          },
+          "rounds": {
+            "title": "Rounds",
+            "type": "integer"
+          },
+          "routing_ms": {
+            "title": "Routing Ms",
+            "type": "number"
+          },
+          "skills": {
+            "title": "Skills",
+            "type": "integer"
+          },
+          "skills_ms": {
+            "title": "Skills Ms",
+            "type": "number"
+          },
+          "synthesis_ms": {
+            "title": "Synthesis Ms",
+            "type": "number"
+          },
+          "total_ms": {
+            "title": "Total Ms",
+            "type": "number"
+          }
+        },
+        "required": [
+          "at",
+          "routing_ms",
+          "skills_ms",
+          "synthesis_ms",
+          "total_ms",
+          "skills",
+          "rounds"
+        ],
+        "title": "TurnTiming",
         "type": "object"
       },
       "UndoOutcome": {
@@ -4466,6 +4580,25 @@
           }
         },
         "summary": "Diagnostic Logs"
+      }
+    },
+    "/diagnostics/timings": {
+      "get": {
+        "description": "How long recent turns took, by stage — REQ-27.\n\nBeside /diagnostics/logs because it answers the other half of the same\nquestion, and with the same restraint: the log says how big it is and not\nwhat is in it, and this says how long a turn took and not what was asked.\nSix numbers per turn, the last fifty turns, in memory only -- see\napp/timings.py for why none of it is written down.",
+        "operationId": "diagnostic_timings_diagnostics_timings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimingSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Diagnostic Timings"
       }
     },
     "/documents": {

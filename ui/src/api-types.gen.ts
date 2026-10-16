@@ -475,6 +475,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/diagnostics/timings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Diagnostic Timings
+         * @description How long recent turns took, by stage — REQ-27.
+         *
+         *     Beside /diagnostics/logs because it answers the other half of the same
+         *     question, and with the same restraint: the log says how big it is and not
+         *     what is in it, and this says how long a turn took and not what was asked.
+         *     Six numbers per turn, the last fifty turns, in memory only -- see
+         *     app/timings.py for why none of it is written down.
+         */
+        get: operations["diagnostic_timings_diagnostics_timings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/documents": {
         parameters: {
             query?: never;
@@ -2579,6 +2605,21 @@ export interface components {
             spoke: boolean;
         };
         /**
+         * StageMedians
+         * @description Medians over the window. Zeroes when it is empty, which is honest for a
+         *     median of nothing and saves the panel a null check per field.
+         */
+        StageMedians: {
+            /** Routing Ms */
+            routing_ms: number;
+            /** Skills Ms */
+            skills_ms: number;
+            /** Synthesis Ms */
+            synthesis_ms: number;
+            /** Total Ms */
+            total_ms: number;
+        };
+        /**
          * StoppedCapture
          * @description A finished recording, with the summary this call just produced.
          *
@@ -2668,6 +2709,25 @@ export interface components {
             /** Tasks */
             tasks: components["schemas"]["Task"][];
         };
+        /**
+         * TimingSummary
+         * @description What /diagnostics/timings answers (REQ-27).
+         *
+         *     `turns` is newest first and at most `capacity` long -- a ring in memory,
+         *     never written down. The medians and the slowest turn are computed in
+         *     app/timings.py rather than in the UI, so the CLI can ask the same question
+         *     and get the same number.
+         */
+        TimingSummary: {
+            /** Capacity */
+            capacity: number;
+            /** Count */
+            count: number;
+            median: components["schemas"]["StageMedians"];
+            slowest?: components["schemas"]["TurnTiming"] | null;
+            /** Turns */
+            turns: components["schemas"]["TurnTiming"][];
+        };
         /** Transcript */
         Transcript: {
             /** Ended At */
@@ -2753,6 +2813,26 @@ export interface components {
             reply: string;
             /** Skill Calls */
             skill_calls: components["schemas"]["SkillCall"][];
+        };
+        /**
+         * TurnTiming
+         * @description One turn's milliseconds, as timings.TurnTiming.to_dict() produces it.
+         */
+        TurnTiming: {
+            /** At */
+            at: number;
+            /** Rounds */
+            rounds: number;
+            /** Routing Ms */
+            routing_ms: number;
+            /** Skills */
+            skills: number;
+            /** Skills Ms */
+            skills_ms: number;
+            /** Synthesis Ms */
+            synthesis_ms: number;
+            /** Total Ms */
+            total_ms: number;
         };
         /** UndoOutcome */
         UndoOutcome: {
@@ -3595,6 +3675,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LogSummary"];
+                };
+            };
+        };
+    };
+    diagnostic_timings_diagnostics_timings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimingSummary"];
                 };
             };
         };

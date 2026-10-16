@@ -15,6 +15,7 @@ from .. import diagnostics
 from .. import preferences
 from .. import privacy_export
 from .. import retention
+from .. import timings
 from ..settings import data_dir
 from . import schemas
 
@@ -90,6 +91,19 @@ def diagnostic_logs() -> dict[str, Any]:
     return diagnostics.summary()
 
 
+@router.get("/diagnostics/timings", response_model=schemas.TimingSummary)
+def diagnostic_timings() -> dict[str, Any]:
+    """How long recent turns took, by stage — REQ-27.
+
+    Beside /diagnostics/logs because it answers the other half of the same
+    question, and with the same restraint: the log says how big it is and not
+    what is in it, and this says how long a turn took and not what was asked.
+    Six numbers per turn, the last fifty turns, in memory only -- see
+    app/timings.py for why none of it is written down.
+    """
+    return timings.summary()
+
+
 @router.post("/diagnostics/client-problem", response_model=schemas.Acknowledged)
 def client_problem(problem: ClientProblem) -> dict[str, Any]:
     """Record a failure the frontend hit — REQ-27.
@@ -127,6 +141,11 @@ def wipe() -> dict[str, Any]:
     # would leave file paths and account labels on disk under a button that says
     # it removed them.
     removed["logs"] = diagnostics.wipe_logs()
+    # The timings ring is local data too. Not counted in `removed`, which is
+    # rows deleted from disk, and adding a memory-only number to that total
+    # would overstate what the button did -- but left standing after "delete
+    # everything" it would keep showing how long this morning's turns took.
+    timings.clear()
     return {"removed": removed}
 
 
