@@ -209,7 +209,7 @@ commit can be lost on OS crash; the database stays consistent).
 
 ## 3. Refactors
 
-### R1 — Split `main.py` into routers ★ biggest structural win
+### R1 — Split `main.py` into routers ★ biggest structural win — **done**
 
 1,413 lines and ~70 endpoints in one module, with ~60 function-local imports
 that exist to keep the frozen build's import time down. Nobody can own this
@@ -252,7 +252,7 @@ replace only the type declarations.
 Note this pairs with **C3**: bounded `limit` parameters show up in the
 generated types as real constraints.
 
-### R3 — Lift the intent tables out of the turn loop
+### R3 — Lift the intent tables out of the turn loop — **done**
 
 Six regex/set constants at the top of `orchestrator.py` encode what a user
 *means* in a particular language, inside the module that decides what to *do*.
@@ -424,9 +424,23 @@ C5's cheap half, C2, C4, C6, and T4's snapshot last so it pins the surface
 C9 is unchanged — it is a decision to make, not a defect to fix — and C5's
 remaining half is deferred to its own migration.
 
-**Phase B — structure (2–3 days).**
-R1 routers split (snapshot diff must be empty), R3 intent locales, R2 generated
-types + CI drift check, R4 UI splits, T1 coverage floor.
+**Phase B — structure. R1 and R3 done; R2, R4 and T1 remain.**
+R1 landed with the snapshot diff empty, which is what it was for. It turned up
+two things worth knowing: nine of the twelve new modules share a name with the
+package they import from, so every function-local `from .capture import …`
+silently became a self-import until mypy caught all 28; and one test that
+patched `main.catalog` failed rather than passing for the wrong reason, which
+is the only reason it was found.
+
+R3 landed with one correction to the plan as written: the tables are not all
+per-language. What the *user* types is matched across every locale at once —
+an English persona is not a promise about what the person will type — and only
+the guard patterns follow the persona. Splitting naively would have stopped
+recognising "sí" as agreement, silently. The Spanish locale also gained the
+negatives it never had.
+
+Still open in this phase: R2 generated types + CI drift check, R4 UI splits,
+T1 coverage floor.
 
 **Phase C — capability (1–2 weeks).**
 F2 model fallback (smallest, highest first-run payoff), F3 export, F1
