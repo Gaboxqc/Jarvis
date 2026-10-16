@@ -43,6 +43,21 @@ log = logging.getLogger(__name__)
 # sweep tooling and the prompt tests have one number to refer to.
 MAX_SKILLS_PER_TURN = ActionSettings.max_skills_per_turn
 
+# How many times one turn may route.
+#
+# Two, and the second one is conditional. A request whose later step needs an
+# earlier step's *output* cannot be planned in one pass -- "find the lease,
+# then tell me the deposit" is two tool calls where the second's arguments are
+# in the first's result -- so one round is a ceiling on what the assistant can
+# be asked, not just on what it costs.
+#
+# Two rather than "until it stops asking": each round is a model call and a
+# batch of real side effects, and a loop with no fixed bound is one bad route
+# away from running the Action Gate in circles. Two covers look-then-act, which
+# is the shape almost every dependent request has; a third round has yet to be
+# wanted by anything.
+MAX_ROUNDS = 2
+
 # Recognising what a user means, and what the model claimed, lives in
 # brain/intents/ -- one module per language, selected two different ways. See
 # its docstring: what the *user* typed is matched in every language at once,
@@ -301,52 +316,92 @@ def _run_turn(
         return
 
     # 4. Execute, stopping at the first action that needs approval.
+    #
+    # Up to MAX_ROUNDS of it. One round cannot answer "find the lease, then
+    # tell me what the deposit was": the second step's arguments are in the
+    # first step's output, so a router asked to plan both in one shot has to
+    # guess at them. A second pass, given the results, does not.
+    #
+    # It happens only when the router asked for it. A routing call is half the
+    # latency of a turn and almost no request needs two, so the first round
+    # sets `needs_followup` when a later step depends on an earlier one's
+    # output -- and a model that ignores the field gets precisely the
+    # behaviour this had before, which is what makes it safe to ask for.
     yield {"type": "stage", "stage": "working"}
     batch_id = gate.new_batch_id()
     results: list[dict[str, Any]] = []
+    not_run: list[str] = []
     budget = config.actions.max_skills_per_turn
-    deferred = [call["name"] for call in calls[budget:]]
-    if deferred:
-        log.info(
-            "router asked for %d skills; running %d, deferring %s",
-            len(calls),
-            budget,
-            ", ".join(deferred),
-        )
-    for call in calls[:budget]:
-        outcome = gate.submit(call["name"], call.get("args") or {}, ctx, batch_id=batch_id)
-        results.append(outcome.to_dict())
 
-        if outcome.status == gate.NEEDS_CONFIRMATION:
-            # Nothing after this runs. A later step might depend on this one, and
-            # queuing side effects behind an unanswered question is how a "no"
-            # ends up having done half the work anyway.
-            #
-            # Emitted whole, never streamed: a question awaiting approval must not
-            # arrive looking like an answer already being given.
+    for round_number in range(1, MAX_ROUNDS + 1):
+        deferred = [call["name"] for call in calls[budget:]]
+        if deferred:
+            log.info(
+                "router asked for %d skills; running %d, deferring %s",
+                len(calls),
+                budget,
+                ", ".join(deferred),
+            )
+
+        round_results: list[dict[str, Any]] = []
+        parked: gate.GateOutcome | None = None
+        for call in calls[:budget]:
+            outcome = gate.submit(call["name"], call.get("args") or {}, ctx, batch_id=batch_id)
+            round_results.append(outcome.to_dict())
+            results.append(outcome.to_dict())
+
+            if outcome.status == gate.NEEDS_CONFIRMATION:
+                # Nothing after this runs, in this round or any later one. A
+                # later step might depend on this one, and queuing side effects
+                # behind an unanswered question is how a "no" ends up having
+                # done half the work anyway.
+                parked = outcome
+                break
+
+        if parked is not None:
+            # Emitted whole, never streamed: a question awaiting approval must
+            # not arrive looking like an answer already being given.
             pending = PendingAction(
-                action_id=outcome.action_id or "",
-                skill=outcome.skill_name,
-                preview=outcome.preview,
-                reversible=outcome.reversible,
+                action_id=parked.action_id or "",
+                skill=parked.skill_name,
+                preview=parked.preview,
+                reversible=parked.reversible,
             )
             yield {"type": "done", "result": _finish(
                 session_id,
                 TurnResult(
-                    reply=prompts.confirmation_prompt(outcome.preview, outcome.reversible),
+                    reply=prompts.confirmation_prompt(parked.preview, parked.reversible),
                     pending=pending,
                     skill_calls=results,
-                    not_run=_not_run(calls, results, deferred, budget),
+                    not_run=not_run + _not_run(calls, round_results, deferred, budget),
                 ),
             )}
             return
+
+        not_run += deferred
+
+        if round_number >= MAX_ROUNDS or not _wants_followup(route):
+            break
+
+        # Re-route, with what just happened in front of the model.
+        follow_on = _route(
+            system, history, text, budget, results=results
+        )
+        next_calls = _extract_calls(follow_on)
+        if not next_calls:
+            # It looked at the results and had nothing more to ask for, which
+            # is a legitimate answer and the common one. Any text it wrote is
+            # left alone; the synthesis pass below is what phrases the reply.
+            break
+        log.info("round %d: %d more skill(s)", round_number + 1, len(next_calls))
+        calls, route = next_calls, follow_on
 
     # 5. Say what happened.
     yield {"type": "stage", "stage": "writing"}
     written = ""
     try:
         for kind, payload in _generate(
-            _synthesis_messages(system, history, results, deferred), stream=stream
+            _synthesis_messages(system, history, results, not_run), stream=stream
         ):
             if kind == "delta":
                 yield {"type": "delta", "text": payload}
@@ -357,14 +412,14 @@ def _run_turn(
         # because the phrasing pass could not run (REQ-27).
         written = ""
 
-    reply = _append_receipts(written or _fallback_summary(results, deferred), results)
+    reply = _append_receipts(written or _fallback_summary(results, not_run), results)
     reply = _guard_ungrounded_reply(text, reply, results, config.persona.language)
 
     # Receipts and the guard can both change text already shown, so the final
     # result carries the authoritative version for clients to settle on.
     yield {"type": "done", "result": _finish(
         session_id,
-        TurnResult(reply=reply, skill_calls=results, not_run=deferred))}
+        TurnResult(reply=reply, skill_calls=results, not_run=not_run))}
 
 
 def confirm_pending(action_id: str, session_id: str = "default") -> TurnResult:
@@ -454,6 +509,8 @@ def _route(
     history: list[dict[str, str]],
     text: str,
     budget: int,
+    *,
+    results: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
     """Decide which skills, if any, this turn needs.
 
@@ -463,16 +520,27 @@ def _route(
     Ollama serves -- the tools are described in the prompt and the answer comes
     back as JSON. The JSON path is the floor, not a legacy branch: it is what
     keeps the assistant working when someone changes one line of config.
+
+    `results` is what already ran this turn, on the second pass. The user's
+    message is still the last thing in the list -- small models reliably answer
+    the final user turn, and the request is what is being routed; the results
+    go in ahead of it as context, so the second pass is "given this, what else
+    does that need" rather than "comment on this".
     """
     available = catalog()
     if not available:
         return None
+
+    context: list[dict[str, str]] = []
+    if results:
+        context = [{"role": "user", "content": prompts.results_so_far(results)}]
 
     if load_config().brain.native_tools and llm.supports_tools():
         messages = [
             {"role": "system", "content": system},
             {"role": "system", "content": prompts.native_router_prompt()},
             *history[-6:],
+            *context,
             {"role": "user", "content": text},
         ]
         reply = llm.chat(
@@ -487,6 +555,7 @@ def _route(
         {"role": "system", "content": system},
         {"role": "system", "content": prompts.router_prompt(available, budget)},
         *history[-6:],
+        *context,
         {"role": "user", "content": text},
     ]
     reply = llm.chat(messages, json_mode=True, temperature=0.0)
@@ -525,6 +594,23 @@ def _extract_calls(route: dict[str, Any] | None) -> list[dict[str, Any]]:
         args = entry.get("args") or entry.get("arguments") or entry.get("parameters") or {}
         calls.append({"name": name, "args": args if isinstance(args, dict) else {}})
     return calls
+
+
+def _wants_followup(route: dict[str, Any] | None) -> bool:
+    """Whether the router said it will need to see these results.
+
+    Opt-in, and the model opts in. A second routing pass is half the latency
+    of a turn and almost no request needs one, so this is asked for in the
+    prompt rather than assumed -- and a model that never sets it behaves
+    exactly as this did before the field existed.
+
+    Anything other than a true-ish `needs_followup` is a no, including the
+    absent key and a model that returned a string: a turn that re-routes
+    because it misread a reply is a turn that runs side effects twice.
+    """
+    if not isinstance(route, dict):
+        return False
+    return route.get("needs_followup") is True
 
 
 def _not_run(

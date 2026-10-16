@@ -153,6 +153,20 @@ _routines_pending = 0
 
 
 def _routine_worker() -> None:
+    try:
+        _consume_routines()
+    finally:
+        # Connections are per thread, so this one is this worker's and nobody
+        # else can use it. Closed on the way out rather than left to the
+        # interpreter: a thread that exits holding a SQLite handle keeps the
+        # file open, and on Windows an open handle is what stops the next
+        # installer replacing it.
+        from .. import db
+
+        db.close_connection()
+
+
+def _consume_routines() -> None:
     while True:
         delivery = _routine_queue.get()
         if delivery is None:

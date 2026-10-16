@@ -187,6 +187,38 @@ def native_router_prompt() -> str:
     ])
 
 
+def results_so_far(results: list[dict[str, Any]]) -> str:
+    """What already ran this turn, for the second routing pass.
+
+    Deliberately the same payload shape `synthesis_prompt` builds from, and
+    deliberately not the same prompt: synthesis asks for prose about results,
+    and this asks whether the results have opened up another tool call. Giving
+    the router the synthesis framing made it write the answer instead of
+    routing, which is the one thing the routing stage must not do.
+    """
+    payload = [
+        {
+            "skill": entry.get("skill"),
+            "status": entry.get("status"),
+            "result": entry.get("message"),
+            "error": entry.get("error"),
+        }
+        for entry in results
+    ]
+    return "\n".join(
+        [
+            "These tools have already run for this message:",
+            json.dumps(payload, ensure_ascii=False),
+            "",
+            "If their results complete the request, reply "
+            '{"skills": [], "reply": null} and the next stage will write the '
+            "answer. If one more tool is now possible that was not possible "
+            "before -- because its argument is in a result above -- ask for it.",
+            "Never ask for a tool that already ran above with the same arguments.",
+        ]
+    )
+
+
 def router_prompt(catalog: list[dict[str, Any]], max_skills: int) -> str:
     """Instructions for the routing pass. Returns JSON, always."""
     return "\n".join(
@@ -205,6 +237,22 @@ def router_prompt(catalog: list[dict[str, Any]], max_skills: int) -> str:
             '{"skills": [{"name": "utils.time", "args": {}}], "reply": null}',
             "",
             "Rules:",
+            # The one field that makes a dependent request possible.
+            #
+            # A second routing pass costs a whole model call, which is half the
+            # latency of a turn, and almost no request needs one -- so it is
+            # opt-in and the model opts in. Add "needs_followup": true only
+            # when answering genuinely requires *seeing* a result first:
+            # "find the lease, then tell me what the deposit was" cannot be
+            # planned in one shot, because the second step's arguments are in
+            # the first step's output.
+            #
+            # A model that ignores the field gets exactly the behaviour it had
+            # before, which is why this is safe to ask for.
+            '- Add "needs_followup": true when you will need to see these '
+            "tools' results before you can finish the request -- when a later "
+            "step's arguments are in an earlier step's output. Leave it out "
+            "otherwise; it costs an extra round trip.",
             '- If no tool is needed, use {"skills": [], "reply": null} and the next stage will answer.',
             "- Use a tool whenever it would be more accurate than answering from memory: "
             "arithmetic, unit and currency conversion, the current time, anything about the "
