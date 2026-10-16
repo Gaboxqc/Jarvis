@@ -18,7 +18,7 @@ from .settings import data_dir
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # How an existing database is brought up to SCHEMA_VERSION.
 #
@@ -96,6 +96,33 @@ MIGRATIONS: dict[int, tuple[str, ...]] = {
         """
         CREATE TRIGGER IF NOT EXISTS chunk_vectors_ad AFTER DELETE ON chunk_vectors BEGIN
             UPDATE index_state SET value = value + 1 WHERE key = 'vectors_generation';
+        END
+        """,
+    ),
+    # The same counter for fact_vectors, which memory/long_term.py now holds
+    # resident for the same reason index/search.py holds the chunk vectors: the
+    # table was read in full on every single turn, before routing, whether or
+    # not there was anything in it.
+    #
+    # index_state already exists by version 3, so this adds a row and three
+    # triggers and nothing else. Starts at 0 like the other one; the value is
+    # only ever compared against itself.
+    4: (
+        "INSERT OR IGNORE INTO index_state(key, value) "
+        "VALUES('fact_vectors_generation', 0)",
+        """
+        CREATE TRIGGER IF NOT EXISTS fact_vectors_ai AFTER INSERT ON fact_vectors BEGIN
+            UPDATE index_state SET value = value + 1 WHERE key = 'fact_vectors_generation';
+        END
+        """,
+        """
+        CREATE TRIGGER IF NOT EXISTS fact_vectors_au AFTER UPDATE ON fact_vectors BEGIN
+            UPDATE index_state SET value = value + 1 WHERE key = 'fact_vectors_generation';
+        END
+        """,
+        """
+        CREATE TRIGGER IF NOT EXISTS fact_vectors_ad AFTER DELETE ON fact_vectors BEGIN
+            UPDATE index_state SET value = value + 1 WHERE key = 'fact_vectors_generation';
         END
         """,
     ),
@@ -296,6 +323,26 @@ CREATE TABLE IF NOT EXISTS fact_vectors (
     model    TEXT NOT NULL,
     vector   BLOB NOT NULL
 );
+
+-- And a counter of its own, for the same reason and by the same mechanism.
+--
+-- A separate key rather than sharing 'vectors_generation': the two tables are
+-- written on completely different occasions -- a document scan touches one, a
+-- person agreeing to be remembered touches the other -- and one shared counter
+-- would make every reindex rebuild the fact matrix and every remembered fact
+-- rebuild the document matrix. Both would still be correct, and both would be
+-- doing work for an event that could not have changed what they hold.
+INSERT OR IGNORE INTO index_state(key, value) VALUES('fact_vectors_generation', 0);
+
+CREATE TRIGGER IF NOT EXISTS fact_vectors_ai AFTER INSERT ON fact_vectors BEGIN
+    UPDATE index_state SET value = value + 1 WHERE key = 'fact_vectors_generation';
+END;
+CREATE TRIGGER IF NOT EXISTS fact_vectors_au AFTER UPDATE ON fact_vectors BEGIN
+    UPDATE index_state SET value = value + 1 WHERE key = 'fact_vectors_generation';
+END;
+CREATE TRIGGER IF NOT EXISTS fact_vectors_ad AFTER DELETE ON fact_vectors BEGIN
+    UPDATE index_state SET value = value + 1 WHERE key = 'fact_vectors_generation';
+END;
 
 -- REQ-10: tasks and notes
 CREATE TABLE IF NOT EXISTS tasks (
