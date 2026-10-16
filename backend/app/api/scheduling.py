@@ -8,14 +8,16 @@ from ever firing on its own.
 
 from __future__ import annotations
 
-import logging
 from typing import Any
+
+import logging
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from ..scheduler import service as scheduler
 from ..scheduler import store as sched_store
+from . import schemas
 
 log = logging.getLogger("kai")
 
@@ -28,12 +30,12 @@ class TaskRequest(BaseModel):
     due: str | None = None
 
 
-@router.get("/reminders")
+@router.get("/reminders", response_model=schemas.Reminders)
 def list_reminders() -> dict[str, Any]:
     return {"reminders": [i.to_dict() for i in sched_store.active_items()]}
 
 
-@router.get("/routines")
+@router.get("/routines", response_model=schemas.Routines)
 def list_routines() -> dict[str, Any]:
     from ..scheduler import routines
 
@@ -49,7 +51,7 @@ def list_routines() -> dict[str, Any]:
     }
 
 
-@router.post("/routines/{routine_id}/approve")
+@router.post("/routines/{routine_id}/approve", response_model=schemas.RoutineApproved)
 def approve_routine(routine_id: str) -> dict[str, Any]:
     """Re-approve a routine whose steps changed — REQ-12, REQ-24.
 
@@ -65,7 +67,7 @@ def approve_routine(routine_id: str) -> dict[str, Any]:
     return {"approved": True, "routine": item.to_dict()}
 
 
-@router.post("/routines/{routine_id}/run")
+@router.post("/routines/{routine_id}/run", response_model=schemas.SequenceRun)
 def run_routine(routine_id: str) -> dict[str, Any]:
     """Run a routine now. Useful for checking one does what you meant."""
     from ..scheduler import routines
@@ -76,7 +78,7 @@ def run_routine(routine_id: str) -> dict[str, Any]:
     return routines.run(item)
 
 
-@router.delete("/routines/{routine_id}")
+@router.delete("/routines/{routine_id}", response_model=schemas.Deleted)
 def delete_routine(routine_id: str) -> dict[str, Any]:
     from ..scheduler import routines
 
@@ -85,7 +87,7 @@ def delete_routine(routine_id: str) -> dict[str, Any]:
     return {"deleted": routine_id}
 
 
-@router.get("/shortcuts")
+@router.get("/shortcuts", response_model=schemas.Shortcuts)
 def list_shortcuts() -> dict[str, Any]:
     from ..scheduler import sequences, shortcuts
 
@@ -102,7 +104,7 @@ def list_shortcuts() -> dict[str, Any]:
     }
 
 
-@router.post("/shortcuts/{shortcut_id}/run")
+@router.post("/shortcuts/{shortcut_id}/run", response_model=schemas.SequenceRun)
 def run_shortcut(shortcut_id: str) -> dict[str, Any]:
     from ..scheduler import shortcuts
 
@@ -112,7 +114,7 @@ def run_shortcut(shortcut_id: str) -> dict[str, Any]:
     return shortcuts.run(item)
 
 
-@router.post("/shortcuts/{shortcut_id}/approve")
+@router.post("/shortcuts/{shortcut_id}/approve", response_model=schemas.ShortcutApproved)
 def approve_shortcut(shortcut_id: str) -> dict[str, Any]:
     """Re-approve a shortcut whose steps changed — REQ-22, REQ-24."""
     from ..scheduler import shortcuts
@@ -123,7 +125,7 @@ def approve_shortcut(shortcut_id: str) -> dict[str, Any]:
     return {"approved": True, "shortcut": item.to_dict()}
 
 
-@router.delete("/shortcuts/{shortcut_id}")
+@router.delete("/shortcuts/{shortcut_id}", response_model=schemas.Deleted)
 def delete_shortcut(shortcut_id: str) -> dict[str, Any]:
     from ..scheduler import shortcuts
 
@@ -132,14 +134,14 @@ def delete_shortcut(shortcut_id: str) -> dict[str, Any]:
     return {"deleted": shortcut_id}
 
 
-@router.get("/tasks")
+@router.get("/tasks", response_model=schemas.Tasks)
 def list_tasks(include_done: bool = True) -> dict[str, Any]:
     from ..skills.planning import tasks as task_store
 
     return {"tasks": task_store.list_tasks(include_done)}
 
 
-@router.post("/tasks")
+@router.post("/tasks", response_model=schemas.CreatedTask)
 def add_task(request: TaskRequest) -> dict[str, Any]:
     from ..skills.base import SkillError
     from ..skills.planning import tasks as task_store
@@ -150,7 +152,7 @@ def add_task(request: TaskRequest) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.patch("/tasks/{task_id}")
+@router.patch("/tasks/{task_id}", response_model=schemas.TaskDone)
 def complete_task(task_id: str, done: bool = True) -> dict[str, Any]:
     from ..skills.base import SkillError
     from ..skills.planning import tasks as task_store
@@ -161,7 +163,7 @@ def complete_task(task_id: str, done: bool = True) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.delete("/tasks/{task_id}")
+@router.delete("/tasks/{task_id}", response_model=schemas.TaskRemoved)
 def remove_task(task_id: str) -> dict[str, Any]:
     from ..skills.base import SkillError
     from ..skills.planning import tasks as task_store
@@ -172,7 +174,7 @@ def remove_task(task_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.delete("/reminders/{reminder_id}")
+@router.delete("/reminders/{reminder_id}", response_model=schemas.ReminderCancelled)
 def cancel_reminder(reminder_id: str) -> dict[str, Any]:
     item = sched_store.cancel(reminder_id)
     if item is None:
@@ -180,7 +182,7 @@ def cancel_reminder(reminder_id: str) -> dict[str, Any]:
     return {"cancelled": item.id, "label": item.label}
 
 
-@router.post("/reminders/tick")
+@router.post("/reminders/tick", response_model=schemas.Delivered)
 def force_tick() -> dict[str, Any]:
     """Deliver anything due right now. Used by tests and by the UI on wake.
 

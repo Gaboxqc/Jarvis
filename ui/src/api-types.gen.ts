@@ -1534,6 +1534,47 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * Account
+         * @description An account's details. Never a secret, by construction.
+         *
+         *     `credential_stored` and `credential_ref` were being returned and were
+         *     absent from the hand-written type, so the screen could not tell a
+         *     configured account from one still waiting for its password.
+         */
+        Account: {
+            /** Credential Ref */
+            credential_ref: string;
+            /** Credential Stored */
+            credential_stored: boolean;
+            /** Enabled */
+            enabled: boolean;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Provider */
+            provider: string;
+            /** Target */
+            target: string;
+            /** Username */
+            username: string;
+            /** Writable */
+            writable: boolean;
+        };
+        /** AccountCheck */
+        AccountCheck: {
+            /** Error */
+            error?: string | null;
+            /** Events */
+            events?: number | null;
+            /** Label */
+            label: string;
+            /** Ok */
+            ok: boolean;
+            /** Unread */
+            unread?: number | null;
+        };
         /** AccountRequest */
         AccountRequest: {
             /** Fields */
@@ -1544,6 +1585,66 @@ export interface components {
             kind: string;
             /** Provider */
             provider: string;
+        };
+        /** Acknowledged */
+        Acknowledged: {
+            /** Ok */
+            ok: boolean;
+        };
+        /** ActionHistory */
+        ActionHistory: {
+            /** History */
+            history: components["schemas"]["ActionRecord"][];
+        };
+        /** ActionRecord */
+        ActionRecord: {
+            /** Batch Id */
+            batch_id: string;
+            /** Can Undo */
+            can_undo: boolean;
+            /** Error */
+            error: string | null;
+            /** Executed At */
+            executed_at: string | null;
+            /** Id */
+            id: string;
+            /** Preview */
+            preview: string;
+            /** Severity */
+            severity: string;
+            /** Skill */
+            skill: string;
+            /** Status */
+            status: string;
+        };
+        /** AddedAccount */
+        AddedAccount: {
+            /** Config File */
+            config_file: string;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Needs Secret */
+            needs_secret: boolean;
+            /** Provider */
+            provider: string;
+            /**
+             * Secret Kind
+             * @enum {string}
+             */
+            secret_kind: "password" | "url";
+        };
+        /** AvatarLicence */
+        AvatarLicence: {
+            /** Licence Accepted */
+            licence_accepted: boolean;
+            /** Licence Accepted At */
+            licence_accepted_at: string;
+            /** Licence Summary */
+            licence_summary: string;
+            /** Licence Url */
+            licence_url: string;
         };
         /** AvatarLicenceRequest */
         AvatarLicenceRequest: {
@@ -1557,6 +1658,76 @@ export interface components {
              * Format: binary
              */
             file: string;
+        };
+        /** BrainHealth */
+        BrainHealth: {
+            /** Configured */
+            configured: string;
+            /** Error */
+            error: string | null;
+            /** Host */
+            host: string;
+            /** Model */
+            model: string;
+            /** Model Installed */
+            model_installed: boolean;
+            /** Models */
+            models: string[];
+            /** Ok */
+            ok: boolean;
+            /** Substituted */
+            substituted: boolean;
+        };
+        /** Briefing */
+        Briefing: {
+            /** Sections */
+            sections: components["schemas"]["BriefingSection"][];
+        };
+        /** BriefingSection */
+        BriefingSection: {
+            /** Configured */
+            configured: boolean;
+            /** Error */
+            error?: string | null;
+            /** Lines */
+            lines: string[];
+            /** Name */
+            name: string;
+        };
+        /** CaptureStatus */
+        CaptureStatus: {
+            /** Label */
+            label: string;
+            /** Note */
+            note: string;
+            /** Recording */
+            recording: boolean;
+            /** Seconds */
+            seconds: number;
+            /** Sources */
+            sources: string[];
+            /** Transcript Id */
+            transcript_id: string | null;
+            /** Words */
+            words: number;
+        };
+        /** CaptureSummary */
+        CaptureSummary: {
+            /** Actions */
+            actions: string[];
+            /** Decisions */
+            decisions: string[];
+            /** Error */
+            error: string | null;
+            /** Summary */
+            summary: string;
+            /** Truncated */
+            truncated: boolean;
+        };
+        /** ClearedSession */
+        ClearedSession: {
+            /** Cleared Turns */
+            cleared_turns: number;
         };
         /**
          * ClientProblem
@@ -1591,10 +1762,196 @@ export interface components {
              */
             enable?: boolean;
         };
+        /** CloneStatus */
+        CloneStatus: {
+            /** Consented */
+            consented: boolean;
+            /** Enabled */
+            enabled: boolean;
+            /** Engine Installed */
+            engine_installed: boolean;
+            /** Has Reference */
+            has_reference: boolean;
+            /** Installed */
+            installed: boolean;
+            /** Licence */
+            licence: string;
+            /** Licence Accepted */
+            licence_accepted: boolean;
+            /** Licence Accepted At */
+            licence_accepted_at: string;
+            /** Loaded */
+            loaded: boolean;
+            /** Min Seconds */
+            min_seconds: number;
+            /** Packaged */
+            packaged: boolean;
+            /** Reference Seconds */
+            reference_seconds: number;
+        };
+        /** Connectors */
+        Connectors: {
+            /** Calendar */
+            calendar: components["schemas"]["Account"][];
+            credential_store: components["schemas"]["CredentialStore"];
+            /** Mail */
+            mail: components["schemas"]["Account"][];
+        };
+        /**
+         * CreatedTask
+         * @description What POST /tasks answers with, which is not a `Task`.
+         *
+         *     create_task() returns the five fields it just decided, and not `kind`
+         *     or `created_at`. The client typed this as a full Task, so two of its
+         *     fields were a fiction -- nothing reads them today, which is the only
+         *     reason it never bit.
+         */
+        CreatedTask: {
+            /** Done */
+            done: boolean;
+            /** Due */
+            due: string | null;
+            /** Id */
+            id: string;
+            /** Tags */
+            tags: string[];
+            /** Text */
+            text: string;
+        };
+        /** CredentialForgotten */
+        CredentialForgotten: {
+            /** Removed */
+            removed: boolean;
+        };
         /** CredentialRequest */
         CredentialRequest: {
             /** Secret */
             secret: string;
+        };
+        /** CredentialStore */
+        CredentialStore: {
+            /** Available */
+            available: boolean;
+            /** Backend */
+            backend: string;
+            /** Detail */
+            detail: string;
+        };
+        /**
+         * CredentialStored
+         * @description The reference, never the value.
+         */
+        CredentialStored: {
+            /** Credential Ref */
+            credential_ref: string;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Stored */
+            stored: boolean;
+        };
+        /** Deleted */
+        Deleted: {
+            /** Deleted */
+            deleted: string;
+        };
+        /** DeletedFact */
+        DeletedFact: {
+            deleted: components["schemas"]["MemoryFact"];
+        };
+        /** DeletedFacts */
+        DeletedFacts: {
+            /** Deleted */
+            deleted: number;
+        };
+        /** DeletedTranscript */
+        DeletedTranscript: {
+            deleted: components["schemas"]["Transcript"];
+        };
+        /** Delivered */
+        Delivered: {
+            /** Delivered */
+            delivered: string[];
+        };
+        /** DocumentHit */
+        DocumentHit: {
+            /** Citation */
+            citation: string;
+            /** File */
+            file: string;
+            /** Path */
+            path: string;
+            /** Section */
+            section: string;
+            /** Text */
+            text: string;
+        };
+        /** DocumentHits */
+        DocumentHits: {
+            /** Results */
+            results: components["schemas"]["DocumentHit"][];
+        };
+        /** EngineProgress */
+        EngineProgress: {
+            /** Error */
+            error: string | null;
+            /** Installed */
+            installed: boolean;
+            /** Received */
+            received: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "idle" | "downloading" | "verifying" | "installing" | "installed" | "failed";
+            /** Total */
+            total: number;
+        };
+        /** EngineRemoved */
+        EngineRemoved: {
+            /** Installed */
+            installed: boolean;
+            /** Removed */
+            removed: boolean;
+        };
+        /** ExportCounts */
+        ExportCounts: {
+            /** Actions */
+            actions: number;
+            /** Conversations */
+            conversations: number;
+            /** Documents */
+            documents: number;
+            /** Memory */
+            memory: number;
+            /** Reminders */
+            reminders: number;
+            /** Tasks */
+            tasks: number;
+            /** Transcripts */
+            transcripts: number;
+        };
+        /** ExportPreview */
+        ExportPreview: {
+            counts: components["schemas"]["ExportCounts"];
+            /** Excludes */
+            excludes: string[];
+        };
+        /** FailedDownload */
+        FailedDownload: {
+            /** Error */
+            error: string;
+            /** Model */
+            model: string;
+        };
+        /**
+         * FocusEnded
+         * @description Ending a session answers with the one fact that changed.
+         */
+        FocusEnded: {
+            /** Active */
+            active: boolean;
         };
         /** FocusRequest */
         FocusRequest: {
@@ -1604,10 +1961,489 @@ export interface components {
              */
             minutes?: number;
         };
+        /**
+         * FocusState
+         * @description One shape for GET /focus and POST /focus/start.
+         *
+         *     They returned two: the first carried `would_close` and not `message`,
+         *     the second the reverse. The Today screen stores the result of both in
+         *     the same state and reads `minutes_left` and `closed_apps` off either,
+         *     so the shapes were already required to agree and simply did not.
+         *     Making them one is the fix; the alternative is a client-side union
+         *     describing a difference with no reason behind it.
+         */
+        FocusState: {
+            /** Active */
+            active: boolean;
+            /** Closed Apps */
+            closed_apps: string[];
+            /** Message */
+            message: string | null;
+            /** Minutes Left */
+            minutes_left: number;
+            /** Would Close */
+            would_close: string[];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** Health */
+        Health: {
+            brain: components["schemas"]["BrainHealth"];
+            /** Config File */
+            config_file: string | null;
+            /** Data Dir */
+            data_dir: string;
+            /** Ok */
+            ok: boolean;
+            /** Persona */
+            persona: string;
+            privacy: components["schemas"]["PrivacyFlags"];
+            /** Problem */
+            problem: string | null;
+            /** Skills */
+            skills: number;
+            /** Version */
+            version: string;
+        };
+        /** IndexCleared */
+        IndexCleared: {
+            /** Cleared Documents */
+            cleared_documents: number;
+        };
+        /** IndexFailure */
+        IndexFailure: {
+            /** Error */
+            error: string | null;
+            /** File */
+            file: string;
+            /** Path */
+            path: string;
+        };
+        /** IndexStatus */
+        IndexStatus: {
+            /** Chunks */
+            chunks: number;
+            /** Deferred Because */
+            deferred_because: string | null;
+            /** Documents */
+            documents: number;
+            /** Failed */
+            failed: number;
+            /** Failures */
+            failures: components["schemas"]["IndexFailure"][];
+            /** Folders */
+            folders: string[];
+            /** Last Indexed */
+            last_indexed: string | null;
+            /** Last Scan */
+            last_scan: string | null;
+            /** Paused */
+            paused: boolean;
+            /** Running */
+            running: boolean;
+        };
+        /** IndexedDocument */
+        IndexedDocument: {
+            /** Chunks */
+            chunks: number;
+            /** Error */
+            error: string | null;
+            /** File */
+            file: string;
+            /** Indexed At */
+            indexed_at: string | null;
+            /** Path */
+            path: string;
+        };
+        /** IndexedDocuments */
+        IndexedDocuments: {
+            /** Documents */
+            documents: components["schemas"]["IndexedDocument"][];
+        };
+        /** LogFile */
+        LogFile: {
+            /** Modified */
+            modified: number;
+            /** Name */
+            name: string;
+            /** Size Bytes */
+            size_bytes: number;
+        };
+        /** LogSummary */
+        LogSummary: {
+            /** Directory */
+            directory: string;
+            /** Exists */
+            exists: boolean;
+            /** Files */
+            files: components["schemas"]["LogFile"][];
+            /** Total Bytes */
+            total_bytes: number;
+        };
+        /** MemoryFact */
+        MemoryFact: {
+            /** Category */
+            category: string;
+            /** Created At */
+            created_at: string | null;
+            /** Id */
+            id: string;
+            /** Text */
+            text: string;
+        };
+        /** MemoryFacts */
+        MemoryFacts: {
+            /** Facts */
+            facts: components["schemas"]["MemoryFact"][];
+        };
+        /** Notification */
+        Notification: {
+            /** At */
+            at: string;
+            /** Body */
+            body: string;
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Title */
+            title: string;
+        };
+        /** Notifications */
+        Notifications: {
+            /** Notifications */
+            notifications: components["schemas"]["Notification"][];
+        };
+        /**
+         * ParkedAction
+         * @description A pending action as /actions/pending lists it.
+         *
+         *     Not `PendingAction`: this one carries `expires_at` and that one does not,
+         *     and they were the same name on the wire until this file made the
+         *     difference visible. A confirmation has a TTL and a client that cannot see
+         *     it cannot tell a live question from a dead one.
+         */
+        ParkedAction: {
+            /** Action Id */
+            action_id: string;
+            /** Expires At */
+            expires_at: string | null;
+            /** Preview */
+            preview: string;
+            /** Reversible */
+            reversible: boolean;
+            /** Skill */
+            skill: string;
+        };
+        /**
+         * PendingAction
+         * @description An action waiting for a yes. The id is the whole contract (REQ-24).
+         */
+        PendingAction: {
+            /** Action Id */
+            action_id: string;
+            /** Preview */
+            preview: string;
+            /** Reversible */
+            reversible: boolean;
+            /** Skill */
+            skill: string;
+        };
+        /** PendingActions */
+        PendingActions: {
+            /** Pending */
+            pending: components["schemas"]["ParkedAction"][];
+        };
+        /** PreApproval */
+        PreApproval: {
+            /** Granted At */
+            granted_at: string | null;
+            /** Skill */
+            skill: string;
+            /** Source */
+            source: string;
+        };
+        /** PreApprovalGranted */
+        PreApprovalGranted: {
+            /** Granted */
+            granted: string;
+            /** Pre Approvals */
+            pre_approvals: components["schemas"]["PreApproval"][];
+        };
+        /** PreApprovalRevoked */
+        PreApprovalRevoked: {
+            /** Pre Approvals */
+            pre_approvals: components["schemas"]["PreApproval"][];
+            /** Revoked */
+            revoked: string;
+        };
+        /** PreApprovals */
+        PreApprovals: {
+            /** Pre Approvals */
+            pre_approvals: components["schemas"]["PreApproval"][];
+        };
+        /** PresenceState */
+        PresenceState: {
+            /** Emotion */
+            emotion: string | null;
+            /** Focus */
+            focus: boolean;
+            /** Recording */
+            recording: boolean;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "idle" | "listening" | "thinking" | "speaking" | "recording";
+        };
+        /** PrivacyFlags */
+        PrivacyFlags: {
+            /** Cloud Llm */
+            cloud_llm: boolean;
+            /** Live Data */
+            live_data: boolean;
+            /** Web Search */
+            web_search: boolean;
+        };
+        /** ReferenceForgotten */
+        ReferenceForgotten: {
+            /** Consented */
+            consented: boolean;
+            /** Enabled */
+            enabled: boolean;
+            /** Engine Installed */
+            engine_installed: boolean;
+            /** Has Reference */
+            has_reference: boolean;
+            /** Installed */
+            installed: boolean;
+            /** Licence */
+            licence: string;
+            /** Licence Accepted */
+            licence_accepted: boolean;
+            /** Licence Accepted At */
+            licence_accepted_at: string;
+            /** Loaded */
+            loaded: boolean;
+            /** Min Seconds */
+            min_seconds: number;
+            /** Packaged */
+            packaged: boolean;
+            /** Reference Seconds */
+            reference_seconds: number;
+            /** Removed */
+            removed: boolean;
+        };
+        /**
+         * ReferenceSaved
+         * @description The clone status, plus what the upload itself produced.
+         */
+        ReferenceSaved: {
+            /** Consented */
+            consented: boolean;
+            /** Enabled */
+            enabled: boolean;
+            /** Engine Installed */
+            engine_installed: boolean;
+            /** Has Reference */
+            has_reference: boolean;
+            /** Installed */
+            installed: boolean;
+            /** Licence */
+            licence: string;
+            /** Licence Accepted */
+            licence_accepted: boolean;
+            /** Licence Accepted At */
+            licence_accepted_at: string;
+            /** Loaded */
+            loaded: boolean;
+            /** Min Seconds */
+            min_seconds: number;
+            /** Packaged */
+            packaged: boolean;
+            /** Path */
+            path: string;
+            /** Reference Seconds */
+            reference_seconds: number;
+            /** Seconds */
+            seconds: number;
+        };
+        /** ReminderCancelled */
+        ReminderCancelled: {
+            /** Cancelled */
+            cancelled: string;
+            /** Label */
+            label: string;
+        };
+        /** Reminders */
+        Reminders: {
+            /** Reminders */
+            reminders: components["schemas"]["ScheduledItem"][];
+        };
+        /** RemovedAccount */
+        RemovedAccount: {
+            /** Config File */
+            config_file: string;
+            /** Kind */
+            kind: string;
+            /** Removed */
+            removed: string;
+        };
+        /** RetentionSwept */
+        RetentionSwept: {
+            /** Removed */
+            removed: {
+                [key: string]: number;
+            };
+        };
+        /**
+         * RetentionWindow
+         * @description The window, and what is inside it right now (REQ-26).
+         *
+         *     Four fields, and the first draft of this model had five: an `oldest_turn`
+         *     that retention.describe() does not return and never has. Pydantic refused
+         *     the response and the endpoint answered 500, which is the right failure --
+         *     a response model that invents a field is a contract the server cannot
+         *     keep, and it is better to find that in a test than to have the field
+         *     quietly default itself into the schema.
+         */
+        RetentionWindow: {
+            /** Action Records */
+            action_records: number;
+            /** Conversation Days */
+            conversation_days: number;
+            /** Conversation Turns */
+            conversation_turns: number;
+            /** History Days */
+            history_days: number;
+        };
+        /** Routine */
+        Routine: {
+            /** Active */
+            active: boolean;
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Needs Approval */
+            needs_approval: boolean;
+            /** Next Fire At */
+            next_fire_at: string | null;
+            /** Recurring */
+            recurring: boolean;
+            /** Steps */
+            steps: string[];
+        };
+        /** RoutineApproved */
+        RoutineApproved: {
+            /** Approved */
+            approved: boolean;
+            routine: components["schemas"]["ScheduledItem"];
+        };
+        /** Routines */
+        Routines: {
+            /** Routines */
+            routines: components["schemas"]["Routine"][];
+        };
+        /** ScanResult */
+        ScanResult: {
+            /** Duration Seconds */
+            duration_seconds: number;
+            /** Errors */
+            errors: string[];
+            /** Failed */
+            failed: number;
+            /** Indexed */
+            indexed: number;
+            /** Removed */
+            removed: number;
+            /** Skipped */
+            skipped: number;
+            /** Updated */
+            updated: number;
+        };
+        /** ScheduledItem */
+        ScheduledItem: {
+            /** Active */
+            active: boolean;
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Next Fire At */
+            next_fire_at: string | null;
+            /** Recurring */
+            recurring: boolean;
+        };
+        /** SemanticStatus */
+        SemanticStatus: {
+            /** Chunks */
+            chunks: number;
+            /** Download Mb */
+            download_mb: number;
+            /** Embedded */
+            embedded: number;
+            /** Enabled */
+            enabled: boolean;
+            /** Model */
+            model: string;
+            /** Model Installed */
+            model_installed: boolean;
+        };
+        /**
+         * SequenceRun
+         * @description What running a routine or a shortcut did, per step.
+         *
+         *     `routine_id` duplicates `id` and is kept: it is the name routines used
+         *     before shortcuts existed, and dropping it from the schema would be a
+         *     breaking change dressed up as tidying.
+         */
+        SequenceRun: {
+            /** Batch Id */
+            batch_id: string;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Needs Approval */
+            needs_approval: boolean;
+            /** Ran */
+            ran: number;
+            /** Routine Id */
+            routine_id: string;
+            /** Skipped */
+            skipped: number;
+            /** Steps */
+            steps: components["schemas"]["SequenceStep"][];
+        };
+        /** SequenceStep */
+        SequenceStep: {
+            /** Message */
+            message: string;
+            /** Skill */
+            skill: string;
+            /** Status */
+            status: string;
+        };
+        /** Settings */
+        Settings: {
+            /** Current */
+            current: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            /** Writable */
+            writable: {
+                [key: string]: string[];
+            };
         };
         /** SettingsPatch */
         SettingsPatch: {
@@ -1617,6 +2453,68 @@ export interface components {
                     [key: string]: unknown;
                 };
             };
+        };
+        /** SettingsUpdated */
+        SettingsUpdated: {
+            /** Changed */
+            changed: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            /** Config File */
+            config_file?: string | null;
+        };
+        /** Shortcut */
+        Shortcut: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Needs Approval */
+            needs_approval: boolean;
+            /** Steps */
+            steps: string[];
+        };
+        /** ShortcutApproved */
+        ShortcutApproved: {
+            /** Approved */
+            approved: boolean;
+            shortcut: components["schemas"]["ScheduledItem"];
+        };
+        /** Shortcuts */
+        Shortcuts: {
+            /** Shortcuts */
+            shortcuts: components["schemas"]["Shortcut"][];
+        };
+        /**
+         * SkillCall
+         * @description One gate outcome, as GateOutcome.to_dict() produces it.
+         *
+         *     The hand-written TypeScript described three of these eight fields. That
+         *     was not wrong -- TypeScript does not object to fields it was not told
+         *     about -- but it meant `data` and `action_id` were being used from the
+         *     wire with no type behind them.
+         */
+        SkillCall: {
+            /** Action Id */
+            action_id: string | null;
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            };
+            /** Error */
+            error: string | null;
+            /** Message */
+            message: string;
+            /** Preview */
+            preview: string;
+            /** Reversible */
+            reversible: boolean;
+            /** Skill */
+            skill: string;
+            /** Status */
+            status: string;
         };
         /** SkillCallRequest */
         SkillCallRequest: {
@@ -1632,8 +2530,124 @@ export interface components {
              */
             session_id?: string;
         };
+        /** SkillCatalog */
+        SkillCatalog: {
+            /** Skills */
+            skills: components["schemas"]["SkillEntry"][];
+        };
+        /**
+         * SkillEntry
+         * @description One catalog entry, as the router sees it.
+         */
+        SkillEntry: {
+            /** Consequential */
+            consequential: boolean;
+            /** Description */
+            description: string;
+            /** Name */
+            name: string;
+            /** Parameters */
+            parameters: {
+                [key: string]: components["schemas"]["SkillParameter"];
+            };
+        };
+        /** SkillParameter */
+        SkillParameter: {
+            /** Description */
+            description: string;
+            /** Enum */
+            enum?: string[] | null;
+            /** Required */
+            required: boolean;
+            /** Type */
+            type: string;
+        };
         /** SpeakRequest */
         SpeakRequest: {
+            /** Text */
+            text: string;
+        };
+        /** SpeechShape */
+        SpeechShape: {
+            /** Envelope */
+            envelope: number[];
+            /** Sample Rate */
+            sample_rate: number;
+            /** Seconds */
+            seconds: number;
+            /** Spoke */
+            spoke: boolean;
+        };
+        /**
+         * StoppedCapture
+         * @description A finished recording, with the summary this call just produced.
+         *
+         *     Not a subclass of `Transcript`: that one's `summary` is whatever was
+         *     stored and so is open-ended, and narrowing a field in a subclass is a
+         *     promise the parent did not make. Here the shape *is* known, because
+         *     summarize.summarise() produced it one line above -- so it is spelled out,
+         *     and the duplication is the price of the two being genuinely different.
+         */
+        StoppedCapture: {
+            /** Ended At */
+            ended_at: string | null;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Minutes */
+            minutes: number;
+            /** Running */
+            running: boolean;
+            /** Sources */
+            sources: string[];
+            /** Started At */
+            started_at: string | null;
+            summary: components["schemas"]["CaptureSummary"] | null;
+            /** Words */
+            words: number;
+        };
+        /** SttStatus */
+        SttStatus: {
+            /** Idle Seconds */
+            idle_seconds: number | null;
+            /** Installed */
+            installed: boolean;
+            /** Loaded */
+            loaded: boolean;
+            /** Model */
+            model: string;
+        };
+        /** Task */
+        Task: {
+            /** Created At */
+            created_at: string | null;
+            /** Done */
+            done: boolean;
+            /** Due */
+            due: string | null;
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Tags */
+            tags: string[];
+            /** Text */
+            text: string;
+        };
+        /** TaskDone */
+        TaskDone: {
+            /** Done */
+            done: boolean;
+            /** Id */
+            id: string;
+            /** Text */
+            text: string;
+        };
+        /** TaskRemoved */
+        TaskRemoved: {
+            /** Id */
+            id: string;
             /** Text */
             text: string;
         };
@@ -1649,6 +2663,71 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** Tasks */
+        Tasks: {
+            /** Tasks */
+            tasks: components["schemas"]["Task"][];
+        };
+        /** Transcript */
+        Transcript: {
+            /** Ended At */
+            ended_at: string | null;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Minutes */
+            minutes: number;
+            /** Running */
+            running: boolean;
+            /** Sources */
+            sources: string[];
+            /** Started At */
+            started_at: string | null;
+            summary: components["schemas"]["CaptureSummary"] | null;
+            /** Words */
+            words: number;
+        };
+        /** TranscriptDetail */
+        TranscriptDetail: {
+            /** Ended At */
+            ended_at: string | null;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Minutes */
+            minutes: number;
+            /** Running */
+            running: boolean;
+            /** Sources */
+            sources: string[];
+            /** Started At */
+            started_at: string | null;
+            summary: components["schemas"]["CaptureSummary"] | null;
+            /** Text */
+            text: string;
+            /** Words */
+            words: number;
+        };
+        /** Transcripts */
+        Transcripts: {
+            /** Transcripts */
+            transcripts: components["schemas"]["Transcript"][];
+        };
+        /** TtsStatus */
+        TtsStatus: {
+            /** Available */
+            available: string[];
+            /** Installed */
+            installed: boolean;
+            /** Loaded */
+            loaded: boolean;
+            /** Muted */
+            muted: boolean;
+            /** Voice */
+            voice: string;
+        };
         /** TurnRequest */
         TurnRequest: {
             /** Pending Action Id */
@@ -1661,6 +2740,31 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** TurnResult */
+        TurnResult: {
+            /** Error */
+            error: string | null;
+            /** Needs Confirmation */
+            needs_confirmation: boolean;
+            /** Not Run */
+            not_run: string[];
+            pending: components["schemas"]["PendingAction"] | null;
+            /** Reply */
+            reply: string;
+            /** Skill Calls */
+            skill_calls: components["schemas"]["SkillCall"][];
+        };
+        /** UndoOutcome */
+        UndoOutcome: {
+            /** Failed */
+            failed: string[];
+            /** Message */
+            message: string;
+            /** Ok */
+            ok: boolean;
+            /** Undone */
+            undone: string[];
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -1669,6 +2773,103 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** VoiceModel */
+        VoiceModel: {
+            /**
+             * Approx Mb
+             * @default 0
+             */
+            approx_mb?: number;
+            /**
+             * Detail
+             * @default
+             */
+            detail?: string;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Present */
+            present: boolean;
+        };
+        /** VoiceModels */
+        VoiceModels: {
+            /** Location */
+            location: string;
+            /** Missing Mb */
+            missing_mb: number;
+            /** Models */
+            models: components["schemas"]["VoiceModel"][];
+        };
+        /** VoiceModelsDownloaded */
+        VoiceModelsDownloaded: {
+            /** Downloaded */
+            downloaded: string[];
+            /** Failed */
+            failed: components["schemas"]["FailedDownload"][];
+            /** Location */
+            location: string;
+            /** Ready */
+            ready: boolean;
+        };
+        /** VoiceModelsRemoved */
+        VoiceModelsRemoved: {
+            /** Freed Mb */
+            freed_mb: number;
+        };
+        /** VoiceStatus */
+        VoiceStatus: {
+            /** Download Mb */
+            download_mb: number;
+            /** Enabled */
+            enabled: boolean;
+            /** Input Enabled */
+            input_enabled: boolean;
+            /** Microphone */
+            microphone: boolean;
+            /** Models Ready */
+            models_ready: boolean;
+            /** Output Enabled */
+            output_enabled: boolean;
+            stt: components["schemas"]["SttStatus"];
+            tts: components["schemas"]["TtsStatus"];
+            wake: components["schemas"]["WakeStatus"];
+        };
+        /** VoiceTurn */
+        VoiceTurn: {
+            /** Confidence */
+            confidence: number;
+            /** Error */
+            error?: string | null;
+            /** Heard */
+            heard: string;
+            /** Needs Confirmation */
+            needs_confirmation: boolean;
+            /** Reply */
+            reply: string;
+            /** Spoke */
+            spoke: boolean;
+        };
+        /** WakeStatus */
+        WakeStatus: {
+            /** Available */
+            available: boolean;
+            /** Enabled */
+            enabled: boolean;
+            /** Installed */
+            installed: boolean;
+            /** Phrase */
+            phrase: string;
+            /** Threshold */
+            threshold: number;
+        };
+        /** Wiped */
+        Wiped: {
+            /** Removed */
+            removed: {
+                [key: string]: number;
+            };
         };
         /** XttsLicenceRequest */
         XttsLicenceRequest: {
@@ -1701,9 +2902,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ActionHistory"];
                 };
             };
             /** @description Validation Error */
@@ -1732,9 +2931,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["PendingActions"];
                 };
             };
         };
@@ -1754,9 +2951,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["PreApprovals"];
                 };
             };
         };
@@ -1778,9 +2973,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["PreApprovalGranted"];
                 };
             };
             /** @description Validation Error */
@@ -1811,9 +3004,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["PreApprovalRevoked"];
                 };
             };
             /** @description Validation Error */
@@ -1842,9 +3033,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["UndoOutcome"];
                 };
             };
         };
@@ -1868,9 +3057,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["TurnResult"];
                 };
             };
             /** @description Validation Error */
@@ -1903,9 +3090,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["TurnResult"];
                 };
             };
             /** @description Validation Error */
@@ -1936,9 +3121,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["UndoOutcome"];
                 };
             };
             /** @description Validation Error */
@@ -1967,9 +3150,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["AvatarLicence"];
                 };
             };
         };
@@ -1993,9 +3174,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["AvatarLicence"];
                 };
             };
             /** @description Validation Error */
@@ -2024,9 +3203,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Briefing"];
                 };
             };
         };
@@ -2048,9 +3225,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["CaptureStatus"];
                 };
             };
             /** @description Validation Error */
@@ -2079,9 +3254,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["CaptureStatus"];
                 };
             };
         };
@@ -2101,9 +3274,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["StoppedCapture"];
                 };
             };
         };
@@ -2123,9 +3294,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Transcripts"];
                 };
             };
         };
@@ -2147,9 +3316,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["TranscriptDetail"];
                 };
             };
             /** @description Validation Error */
@@ -2180,9 +3347,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["DeletedTranscript"];
                 };
             };
             /** @description Validation Error */
@@ -2211,9 +3376,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Connectors"];
                 };
             };
         };
@@ -2237,9 +3400,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["AddedAccount"];
                 };
             };
             /** @description Validation Error */
@@ -2271,9 +3432,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["RemovedAccount"];
                 };
             };
             /** @description Validation Error */
@@ -2305,9 +3464,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["AccountCheck"];
                 };
             };
             /** @description Validation Error */
@@ -2343,9 +3500,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["CredentialStored"];
                 };
             };
             /** @description Validation Error */
@@ -2377,9 +3532,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["CredentialForgotten"];
                 };
             };
             /** @description Validation Error */
@@ -2412,9 +3565,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: boolean;
-                    };
+                    "application/json": components["schemas"]["Acknowledged"];
                 };
             };
             /** @description Validation Error */
@@ -2443,9 +3594,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["LogSummary"];
                 };
             };
         };
@@ -2465,9 +3614,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["IndexedDocuments"];
                 };
             };
         };
@@ -2487,9 +3634,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["IndexCleared"];
                 };
             };
         };
@@ -2511,9 +3656,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ScanResult"];
                 };
             };
             /** @description Validation Error */
@@ -2545,9 +3688,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["DocumentHits"];
                 };
             };
             /** @description Validation Error */
@@ -2576,9 +3717,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["SemanticStatus"];
                 };
             };
         };
@@ -2598,9 +3737,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["SemanticStatus"];
                 };
             };
         };
@@ -2620,9 +3757,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["IndexStatus"];
                 };
             };
         };
@@ -2662,9 +3797,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["FocusState"];
                 };
             };
         };
@@ -2684,9 +3817,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["FocusEnded"];
                 };
             };
         };
@@ -2710,9 +3841,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["FocusState"];
                 };
             };
             /** @description Validation Error */
@@ -2741,9 +3870,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Health"];
                 };
             };
         };
@@ -2763,9 +3890,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["MemoryFacts"];
                 };
             };
         };
@@ -2785,9 +3910,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["DeletedFacts"];
                 };
             };
         };
@@ -2809,9 +3932,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["DeletedFact"];
                 };
             };
             /** @description Validation Error */
@@ -2840,9 +3961,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Notifications"];
                 };
             };
         };
@@ -2882,9 +4001,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ExportPreview"];
                 };
             };
         };
@@ -2904,9 +4021,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["RetentionWindow"];
                 };
             };
         };
@@ -2926,9 +4041,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["RetentionSwept"];
                 };
             };
         };
@@ -2948,9 +4061,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Wiped"];
                 };
             };
         };
@@ -2970,9 +4081,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Reminders"];
                 };
             };
         };
@@ -2992,9 +4101,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Delivered"];
                 };
             };
         };
@@ -3016,9 +4123,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ReminderCancelled"];
                 };
             };
             /** @description Validation Error */
@@ -3047,9 +4152,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Routines"];
                 };
             };
         };
@@ -3071,9 +4174,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Deleted"];
                 };
             };
             /** @description Validation Error */
@@ -3104,9 +4205,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["RoutineApproved"];
                 };
             };
             /** @description Validation Error */
@@ -3137,9 +4236,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["SequenceRun"];
                 };
             };
             /** @description Validation Error */
@@ -3170,9 +4267,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ClearedSession"];
                 };
             };
             /** @description Validation Error */
@@ -3201,9 +4296,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Settings"];
                 };
             };
         };
@@ -3227,9 +4320,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["SettingsUpdated"];
                 };
             };
             /** @description Validation Error */
@@ -3258,9 +4349,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Shortcuts"];
                 };
             };
         };
@@ -3282,9 +4371,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Deleted"];
                 };
             };
             /** @description Validation Error */
@@ -3315,9 +4402,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ShortcutApproved"];
                 };
             };
             /** @description Validation Error */
@@ -3348,9 +4433,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["SequenceRun"];
                 };
             };
             /** @description Validation Error */
@@ -3379,9 +4462,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["SkillCatalog"];
                 };
             };
         };
@@ -3405,9 +4486,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["SkillCall"];
                 };
             };
             /** @description Validation Error */
@@ -3436,9 +4515,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["PresenceState"];
                 };
             };
         };
@@ -3460,9 +4537,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Tasks"];
                 };
             };
             /** @description Validation Error */
@@ -3495,9 +4570,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["CreatedTask"];
                 };
             };
             /** @description Validation Error */
@@ -3528,9 +4601,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["TaskRemoved"];
                 };
             };
             /** @description Validation Error */
@@ -3563,9 +4634,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["TaskDone"];
                 };
             };
             /** @description Validation Error */
@@ -3598,9 +4667,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["TurnResult"];
                 };
             };
             /** @description Validation Error */
@@ -3662,9 +4729,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["CloneStatus"];
                 };
             };
         };
@@ -3688,9 +4753,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["CloneStatus"];
                 };
             };
             /** @description Validation Error */
@@ -3719,9 +4782,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["EngineProgress"];
                 };
             };
         };
@@ -3741,9 +4802,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["EngineProgress"];
                 };
             };
         };
@@ -3763,9 +4822,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["EngineRemoved"];
                 };
             };
         };
@@ -3789,9 +4846,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["CloneStatus"];
                 };
             };
             /** @description Validation Error */
@@ -3824,9 +4879,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ReferenceSaved"];
                 };
             };
             /** @description Validation Error */
@@ -3855,9 +4908,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ReferenceForgotten"];
                 };
             };
         };
@@ -3877,9 +4928,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["VoiceTurn"];
                 };
             };
         };
@@ -3899,9 +4948,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["VoiceModels"];
                 };
             };
         };
@@ -3923,9 +4970,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["VoiceModelsDownloaded"];
                 };
             };
             /** @description Validation Error */
@@ -3954,9 +4999,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["VoiceModelsRemoved"];
                 };
             };
         };
@@ -3980,9 +5023,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["SpeechShape"];
                 };
             };
             /** @description Validation Error */
@@ -4011,9 +5052,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["VoiceStatus"];
                 };
             };
         };

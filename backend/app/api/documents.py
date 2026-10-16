@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+
 from fastapi import APIRouter, HTTPException
 
 from ..index import scanner as index_scanner
@@ -11,28 +12,29 @@ from ..index import search as index_search
 from ..index import store as index_store
 from ..memory import long_term
 from ..settings import load_config
+from . import schemas
 
 from .params import Limit, SearchQuery
 
 router = APIRouter()
 
 
-@router.get("/documents/status")
+@router.get("/documents/status", response_model=schemas.IndexStatus)
 def document_index_status() -> dict[str, Any]:
     return {**index_scanner.status(), "failures": index_store.failures()}
 
 
-@router.get("/documents")
+@router.get("/documents", response_model=schemas.IndexedDocuments)
 def list_documents() -> dict[str, Any]:
     return {"documents": index_store.documents()}
 
 
-@router.post("/documents/reindex")
+@router.post("/documents/reindex", response_model=schemas.ScanResult)
 def reindex_documents(force: bool = True) -> dict[str, Any]:
     return index_scanner.scan(force=force).to_dict()
 
 
-@router.get("/documents/semantic")
+@router.get("/documents/semantic", response_model=schemas.SemanticStatus)
 def semantic_status() -> dict[str, Any]:
     """Whether meaning-based search is on, and how much of the index has it.
 
@@ -52,7 +54,7 @@ def semantic_status() -> dict[str, Any]:
     }
 
 
-@router.post("/documents/semantic/model")
+@router.post("/documents/semantic/model", response_model=schemas.SemanticStatus)
 def install_embedding_model() -> dict[str, Any]:
     """Pull the embedding model. Explicit, and never on startup.
 
@@ -72,12 +74,12 @@ def install_embedding_model() -> dict[str, Any]:
     return semantic_status()
 
 
-@router.get("/documents/search")
+@router.get("/documents/search", response_model=schemas.DocumentHits)
 def search_documents(q: SearchQuery, limit: Limit = 5) -> dict[str, Any]:
     return {"results": [hit.to_dict() for hit in index_search.search(q, limit=limit)]}
 
 
-@router.delete("/documents/index")
+@router.delete("/documents/index", response_model=schemas.IndexCleared)
 def clear_document_index() -> dict[str, Any]:
     """REQ-16/REQ-26 — the user can see what is indexed and remove all of it."""
     return {"cleared_documents": index_store.clear()}

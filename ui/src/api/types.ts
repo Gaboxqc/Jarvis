@@ -1,149 +1,93 @@
 /**
- * What the backend sends back.
+ * What the backend sends back — now its own description, not a second opinion.
  *
- * Hand-written, and that is the gap: the handlers return `dict[str, Any]`,
- * so the OpenAPI schema describes every response as an untyped object and
- * api-types.gen.ts cannot cover these. Closing it properly means response
- * models on the Python side -- see docs/NEXT-LEVEL-PLAN.md.
+ * This was 354 lines of hand-written interfaces mirroring Python dataclasses:
+ * maintained by hand, in a different language, with nothing checking the two
+ * against each other. A renamed response field passed ruff, mypy, pytest and
+ * `tsc`, and broke the UI at runtime. That was demonstrated rather than
+ * argued — three fields were added to /health's response and the committed
+ * OpenAPI snapshot did not move by one line, because every handler was
+ * annotated `dict[str, Any]`.
  *
- * Request bodies and paths *are* generated and checked; see client.ts.
+ * The handlers now carry Pydantic response models (backend/app/api/schemas.py),
+ * so the schema describes the responses, `npm run api:types` generates them,
+ * and this file is aliases over the result. The chain: a backend test holds
+ * the snapshot equal to the live app, CI holds the generated types equal to
+ * the snapshot, and `tsc` holds the components equal to the types. A field
+ * renamed in Python is now a type error here.
+ *
+ * The aliases exist rather than importing `components["schemas"]["Health"]` at
+ * every call site because that spelling is unreadable and because the names
+ * are part of this client's own vocabulary. Adding one is one line; the shape
+ * behind it is not ours to write any more.
+ *
+ * What is still hand-written, and why: the SSE event payloads in events.ts.
+ * `/turn/stream` and `/events` are streams, so FastAPI has no response model
+ * to describe and the schema says nothing about their frames. They are the
+ * last unguarded piece of this contract.
  */
 
-export interface PendingAction {
-  action_id: string;
-  skill: string;
-  preview: string;
-  reversible: boolean;
-}
+import type { components } from "../api-types.gen";
 
-export interface TurnResult {
-  reply: string;
-  needs_confirmation: boolean;
-  pending: PendingAction | null;
-  skill_calls: { skill: string; status: string; message: string }[];
-  error: string | null;
-}
+type Schemas = components["schemas"];
 
-export interface PresenceState {
-  state: "idle" | "listening" | "thinking" | "speaking" | "recording";
-  emotion: string | null;
-  recording: boolean;
-  focus: boolean;
-}
+// -- the turn ------------------------------------------------------------
 
-export interface MemoryFact {
-  id: string;
-  text: string;
-  category: string;
-  created_at: string | null;
-}
+export type PendingAction = Schemas["PendingAction"];
+export type SkillCall = Schemas["SkillCall"];
+export type TurnResult = Schemas["TurnResult"];
 
-export interface ActionRecord {
-  id: string;
-  batch_id: string;
-  skill: string;
-  preview: string;
-  severity: string;
-  status: string;
-  can_undo: boolean;
-  executed_at: string | null;
-  error: string | null;
-}
+// -- the Action Gate -----------------------------------------------------
 
-export interface VoiceStatus {
-  enabled: boolean;
-  input_enabled: boolean;
-  output_enabled: boolean;
-  microphone: boolean;
-  models_ready: boolean;
-  download_mb: number;
-  stt: { model: string; installed: boolean; loaded: boolean };
-  tts: { voice: string; installed: boolean; muted: boolean; available: string[] };
-  wake: { phrase: string; enabled: boolean; installed: boolean; available: boolean };
-}
+/** A parked action as /actions/pending lists it — carries `expires_at`. */
+export type ParkedAction = Schemas["ParkedAction"];
+export type ActionRecord = Schemas["ActionRecord"];
+export type UndoOutcome = Schemas["UndoOutcome"];
+export type PreApproval = Schemas["PreApproval"];
+export type SkillEntry = Schemas["SkillEntry"];
 
-export interface SpeechShape {
-  /** False when speech output is muted, or no device would take it. */
-  spoke: boolean;
-  seconds: number;
-  sample_rate: number;
-  /** Loudness 0–1 at 30 samples per second. Drives the avatar's mouth. */
-  envelope: number[];
-}
+// -- memory --------------------------------------------------------------
 
-export interface VoiceTurn {
-  heard: string;
-  confidence: number;
-  reply: string;
-  spoke: boolean;
-  needs_confirmation: boolean;
-  error: string | null;
-}
+export type MemoryFact = Schemas["MemoryFact"];
 
-export interface Notification {
-  id: string;
-  kind: string;
-  title: string;
-  body: string;
-  at: string;
-}
+// -- scheduling ----------------------------------------------------------
 
-export interface Settings {
-  current: {
-    voice: Record<string, unknown>;
-    persona: Record<string, unknown>;
-    privacy?: Record<string, unknown>;
-    documents?: Record<string, unknown>;
-    system?: Record<string, unknown>;
-    brain?: Record<string, unknown>;
-  };
-  /** section -> keys the API will accept. Anything absent is refused. */
-  writable: Record<string, string[]>;
-}
+export type Reminder = Schemas["ScheduledItem"];
+export type RoutineSummary = Schemas["Routine"];
+export type ShortcutSummary = Schemas["Shortcut"];
+export type SequenceRun = Schemas["SequenceRun"];
+export type Task = Schemas["Task"];
+/** What POST /tasks answers with — fewer fields than a listed Task. */
+export type CreatedTask = Schemas["CreatedTask"];
 
-/** Live2D's runtime licence — the avatar stays inert until this is accepted. */
-export interface AvatarLicence {
-  licence_accepted: boolean;
-  licence_accepted_at: string;
-  licence_summary: string;
-  licence_url: string;
-}
+// -- documents -----------------------------------------------------------
 
-export interface Health {
-  ok: boolean;
-  brain: {
-    ok: boolean;
-    model?: string;
-    error?: string | null;
-    /**
-     * What Ollama actually reports, tags included (`qwen2.5:latest`).
-     *
-     * The picker needs this rather than a fixed list: the only models worth
-     * offering are the ones already pulled, and offering one that is not
-     * installed produces an app that cannot answer anything.
-     */
-    models?: string[];
-    model_installed?: boolean;
-    host?: string;
-  };
-  skills: number;
-  persona: string;
-  config_file: string | null;
-  data_dir: string;
-  privacy: { web_search: boolean; live_data: boolean; cloud_llm: boolean };
-}
+export type IndexStatus = Schemas["IndexStatus"];
+export type IndexedDocument = Schemas["IndexedDocument"];
+export type ScanResult = Schemas["ScanResult"];
+export type SemanticStatus = Schemas["SemanticStatus"];
+export type DocumentHit = Schemas["DocumentHit"];
 
+// -- connectors ----------------------------------------------------------
+
+export type Account = Schemas["Account"];
+export type Connectors = Schemas["Connectors"];
+export type AddedAccount = Schemas["AddedAccount"];
+export type AccountCheck = Schemas["AccountCheck"];
+export type BriefingSection = Schemas["BriefingSection"];
+
+/** The account kinds and providers the API accepts. */
 export type AccountKind = "mail" | "calendar";
-
-/**
- * `ics` calendars carry no URL in `AccountFields`, deliberately.
- *
- * A Google iCal URL is what they call a "secret address" — anyone holding it
- * reads the whole calendar without logging in — so it is a credential and goes
- * through `setCredential`, into the OS store, never into the config file.
- */
 export type AccountProvider = "imap" | "caldav" | "ics";
 
+/**
+ * The fields a new account carries.
+ *
+ * Still hand-written, and deliberately: the schema types `fields` as an open
+ * object because which keys are valid depends on the provider, and that rule
+ * lives in connectors/setup.py. This is the client's own stricter view of it
+ * — narrower than the API accepts, which is the safe direction.
+ */
 export interface AccountFields {
   label: string;
   host?: string;
@@ -153,216 +97,39 @@ export interface AccountFields {
   smtp_port?: number;
   url?: string;
   writable?: boolean;
-  // No password. Not omitted for brevity — it must not exist. See addAccount.
+  enabled?: boolean;
 }
 
-export interface SemanticStatus {
-  enabled: boolean;
-  model: string;
-  model_installed: boolean;
-  download_mb: number;
-  chunks: number;
-  embedded: number;
-}
+// -- voice ---------------------------------------------------------------
 
-export interface RoutineSummary {
-  id: string;
-  label: string;
-  next_fire_at: string | null;
-  recurring: boolean;
-  active: boolean;
-  steps: string[];
-  needs_approval: boolean;
-}
+export type VoiceStatus = Schemas["VoiceStatus"];
+export type VoiceModel = Schemas["VoiceModel"];
+export type SpeechShape = Schemas["SpeechShape"];
+export type VoiceTurn = Schemas["VoiceTurn"];
+export type CloneStatus = Schemas["CloneStatus"];
+export type EngineProgress = Schemas["EngineProgress"];
 
-export interface ShortcutSummary {
-  id: string;
-  label: string;
-  steps: string[];
-  needs_approval: boolean;
-}
+// -- the avatar ----------------------------------------------------------
 
-export interface RetentionStatus {
-  conversation_days: number;
-  history_days: number;
-  conversation_turns: number;
-  action_records: number;
-}
+/** Live2D's runtime licence — the avatar stays inert until this is accepted. */
+export type AvatarLicence = Schemas["AvatarLicence"];
 
-export interface LogSummary {
-  directory: string;
-  files: { name: string; size_bytes: number; modified: number }[];
-  total_bytes: number;
-  exists: boolean;
-}
+// -- capture -------------------------------------------------------------
 
-/** One configured account. Contains no secret and never will. */
-export interface Account {
-  kind: string;
-  label: string;
-  provider: string;
-  target: string;
-  username: string;
-  writable: boolean;
-  enabled: boolean;
-  credential_stored: boolean;
-}
+export type CaptureSummary = Schemas["CaptureSummary"];
+export type CaptureStatus = Schemas["CaptureStatus"];
+export type Transcript = Schemas["TranscriptDetail"];
 
-export interface Task {
-  id: string;
-  text: string;
-  kind: string;
-  tags: string[];
-  due: string | null;
-  done: boolean;
-}
+// -- presence, health, focus --------------------------------------------
 
-export interface Reminder {
-  id: string;
-  kind: string;
-  label: string;
-  next_fire_at: string | null;
-  recurring: boolean;
-  active: boolean;
-}
+export type PresenceState = Schemas["PresenceState"];
+export type Notification = Schemas["Notification"];
+export type Health = Schemas["Health"];
+export type FocusState = Schemas["FocusState"];
 
-export interface CloneStatus {
-  /** Whether the XTTS package is present. It is a ~2GB optional dependency. */
-  installed: boolean;
-  /** A frozen build. Decides what advice "not installed" should carry. */
-  packaged?: boolean;
-  /** The downloadable sidecar is on disk. Not the same as being usable yet. */
-  engine_installed?: boolean;
-  /** XTTS-v2's own licence, separate from the consent switch. */
-  licence_accepted?: boolean;
-  licence_accepted_at?: string;
-  enabled: boolean;
-  consented: boolean;
-  has_reference: boolean;
-  reference_seconds: number;
-  loaded: boolean;
-  min_seconds: number;
-  licence: string;
-}
+// -- settings, retention, diagnostics, export ---------------------------
 
-/** A download in flight. `total` is 0 until the server reports a length. */
-export interface EngineProgress {
-  installed: boolean;
-  state: "idle" | "downloading" | "verifying" | "installing" | "installed" | "failed";
-  received: number;
-  total: number;
-  error: string | null;
-}
-
-export interface CaptureSummary {
-  summary: string;
-  decisions: string[];
-  actions: string[];
-  /** True when the recording was too long to summarise whole. */
-  truncated: boolean;
-  error: string | null;
-}
-
-export interface Transcript {
-  id: string;
-  label: string;
-  started_at: string | null;
-  ended_at: string | null;
-  /** Which inputs were captured. Microphone only, today. */
-  sources: string[];
-  minutes: number;
-  words: number;
-  summary: CaptureSummary | null;
-  running: boolean;
-  text?: string;
-}
-
-export interface CaptureStatus {
-  recording: boolean;
-  transcript_id: string | null;
-  label: string;
-  seconds: number;
-  sources: string[];
-  words: number;
-  /** Why capture is degraded — no microphone, a failed source. */
-  note: string;
-}
-
-export interface DocumentHit {
-  file: string;
-  path: string;
-  section: string;
-  /** "lease.pdf (Section 4)" — what the answer should be attributed to. */
-  citation: string;
-  text: string;
-}
-
-export interface IndexedDocument {
-  file: string;
-  path: string;
-  chunks: number;
-  indexed_at: string | null;
-  error: string | null;
-}
-
-export interface IndexStatus {
-  folders: string[];
-  running: boolean;
-  paused: boolean;
-  /** Why a scan is holding off — on battery, machine busy. Null when it isn't. */
-  deferred_because: string | null;
-  last_scan: string | null;
-  documents: number;
-  chunks: number;
-  failed: number;
-  last_indexed: string | null;
-  failures: { path: string; error: string }[];
-}
-
-export interface BriefingSection {
-  name: string;
-  lines: string[];
-  /** Set when that one source failed. The rest of the briefing still arrives. */
-  error: string | null;
-  /** False when there is no account for this source at all — not the same as
-   *  having nothing to report, and the screen must not conflate them. */
-  configured: boolean;
-}
-
-export interface FocusState {
-  active: boolean;
-  minutes_left: number;
-  closed_apps: string[];
-  /** Apps running right now that starting a session would terminate. */
-  would_close?: string[];
-}
-
-export interface Connectors {
-  credential_store: { available: boolean; backend: string; detail: string };
-  calendar: Account[];
-  mail: Account[];
-}
-
-export interface AddedAccount {
-  kind: string;
-  label: string;
-  provider: string;
-  config_file: string;
-  needs_secret: boolean;
-  /** "password" for mail and CalDAV; "url" for an iCal calendar. */
-  secret_kind: "password" | "url";
-}
-
-export interface ExportPreview {
-  counts: {
-    memory: number;
-    tasks: number;
-    reminders: number;
-    conversations: number;
-    actions: number;
-    documents: number;
-    transcripts: number;
-  };
-  /** What the export deliberately leaves out, named so it can be shown. */
-  excludes: string[];
-}
+export type Settings = Schemas["Settings"];
+export type RetentionStatus = Schemas["RetentionWindow"];
+export type LogSummary = Schemas["LogSummary"];
+export type ExportPreview = Schemas["ExportPreview"];

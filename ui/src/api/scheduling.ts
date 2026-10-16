@@ -2,7 +2,7 @@
 
 import { request } from "./client";
 import { body } from "./schema";
-import type { Reminder, RoutineSummary, ShortcutSummary, Task } from "./types";
+import type { CreatedTask, Reminder, RoutineSummary, ShortcutSummary, Task } from "./types";
 
 export const scheduling = {
   routines: () => request<{ routines: RoutineSummary[] }>("/routines"),
@@ -41,7 +41,7 @@ export const scheduling = {
     request<{ tasks: Task[] }>(`/tasks?include_done=${includeDone}`),
 
   addTask: (text: string) =>
-    request<Task>("/tasks", { method: "POST", body: body<"TaskRequest">({ text }) }),
+    request<CreatedTask>("/tasks", { method: "POST", body: body<"TaskRequest">({ text }) }),
 
   setTaskDone: (id: string, done: boolean) =>
     request<Task>(`/tasks/${encodeURIComponent(id)}?done=${done}`, { method: "PATCH" }),

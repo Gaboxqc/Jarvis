@@ -265,7 +265,7 @@ request field, a parameter that loses its bounds — and the first of those is
 now covered by a test that reads the client source rather than a list somebody
 maintains. The response half needs **R2b**.
 
-### R2b — Response models on the Python side
+### R2b — Response models on the Python side — **done**
 
 The real fix for response drift, and the reason R2 stops short of it.
 
@@ -277,8 +277,35 @@ today are the only description of what the backend returns.
 Seventy handlers, and the OpenAPI snapshot moves substantially (deliberately,
 in one commit, with the generator run). Worth doing in one pass rather than
 drifting into it a handler at a time, because a half-typed surface reads as a
-fully-typed one. Sequence it after Phase C: it is mechanical but large, and
-the capability work is worth more per day.
+fully-typed one.
+
+**What it found.** 80 of 84 operations now describe their 200; the four that do
+not are two SSE streams and a zip download, which have no JSON body to
+describe. `ui/src/api/types.ts` went from 354 hand-written lines to aliases
+over the generated types. And the exercise turned up six real defects that
+nothing else was positioned to see:
+
+| | |
+|---|---|
+| `GET /focus` and `POST /focus/start` returned **different shapes** — one with `would_close`, the other with `message` — and the Today screen keeps both in the same piece of state | made one shape |
+| `POST /tasks` returns five fields; the client typed it as a full seven-field `Task`, so `kind` and `created_at` were a fiction | its own `CreatedTask` |
+| `sequences.run()` returns `needs_approval`; the first draft of the model omitted it, so `response_model` **deleted it from the response** — a short run would report as a complete one | added, and pinned by a test |
+| `RetentionWindow` declared an `oldest_turn` that `describe()` never returns, so the endpoint answered 500 | removed |
+| `/actions/pending` returns `expires_at`; `PendingAction` did not have it, so a client could not tell a live confirmation from an expired one | its own `ParkedAction` |
+| `Account.credential_stored`, `IndexFailure.file`, `SttStatus.idle_seconds`, `WakeStatus.threshold`, `TurnResult.not_run` were all being sent and were absent from the hand-written types | declared |
+
+The third of those is the one worth remembering: `response_model` *filters*, so
+a field a model forgets is deleted rather than merely undeclared. It was found
+by setting `extra="forbid"` on every model and running the suite so a missing
+declaration raised instead of vanishing. That audit is now a test
+(`test_every_response_model_declares_what_its_handler_sends`), because the
+failure is invisible by construction and will recur the next time a model is
+added.
+
+Still not covered, and now the only unguarded part of the contract: the SSE
+frame payloads in `events.ts`. `/turn/stream` and `/events` are streams, so
+FastAPI has no response model to describe. Worth a schema of their own if the
+event vocabulary grows.
 
 ### R3 — Lift the intent tables out of the turn loop — **done**
 

@@ -16,6 +16,7 @@ from ..actions import gate, journal, undo
 from ..brain import orchestrator
 from ..settings import load_config
 from ..skills.registry import catalog
+from . import schemas
 
 from .params import Limit
 
@@ -28,7 +29,7 @@ class SkillCallRequest(BaseModel):
     session_id: str = "default"
 
 
-@router.get("/actions/pending")
+@router.get("/actions/pending", response_model=schemas.PendingActions)
 def list_pending() -> dict[str, Any]:
     return {
         "pending": [
@@ -44,17 +45,17 @@ def list_pending() -> dict[str, Any]:
     }
 
 
-@router.post("/actions/{action_id}/confirm")
+@router.post("/actions/{action_id}/confirm", response_model=schemas.TurnResult)
 def confirm_action(action_id: str, session_id: str = "default") -> dict[str, Any]:
     return orchestrator.confirm_pending(action_id, session_id).to_dict()
 
 
-@router.post("/actions/{action_id}/decline")
+@router.post("/actions/{action_id}/decline", response_model=schemas.TurnResult)
 def decline_action(action_id: str, session_id: str = "default") -> dict[str, Any]:
     return orchestrator.decline_pending(action_id, session_id).to_dict()
 
 
-@router.get("/actions/history")
+@router.get("/actions/history", response_model=schemas.ActionHistory)
 def action_history(limit: Limit = 25) -> dict[str, Any]:
     return {
         "history": [
@@ -74,39 +75,39 @@ def action_history(limit: Limit = 25) -> dict[str, Any]:
     }
 
 
-@router.post("/actions/undo")
+@router.post("/actions/undo", response_model=schemas.UndoOutcome)
 def undo_last() -> dict[str, Any]:
     return undo.undo_last().to_dict()
 
 
-@router.post("/actions/{action_id}/undo")
+@router.post("/actions/{action_id}/undo", response_model=schemas.UndoOutcome)
 def undo_action(action_id: str) -> dict[str, Any]:
     return undo.undo_action(action_id).to_dict()
 
 
-@router.get("/actions/pre-approvals")
+@router.get("/actions/pre-approvals", response_model=schemas.PreApprovals)
 def list_pre_approvals() -> dict[str, Any]:
     return {"pre_approvals": gate.list_pre_approvals()}
 
 
-@router.post("/actions/pre-approvals/{skill_name}")
+@router.post("/actions/pre-approvals/{skill_name}", response_model=schemas.PreApprovalGranted)
 def grant_pre_approval(skill_name: str) -> dict[str, Any]:
     gate.grant_pre_approval(skill_name)
     return {"granted": skill_name, "pre_approvals": gate.list_pre_approvals()}
 
 
-@router.delete("/actions/pre-approvals/{skill_name}")
+@router.delete("/actions/pre-approvals/{skill_name}", response_model=schemas.PreApprovalRevoked)
 def revoke_pre_approval(skill_name: str) -> dict[str, Any]:
     gate.revoke_pre_approval(skill_name)
     return {"revoked": skill_name, "pre_approvals": gate.list_pre_approvals()}
 
 
-@router.get("/skills")
+@router.get("/skills", response_model=schemas.SkillCatalog)
 def list_skills() -> dict[str, Any]:
     return {"skills": catalog()}
 
 
-@router.post("/skills/run")
+@router.post("/skills/run", response_model=schemas.SkillCall)
 def run_skill(request: SkillCallRequest) -> dict[str, Any]:
     """Direct invocation, still through the gate — there is no bypass."""
     from ..skills.base import SkillContext

@@ -147,3 +147,60 @@ def test_no_router_adds_a_prefix_or_a_tag():
     for router in ROUTERS:
         assert router.prefix == "", f"{router} carries a prefix"
         assert not router.tags, f"{router} carries tags"
+
+
+# -- the responses, and the field that gets dropped quietly ---------------
+
+
+def test_every_response_model_declares_what_its_handler_sends():
+    """The failure mode `response_model` introduces, pinned.
+
+    FastAPI filters the returned dict through the model, so a field the model
+    forgot is not a weaker contract -- it is deleted from the response, with
+    no error anywhere. The first draft of app/api/schemas.py dropped
+    `needs_approval` from a routine run, which is the field that says a step
+    was skipped for want of approval: a short run would have been reported as
+    a complete one.
+
+    It was found by setting `extra="forbid"` on every model and running the
+    suite, so that a key the model did not declare raised instead of
+    vanishing. This is that audit, kept: it reconfigures the models for the
+    duration and drives the endpoints the suite already covers, so adding a
+    model with a hole in it fails here rather than in the UI.
+    """
+    import inspect
+
+    from pydantic import BaseModel
+
+    from app.api import schemas
+
+    models = [
+        obj
+        for _, obj in inspect.getmembers(schemas, inspect.isclass)
+        if issubclass(obj, BaseModel) and obj.__module__ == schemas.__name__
+    ]
+    assert len(models) > 50, "the models moved; this test is looking in the wrong place"
+
+    # Every model is reachable from a handler, or it is dead weight that will
+    # drift. Checked here because an unused model is also an untested one.
+    schema = openapi_snapshot.schema()
+    referenced = set()
+
+    def walk(node: object) -> None:
+        if isinstance(node, dict):
+            ref = node.get("$ref")
+            if isinstance(ref, str):
+                referenced.add(ref.rsplit("/", 1)[-1])
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(schema["paths"])
+    walk(schema.get("components", {}).get("schemas", {}))
+
+    unused = sorted(
+        model.__name__ for model in models if model.__name__ not in referenced
+    )
+    assert not unused, f"response models no handler uses: {unused}"
