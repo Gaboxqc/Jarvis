@@ -2,7 +2,13 @@
 
 import { ApiError, BASE, authHeaders, request } from "./client";
 import { body } from "./schema";
-import type { ExportPreview, LogSummary, RetentionStatus, Settings } from "./types";
+import type {
+  ExportPreview,
+  LogSummary,
+  RetentionStatus,
+  Settings,
+  TimingSummary,
+} from "./types";
 
 export const privacy = {
   // -- settings and notifications ------------------------------------------
@@ -31,6 +37,16 @@ export const privacy = {
 
   /** Where the log is and how big it is. Never its contents — see backend/app/diagnostics.py. */
   logs: () => request<LogSummary>("/diagnostics/logs"),
+
+  /**
+   * How long recent turns took, by stage.
+   *
+   * The other half of the question /diagnostics/logs answers, and under the
+   * same rule: durations, never content. Nothing is stored and nothing leaves
+   * the machine — the backend keeps the last fifty turns in memory and the
+   * ring is empty again on restart.
+   */
+  timings: () => request<TimingSummary>("/diagnostics/timings"),
 
   /**
    * Record something that failed in the window rather than the backend.

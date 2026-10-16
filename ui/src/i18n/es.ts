@@ -236,6 +236,16 @@ export const es: Record<keyof typeof en, string> = {
   "settings.logsNone": "Todavía no hay nada registrado.",
   "settings.logsOpen": "Abrir la carpeta del registro",
   "settings.logsOpenFailed": "No se pudo abrir la carpeta. La ruta está arriba.",
+  "settings.timings": "Velocidad",
+  "settings.timingsNote":
+    "Cuánto tardaron tus últimos turnos, por etapa. Se mide solo en esta sesión: no se guarda nada y nada sale de este equipo.",
+  "settings.timingsNone": "Todavía no hay turnos.",
+  "settings.timingsCount": "Mediana de los últimos {count} turno(s) de {capacity}.",
+  "settings.timingsRouting": "Decidir",
+  "settings.timingsSkills": "Hacer",
+  "settings.timingsSynthesis": "Responder",
+  "settings.timingsTotal": "Turno completo",
+  "settings.timingsSlowest": "El más lento: {total} ({routing} decidir, {skills} hacer, {synthesis} responder).",
   "settings.export": "Tus datos",
   "settings.exportNote":
     "Descarga en un zip todo lo que Kai ha guardado sobre ti: recuerdos, tareas, recordatorios, conversaciones, historial de acciones y transcripciones. Sin contraseñas, y sin el texto de tus documentos.",
