@@ -231,6 +231,14 @@ export const en = {
   "settings.logsNone": "Nothing logged yet.",
   "settings.logsOpen": "Open log folder",
   "settings.logsOpenFailed": "Couldn't open the folder. The path is above.",
+  "settings.export": "Your data",
+  "settings.exportNote":
+    "Download everything Kai has stored about you as a zip — memories, tasks, reminders, conversations, action history and meeting transcripts. No passwords, and not the text of your documents.",
+  "settings.exportCounts":
+    "{memory} memory(ies), {conversations} message(s), {actions} action(s), {transcripts} meeting(s).",
+  "settings.exportButton": "Export everything",
+  "settings.exporting": "Preparing…",
+  "settings.exported": "Saved {file}. Nothing was removed from Kai.",
   "settings.danger": "Delete all local data",
   "settings.dangerNote":
     "Removes every conversation, memory, action record, reminder, task, transcript and document index. This cannot be undone.",
@@ -353,6 +361,10 @@ export const en = {
   "prereq.backendBody":
     "The assistant service isn't answering on port 8756. If you started Kai from source, run the backend too; if you installed it, try quitting from the tray and reopening.",
   "prereq.modelTitle": "The language model isn't ready",
+  "prereq.substitutedTitle": "Using a different model",
+  "prereq.substitutedBody":
+    "The model named in your settings isn't installed, so Kai is answering with one that is. Everything works; answers may be a little worse at picking the right action.",
+  "prereq.substitutedDismiss": "Got it",
   "prereq.modelBody":
     "Everything else is installed, but Kai needs Ollama for the language model — it's the one part too large to bundle. Install it, then pull a model:",
 
