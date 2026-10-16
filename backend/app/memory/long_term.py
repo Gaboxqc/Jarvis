@@ -25,6 +25,49 @@ from .. import db
 
 CATEGORIES = ("preference", "fact", "shortcut", "person")
 
+# How close a fact has to be before meaning alone will put it in front of the
+# model. Nearest is not the same as near: `embeddings.rank_matrix()` returns
+# the top rows whatever they score, so without this every question came back
+# with facts, and `prompts.system_prompt()` offered them as "what you already
+# know about this user". An unrelated fact presented as context for this turn
+# is the failure `_guard_ungrounded_reply` exists to catch, by another door.
+#
+# Measured against the real nomic-embed-text through Ollama, over a store of
+# eight plausible personal facts (peanut allergy, shellfish allergy, landlord's
+# name, client-work folder, terse-answers preference, flat deposit, sister's
+# birthday, bicycle chain). Cosine of the best-scoring fact per question:
+#
+#   12 questions that do mean a stored fact   min 0.500  median 0.617  max 0.905
+#     "when is my sister's birthday"                                       0.905
+#     "who is my landlord"                                                 0.798
+#     "how much was the deposit"                                           0.747
+#     "am I allergic to anything"  -> "Peanuts make me ill"                0.595
+#     "anything I should avoid eating"                                     0.505
+#     "can I eat this"                                                     0.500
+#   51 questions that mean none of them       min 0.353  median 0.418  p90 0.464
+#     "what is my name" -> "My landlord is called Marta"                   0.506
+#     "is it a public holiday on Monday" -> the birthday                   0.479
+#     "what is the capital of France"                                      0.407
+#
+# Note what the two columns do not do: reach zero. Unrelated text sits around
+# 0.42 with this model, not at 0.0, so "it scored something" was never going
+# to be a filter and the number had to be measured rather than reasoned about.
+#
+# The bands touch between 0.479 and 0.500, and 0.49 is the middle of that gap.
+# It keeps all twelve related questions -- including "am I allergic to
+# anything" against "peanuts make me ill", which is the connection embeddings
+# were added for and which test_semantic_search_slow.py asserts -- and drops
+# fifty of the fifty-one unrelated ones, "what is the capital of France" among
+# them. 0.48 scores identically on this sample; 0.50 would lose "can I eat
+# this", and 0.52 loses the allergy question itself.
+#
+# The one survivor is instructive rather than a miss to tune away: "what is my
+# name" really does resemble "My landlord is called Marta", because both are
+# sentences about what something is called. A floor is a coarse filter, not a
+# relevance classifier, and pushing it high enough to catch that case costs
+# the recalls the feature exists for.
+FACT_SIMILARITY_FLOOR = 0.49
+
 _STOPWORDS = {
     "a", "an", "and", "are", "as", "at", "be", "but", "by", "do", "for", "from",
     "has", "have", "how", "i", "if", "in", "is", "it", "its", "me", "my", "of",
@@ -204,7 +247,15 @@ def _by_meaning(query_text: str, limit: int) -> list[MemoryFact]:
     ranked = embeddings.rank(vector, [(r["fact_id"], r["vector"]) for r in rows], limit)
 
     facts = []
-    for fact_id, _score in ranked:
+    for fact_id, score in ranked:
+        # Filtered here rather than inside `rank()`: index/search.py ranks
+        # document chunks through the same function, and chunk text is longer
+        # and of a different shape, so its cosines are not on this scale and
+        # FACT_SIMILARITY_FLOOR was not measured over them. A weak hit there
+        # is also a worse result in a list the user reads with its source
+        # attached, not a false premise handed to the model.
+        if score < FACT_SIMILARITY_FLOOR:
+            break
         fact = get(fact_id)
         if fact is not None:
             facts.append(fact)
