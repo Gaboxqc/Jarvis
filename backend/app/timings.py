@@ -47,11 +47,16 @@ Three things in that table were worth the whole exercise. The skills stage is
 noise -- the Action Gate plus a real skill is single-digit milliseconds against
 a model call of seconds, so "it feels slow" is never about the work being done.
 Routing costs *more* than synthesis, often two or three times more, where the
-comments in brain/orchestrator.py put a routing call at "half the latency of a
-turn". And 350-600ms of every turn lands outside all three stages: 318ms of it
-is `long_term.relevant()`, which embeds the user's text through Ollama before
+comments in brain/orchestrator.py used to put a routing call at "half the
+latency of a turn" -- 2614ms median against 950ms when the table was taken
+again over four turns, so those comments now carry the measurement instead.
+And 350-600ms of every turn lands outside all three stages: 318ms of it is
+`long_term.relevant()`, which embeds the user's text through Ollama before
 routing begins, measured separately at a 318.5ms median on this machine, plus
 140ms once for skill discovery.
+
+That half-second is gone for the turns that were never going to use it; see
+memory/long_term.py for which ones and what is left.
 
 The gap is left visible rather than papered over. A fourth stage would be the
 honest fix and it is a change to this response's shape, so it is a follow-up
