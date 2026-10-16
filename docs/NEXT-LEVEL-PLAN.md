@@ -320,7 +320,7 @@ there is neither. Revisit only if **F8** (sync/multi-device) is ever taken.
 Ordered by value ÷ effort. Each names the seam it uses, because the point of the
 architecture above is that none of these should need a new one.
 
-### F1 — Two-round routing (plan → act → re-route) ★
+### F1 — Two-round routing (plan → act → re-route) ★ — **done**
 
 Today the router picks ≤3 skills in one shot and never sees their results
 before the synthesis pass. "Find the lease, then tell me what the deposit was"
@@ -336,7 +336,7 @@ config, per **C7**) becomes a per-round budget.
 This is the single biggest jump in what the assistant can actually do, and the
 turn loop is already shaped for it.
 
-### F2 — Model autodetect and fallback
+### F2 — Model autodetect and fallback — **done**
 
 `brain.model` is one name. If it is not pulled, every turn returns "run ollama
 pull qwen2.5" — the most common first-run failure, and the one the README
@@ -346,7 +346,7 @@ Fix: when the configured model is absent, pick the best installed one by a
 small preference order, use it, and say once which one was chosen and how to
 change it. Fails loudly only when nothing at all is installed.
 
-### F3 — `/privacy/export`
+### F3 — `/privacy/export` — **done**
 
 `wipe_all_local_data()` is "all or nothing" in the destructive direction and
 there is no constructive counterpart. Portability is the other half of REQ-26:
@@ -479,9 +479,24 @@ negatives it never had.
 Still open in this phase: R2 generated types + CI drift check, R4 UI splits,
 T1 coverage floor.
 
-**Phase C — capability (1–2 weeks).**
-F2 model fallback (smallest, highest first-run payoff), F3 export, F1
-two-round routing, F6 timings, T3 perf test, T2 UI tests alongside.
+**Phase C — capability. F1, F2 and F3 done; F6, T3 and T2 remain.**
+
+F1 shipped in a shape the plan did not specify, and the difference is the
+interesting part. A bounded loop that re-routes unconditionally taxes *every*
+tool-using turn with a second model call — half the latency of a turn, to
+establish nothing in the overwhelming majority of cases. So the second pass is
+opt-in: the router sets `needs_followup` when a later step's arguments live in
+an earlier step's output, and a model that never sets it behaves exactly as
+before. That makes the feature free when unused and degradable to nothing when
+the model ignores it, which is the trade worth having.
+
+Also learned, and it belongs in **R2b**'s case: F2 added three fields to
+`/health`'s response and the OpenAPI snapshot diff was *empty*. The handler
+returns `dict[str, Any]`, so the schema has nothing to say about it. The
+response half of the contract is genuinely unguarded, and this is what that
+looks like in practice rather than in principle.
+
+Still open in this phase: F6 timings, T3 perf test, T2 UI tests.
 
 **Phase D — a product bet, pick one.**
 F7 cross-platform, or F4+F8 (multi-client plus a third-party skill contract).
