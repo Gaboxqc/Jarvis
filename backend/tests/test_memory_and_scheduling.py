@@ -7,9 +7,11 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+import numpy as np
 import pytest
 
 from app import db
+from app.index import embeddings
 from app.actions import gate
 from app.memory import long_term, short_term
 from app.scheduler import service as scheduler
@@ -20,6 +22,51 @@ from app.skills.registry import catalog, load_skills
 
 
 # -- long-term memory (REQ-7) ---------------------------------------------
+
+
+class _Embedder:
+    """One axis per group of words that mean the same thing, as in
+    test_semantic_search.py. Unrelated text comes out orthogonal, which is the
+    only property the tests below read."""
+
+    AXES = {
+        "allergic": 0, "allergy": 0, "shellfish": 0, "peanuts": 0,
+        "client": 1, "clients": 1, "work": 1,
+        "capital": 2, "france": 2, "paris": 2,
+    }
+    WIDTH = 4
+
+    def __call__(self, texts: list[str]) -> list[np.ndarray] | None:
+        out = []
+        for text in texts:
+            vector = np.zeros(self.WIDTH, dtype=np.float32)
+            for word in text.lower().replace(".", " ").replace("/", " ").split():
+                axis = self.AXES.get(word.strip("?!,'\""))
+                if axis is not None:
+                    vector[axis] += 1.0
+            out.append(embeddings.normalise(vector))
+        return out
+
+
+@pytest.fixture(params=[False, True], ids=["no-model", "model"])
+def with_or_without_a_model(request, workspace, monkeypatch):
+    """Run a recall test both ways.
+
+    The suite's `workspace` sets documents.semantic_search off, so by default
+    `_by_meaning()` returns an empty list before it reaches anything -- which
+    is how the two tests below passed for nearly a year while the thing they
+    assert was not true with the model pulled. Semantic recall had no
+    similarity floor, so a question matching nothing still came back with the
+    top `limit` facts. These are the assertions anyone would point at as cover
+    for that, so they have to be exercised on the path where it can fail.
+    """
+    if request.param:
+        monkeypatch.setattr(embeddings, "available", lambda: True)
+        monkeypatch.setattr(embeddings, "embed", _Embedder())
+        monkeypatch.setattr(embeddings, "model_name", lambda: "fake-embed")
+    else:
+        monkeypatch.setattr(embeddings, "available", lambda: False)
+    return request.param
 
 
 def test_memory_survives_and_is_retrievable_by_topic(workspace):
@@ -39,12 +86,12 @@ def test_restating_a_fact_updates_rather_than_duplicating(workspace):
     assert len(long_term.all_facts()) == 1
 
 
-def test_unrelated_facts_are_not_returned(workspace):
+def test_unrelated_facts_are_not_returned(with_or_without_a_model):
     long_term.add("The user is allergic to shellfish", "fact")
     assert long_term.relevant("what is the capital of France") == []
 
 
-def test_recall_stamps_only_the_facts_it_used(workspace):
+def test_recall_stamps_only_the_facts_it_used(with_or_without_a_model):
     """`last_used_at` is written for the facts a turn actually put in front of
     the model, and for no others.
 
