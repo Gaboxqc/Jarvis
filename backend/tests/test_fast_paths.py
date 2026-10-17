@@ -1,8 +1,10 @@
 """Turns that skip the router — REQ-27.
 
-Routing costs a full model call, and on a local 8B model that is roughly half
-the latency of a turn. A greeting can never need a tool, so paying to be told
-so is waste the user feels on every "thanks".
+Routing costs a full model call, and on a local qwen2.5 that is the most
+expensive stage of a turn: 2614ms median against 950ms of synthesis, measured.
+A greeting can never need a tool, so paying to be told so is waste the user
+feels on every "thanks" -- and it can never need memory either, which is
+another 350ms of Ollama round trip (memory/long_term.py).
 
 The risk runs one way. Skipping the router on something that *did* need a tool
 gives a confident answer with nothing behind it, which is precisely the failure
@@ -63,6 +65,47 @@ def test_the_reply_still_comes_from_the_model(counted):
     """
     result = orchestrator.handle_turn("thanks", session_id="fast")
     assert result.reply == "You're welcome."
+
+
+def test_a_pleasantry_does_not_pay_for_memory_recall_either(counted, monkeypatch):
+    """The other half-second in front of every turn.
+
+    Recall embeds the user's message through Ollama -- 350ms measured, before
+    routing -- and the pleasantry branch was being handed the result so it
+    could put the user's remembered facts into the prompt for "thanks". The
+    check now happens before recall rather than after it.
+
+    Asserted on `relevant()` rather than on a timer: the cost is the call, and
+    a test that watched milliseconds would pass or fail on how busy the machine
+    was.
+    """
+    called: list[str] = []
+    monkeypatch.setattr(
+        orchestrator.long_term, "relevant",
+        lambda text, limit=6: called.append(text) or [],
+    )
+
+    assert orchestrator.handle_turn("thanks", session_id="fast").reply
+
+    assert called == [], "a greeting went to memory"
+
+
+def test_anything_that_is_not_a_pleasantry_still_recalls(counted, monkeypatch):
+    """The failure the test above would otherwise hide.
+
+    Moving the check earlier is one line away from moving recall out of the
+    turn altogether, and every other test in the suite would still pass:
+    nothing else asserts that the model is told what Kai remembers.
+    """
+    called: list[str] = []
+    monkeypatch.setattr(
+        orchestrator.long_term, "relevant",
+        lambda text, limit=6: called.append(text) or [],
+    )
+
+    orchestrator.handle_turn("what is on my calendar?", session_id="fast")
+
+    assert called == ["what is on my calendar?"]
 
 
 # -- what must not skip ----------------------------------------------------

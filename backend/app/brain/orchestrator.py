@@ -278,21 +278,32 @@ def _run_turn(
         )}
         return
 
-    # 3. Everything else goes through the model.
-    facts = long_term.relevant(text)
-    system = prompts.system_prompt(config, facts)
     history = [turn.as_message() for turn in short_term.window(session_id)]
 
-    # 3a. A greeting needs an answer, but it never needs a tool. Routing it costs
-    # a whole model call to be told so — half the latency of the turn, spent
-    # establishing that "thanks" is not a request.
+    # 3. A greeting needs an answer, but it never needs a tool. Routing it costs
+    # a whole model call to be told so, and that call is the most expensive thing
+    # in a turn: 2614ms median against 950ms of synthesis over four real turns
+    # against a local qwen2.5 (app/timings.py), so roughly two thirds of the turn
+    # spent establishing that "thanks" is not a request.
+    #
+    # It does not need memory either, and this is checked before recall rather
+    # than after it. Recall is not free -- it embeds the message through Ollama,
+    # measured at 350ms of every turn (memory/long_term.py) -- and it was being
+    # paid here to put the user's remembered facts into the prompt for "thanks".
+    # Nothing is lost that a reply to a pleasantry could have used: this branch
+    # already decided the turn needs no tool, no lookup and no grounding guard.
     if intents.is_pleasantry(normalized):
         yield {"type": "stage", "stage": "writing"}
         yield from _emit_reply(
-            session_id, [{"role": "system", "content": system}, *history],
+            session_id,
+            [{"role": "system", "content": prompts.system_prompt(config, [])}, *history],
             stream=stream, guard=None, language=config.persona.language, timer=timer,
         )
         return
+
+    # 3a. Everything else goes through the model, and gets what Kai remembers.
+    facts = long_term.relevant(text)
+    system = prompts.system_prompt(config, facts)
 
     yield {"type": "stage", "stage": "routing"}
     try:
@@ -487,9 +498,14 @@ def _timed_route(
     """`_route`, on the clock, counted as a round even when it raises.
 
     Both call sites go through this so neither can be the one that forgets:
-    the follow-up round was added as an opt-in because a second routing call is
-    half the latency of a turn (see MAX_ROUNDS), and a timings panel that could
-    not see it would leave that claim exactly as unmeasured as before.
+    the follow-up round was added as an opt-in because a routing call is the
+    most expensive stage of a turn (see MAX_ROUNDS), and a timings panel that
+    could not see it would leave that claim exactly as unmeasured as before.
+
+    It is measured now, and it was worse than the comments here claimed: 2614ms
+    median for routing against 950ms for synthesis over four real turns, where
+    this file used to put a routing call at "half the latency of a turn". A
+    second pass does not add half a turn. It adds most of one.
     """
     timer.routed()
     with timer.stage(timings.ROUTING):
@@ -658,10 +674,11 @@ def _extract_calls(route: dict[str, Any] | None) -> list[dict[str, Any]]:
 def _wants_followup(route: dict[str, Any] | None) -> bool:
     """Whether the router said it will need to see these results.
 
-    Opt-in, and the model opts in. A second routing pass is half the latency
-    of a turn and almost no request needs one, so this is asked for in the
-    prompt rather than assumed -- and a model that never sets it behaves
-    exactly as this did before the field existed.
+    Opt-in, and the model opts in. A second routing pass costs more than the
+    synthesis that writes the answer -- 2614ms median against 950ms, measured
+    -- and almost no request needs one, so this is asked for in the prompt
+    rather than assumed, and a model that never sets it behaves exactly as this
+    did before the field existed.
 
     Anything other than a true-ish `needs_followup` is a no, including the
     absent key and a model that returned a string: a turn that re-routes

@@ -292,6 +292,83 @@ def test_a_version_one_database_gains_the_vector_tables(database):
     assert db.query_one("SELECT text FROM tasks WHERE id = 'keep'")["text"] == "buy milk"
 
 
+def _v3_database(database) -> None:
+    """A database as version 3 left it: the chunk_vectors counter, and no
+    fact_vectors one.
+
+    Built by removing the version 4 statements from the current SCHEMA rather
+    than by keeping a copy of the old one. A stored copy is a second schema to
+    maintain and it rots silently; this cannot drift from what version 4
+    actually added, because it is defined as its absence.
+    """
+    _v1_database(database, version=3)
+    conn = sqlite3.connect(database)
+    for name in ("fact_vectors_ai", "fact_vectors_au", "fact_vectors_ad"):
+        conn.execute(f"DROP TRIGGER IF EXISTS {name}")
+    conn.execute("DELETE FROM index_state WHERE key = 'fact_vectors_generation'")
+    conn.commit()
+    conn.close()
+
+
+def test_a_version_three_database_gains_the_fact_vector_counter(database):
+    """Schema 4. memory/long_term.py holds the fact vectors resident and asks
+    this counter whether they have gone stale; on an install that never got the
+    triggers, the counter would never move and recall would keep answering from
+    a matrix built before the user's last five memories."""
+    _v3_database(database)
+
+    db.connect()
+
+    assert _version_in(database) == db.SCHEMA_VERSION
+    assert db.query_one(
+        "SELECT value FROM index_state WHERE key = 'fact_vectors_generation'"
+    ) is not None
+
+    # And it actually moves, which is the only property the cache reads.
+    before = int(db.query_one(
+        "SELECT value FROM index_state WHERE key = 'fact_vectors_generation'"
+    )["value"])
+    db.execute(
+        "INSERT INTO fact_vectors(fact_id, model, vector) VALUES('f', 'm', X'00000000')"
+    )
+    after = int(db.query_one(
+        "SELECT value FROM index_state WHERE key = 'fact_vectors_generation'"
+    )["value"])
+    assert after > before, "the migrated database did not get the triggers"
+
+
+def test_a_fresh_database_has_the_same_triggers_as_a_migrated_one(database, tmp_path):
+    """The drift this machinery makes easy, in the form it actually took.
+
+    Schema 4 is three triggers and a row, written out twice -- once in SCHEMA
+    for fresh installs and once in MIGRATIONS for existing ones. Nothing but a
+    comparison notices when one copy gains a statement the other does not, and
+    the symptom would be a stale cache on exactly one half of the installed
+    base.
+
+    Triggers and index_state rows, not just tables: version 4 adds no table at
+    all, so the existing table comparison below would have passed a migration
+    that did nothing whatsoever.
+    """
+    _v3_database(database)
+    db.connect()
+    migrated = {
+        row["name"] for row in db.query("SELECT name FROM sqlite_master WHERE type='trigger'")
+    }
+    migrated_keys = {row["key"] for row in db.query("SELECT key FROM index_state")}
+    db.close_connection()
+
+    db.set_db_path(tmp_path / "fresh4.db")
+    db.connect()
+    fresh = {
+        row["name"] for row in db.query("SELECT name FROM sqlite_master WHERE type='trigger'")
+    }
+    fresh_keys = {row["key"] for row in db.query("SELECT key FROM index_state")}
+
+    assert fresh == migrated
+    assert fresh_keys == migrated_keys
+
+
 def test_a_fresh_database_has_the_same_tables_as_a_migrated_one(database, tmp_path):
     """SCHEMA and MIGRATIONS have to agree. They are edited in different places
     and nothing but this notices when they drift."""

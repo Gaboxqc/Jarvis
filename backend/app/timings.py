@@ -47,11 +47,29 @@ Three things in that table were worth the whole exercise. The skills stage is
 noise -- the Action Gate plus a real skill is single-digit milliseconds against
 a model call of seconds, so "it feels slow" is never about the work being done.
 Routing costs *more* than synthesis, often two or three times more, where the
-comments in brain/orchestrator.py put a routing call at "half the latency of a
-turn". And 350-600ms of every turn lands outside all three stages: 318ms of it
-is `long_term.relevant()`, which embeds the user's text through Ollama before
+comments in brain/orchestrator.py used to put a routing call at "half the
+latency of a turn" -- 2614ms median against 950ms when the table was taken
+again over four turns, so those comments now carry the measurement instead.
+And 350-600ms of every turn lands outside all three stages: 318ms of it is
+`long_term.relevant()`, which embeds the user's text through Ollama before
 routing begins, measured separately at a 318.5ms median on this machine, plus
 140ms once for skill discovery.
+
+Finding that gap is what the instrumentation was for, and most of it is gone.
+`relevant()` embedded the message whether or not there was anything to rank it
+against, so an install where nobody had asked Kai to remember anything paid
+391ms a turn for an empty list; it now asks Ollama nothing in that case, and a
+pleasantry asks it nothing either. Measured again the same way:
+
+                                  before    after
+    empty fact store              350.4ms     3.7ms   median outside the stages
+    "thanks", three facts           373ms       2ms
+    a real question, three facts    291ms     336ms   unchanged, and should be
+
+The last row is the point of leaving the gap visible. Where the embedding can
+change the answer it is still paid, in front of the turn, and a reader who
+subtracts and finds a third of a second missing is looking at a real cost. A
+fourth stage is still the honest fix and still a follow-up.
 
 The gap is left visible rather than papered over. A fourth stage would be the
 honest fix and it is a change to this response's shape, so it is a follow-up

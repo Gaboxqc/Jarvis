@@ -89,6 +89,12 @@ rather than just completing it:
   table per turn, which needs the `index_state` generation counter extended to
   that table and therefore a schema migration. It stays deferred, as planned.
 
+  **And the deferred half was a misreading too, in the other direction.** It
+  landed after T3 measured it, and the table read was never the cost: at 200
+  facts it is 0.66ms. The cost was the Ollama round trip to embed the query —
+  391ms with an *empty* fact store — which this document never mentioned
+  because nothing had measured it. See C5 below.
+
 ### C1 — The ungrounded-answer guard is English-only ★ highest value — **done**
 
 [`orchestrator.py:78-97`](../backend/app/brain/orchestrator.py#L78) —
@@ -139,7 +145,7 @@ Fix: a per-session `threading.Lock` registry in the orchestrator — second
 caller either waits or gets a 409 that says a turn is already running. Prefer
 409: a queued turn answers a question the user has already moved on from.
 
-### C5 — `_by_meaning` reads the whole vector table every turn — **partly done**
+### C5 — `_by_meaning` reads the whole vector table every turn — **done**
 
 [`long_term.py:171`](../backend/app/memory/long_term.py#L171) —
 `SELECT fact_id, vector FROM fact_vectors WHERE model = ?` with no limit, once
@@ -155,6 +161,40 @@ Fix now (cheap): `relevant()` issues one `UPDATE … WHERE id IN (…)` instead 
 N statements, and `_find_duplicate` reuses the facts `_by_overlap` already
 loaded. Fix later: extend the `index_state` generation counter to
 `fact_vectors` and share the resident-cache code.
+
+**Done, and the premise was wrong.** The generation counter is extended
+(schema 4) and the vectors are held resident, but measuring first changed what
+this item is about. Reading the table costs 0.66ms at 200 facts and 0.33ms at
+50; what `relevant()` actually spent was 391ms embedding the query through
+Ollama, on every turn, *including when the fact store was empty and the answer
+could only be an empty list*. So `_by_meaning` now loads what it would rank
+against before it embeds anything, and returns early when there is nothing
+there. Measured on real turns:
+
+| | before | after |
+|---|---|---|
+| `relevant()`, empty store | 391.5ms | 1.4ms |
+| `relevant()`, 8–50 facts | ~363ms | ~365ms (unchanged — the embed is needed) |
+| turn time outside the three timed stages, empty store | 350.4ms median | 3.7ms median |
+| a "thanks" turn, 3 facts | 373ms outside the stages | 2ms |
+
+The resident matrix is kept anyway, and its comment says plainly that it is not
+where the half-second was: the store's size is the user's to grow (14ms at
+2,000 facts, 252ms at 20,000, on every turn), and it is what makes "is there
+anything to rank against" cheap enough to ask before paying for an embedding.
+
+Three alternatives were rejected on measurements rather than argued, and
+`memory/long_term.py` records them: a size threshold (a personal fact store
+never leaves the size where one would fire, so it would switch semantic recall
+off for almost everybody — one fact is enough to need it), a query-vector cache
+(on a real documents turn recall embedded the user's sentence and the skill
+embedded the router's three-word paraphrase, so an exact-text cache hits
+nothing), and overlapping the embed with routing (the facts go into the prompt
+routing is given, so there is nothing to overlap it with).
+
+One more turn stopped paying: the pleasantry fast path checked
+`is_pleasantry` *after* recall, so "thanks" embedded the user's message to
+decide which remembered facts to put in a prompt for "you're welcome".
 
 ### C6 — The scheduler thread does four unrelated jobs at one cadence — **done**
 
@@ -549,8 +589,9 @@ T1 coverage floor.
 
 F1 shipped in a shape the plan did not specify, and the difference is the
 interesting part. A bounded loop that re-routes unconditionally taxes *every*
-tool-using turn with a second model call — half the latency of a turn, to
-establish nothing in the overwhelming majority of cases. So the second pass is
+tool-using turn with a second model call — and T3 then measured that call at
+2614ms against 950ms for synthesis, so it is most of a turn rather than half of
+one, to establish nothing in the overwhelming majority of cases. So the second pass is
 opt-in: the router sets `needs_followup` when a later step's arguments live in
 an earlier step's output, and a model that never sets it behaves exactly as
 before. That makes the feature free when unused and degradable to nothing when
@@ -566,6 +607,11 @@ F6 and T3 landed together, because both are about performance being a number
 rather than a claim, and between them they moved three of this document's own
 assertions from argued to measured — see F6 above for which, and for the 318ms
 per turn that nothing had been looking at.
+
+That 318ms is what C5 turned out to be, so C5 closed here rather than in Phase
+A: the item as written was about a table read that costs 0.66ms, and the thing
+in front of every turn was an embedding call nobody had timed. Measuring before
+fixing is the only reason the right half was fixed.
 
 Still open in this phase: T2 UI tests.
 
