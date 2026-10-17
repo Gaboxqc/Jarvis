@@ -525,6 +525,28 @@ to move.
   against 70.56% measured locally, because this runner has no audio device and a
   floor set to the local number would have arrived red. One release of slack,
   then tighten.
+- **T9 — Vacuous cover, and the fixture defaults behind it — done.** Three
+  tests have now been found passing for the wrong reason, and they are one
+  failure mode rather than three coincidences: `main.catalog` patched where
+  the handler no longer read it (#35), two semantic-recall tests evaluated
+  against a feature `workspace` switches off (#41, and one more the same
+  week). A green dot cannot distinguish a satisfied assertion from one that
+  was never evaluated.
+
+  Fixed by removing the room for it rather than by fixing the three: one
+  shared way to turn semantic search on (four had grown, and they had already
+  diverged in their tokenizer and in whether they honoured `available()`),
+  the switched-off defaults named in `workspace`'s own docstring where a new
+  test's author will see them, and `tests/test_semantic_cover.py` asserting
+  that the opt-in works — one test standing in for every opt-in in the suite,
+  which would otherwise all go vacuous together and all keep passing.
+
+  The guard was written wrong first: its regex ended in a literal backspace
+  and matched nothing, passing against a deliberately planted fake. Found
+  only because it was tested against one. **A guard nobody has watched fail
+  is not a guard** — worth treating as a rule, since this plan has now added
+  a dozen of them.
+
 - **T2 — UI tests.** 3 test files (`api`, `Avatar`, `Chat`) for 25 components.
   `Chat.test.tsx` covers the confirmation contract, which is the right thing to
   have covered first. Next: `Settings` (it writes the config file),

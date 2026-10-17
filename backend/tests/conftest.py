@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
+from typing import Any
 from pathlib import Path
 
 import pytest
@@ -78,7 +80,23 @@ class GatedTestSkill(Skill):
 
 @pytest.fixture
 def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """An isolated data dir, database and config for each test."""
+    """An isolated data dir, database and config for each test.
+
+    Two of the settings below are switched *off*, and both of them make a test
+    that forgets to turn them back on pass rather than fail:
+
+      documents.semantic_search   every embedding call returns None, so
+                                  anything about meaning is evaluated against
+                                  an empty list. `fake_embedder` turns it on.
+      KAI_NO_BACKGROUND_SCAN      the indexer never runs on its own, so a
+                                  scanner test has to call scan() itself.
+
+    The reasons are good and are stated where each one is set. The cost is
+    that "it passed" and "it was never evaluated" look identical, and the
+    first of those has already cost this suite a test that held for nearly a
+    year while the thing it asserted was untrue. tests/test_semantic_cover.py
+    is the cover for the cover.
+    """
     data = tmp_path / "data"
     sandbox = tmp_path / "sandbox"
     docs = tmp_path / "docs"
@@ -211,3 +229,138 @@ def make_files(folder: Path, names: list[str]) -> list[Path]:
         path.write_text(f"content of {name}", encoding="utf-8")
         created.append(path)
     return created
+
+
+# -- turning semantic search on, in one place -----------------------------
+#
+# `workspace` above sets `documents.semantic_search: False`, so by default
+# every embedding call returns None and `_by_meaning()` returns an empty list
+# before it reaches anything. That default is right -- with it on, every test
+# that indexes a document or remembers a fact would make real HTTP calls to
+# Ollama, which is slow and makes the suite a different suite on two machines.
+#
+# What it also does is make a test that forgets to opt back in *pass*. Not
+# fail, not skip: pass, while asserting something about meaning that was never
+# evaluated. Two of them did. `test_unrelated_facts_are_not_returned` asserted
+# the property that semantic recall needs a similarity floor, and it held for
+# nearly a year with no floor in the code, because the path it names was
+# switched off underneath it. The other was in test_memory_and_scheduling.py,
+# found the same week.
+#
+# Four files had grown four hand-rolled ways to turn it on: three `embedder`
+# fixtures patching the same three attributes, a fourth parametrised variant,
+# five fake embedders implementing the same algorithm, and two copies of the
+# read-counter below. All of them worked. The trouble with four copies of the
+# thing that decides whether a test is real is that the fifth is the one that
+# gets written slightly wrong, and nothing about a vacuous test looks wrong.
+#
+# So: one algorithm here, vocabularies stay with the tests that read them.
+
+
+def _words(text: str) -> list[str]:
+    """Split on anything that is not a word character.
+
+    One tokenizer, because the four copies this replaced had four. One
+    replaced "," with a space and the others only stripped it from the edges;
+    a third replaced "/" because its example was a path, `D:/work/clients`,
+    which the other three would have read as one word. None of that was
+    wrong in the file it lived in and all of it was a reason two files
+    answered slightly different questions about the same production code.
+
+    Splitting on non-word characters subsumes all four and needs no
+    per-file argument. Every vocabulary in the suite is plain words, so
+    nothing is lost by it.
+    """
+    return re.findall(r"[a-z0-9]+", text.lower())
+
+
+class FakeEmbedder:
+    """Deterministic vectors from a tiny hand-built vocabulary.
+
+    Words that mean the same thing share an axis, which is the one property a
+    real embedding model provides that these tests read. No model, no network,
+    same answer every run.
+
+    `axes` stays with the test file: each one has its own examples -- a lease's
+    deposit, a peanut allergy, a landlord's name -- and a shared vocabulary
+    would be a list nobody could change without reading four files.
+    """
+
+    def __init__(self, axes: dict[str, int], width: int = 8) -> None:
+        self.axes = axes
+        self.width = width
+        #: How many times the model was asked. "Did this reach Ollama at all"
+        #: is the question the recall-latency tests exist to answer.
+        self.calls = 0
+
+    def __call__(self, texts: list[str]) -> list[Any] | None:
+        from app.index import embeddings
+
+        # Same contract as the real one: None when there is no model. A fake
+        # that ignored this would let a test "turn the model off" and keep
+        # getting vectors, which is the no-model tests passing by accident --
+        # the same failure as forgetting to turn it on, from the other side.
+        if not embeddings.available():
+            return None
+
+        self.calls += 1
+        import numpy as np
+
+        out = []
+        for text in texts:
+            vector = np.zeros(self.width, dtype=np.float32)
+            for word in _words(text):
+                axis = self.axes.get(word)
+                if axis is not None:
+                    vector[axis] += 1.0
+            out.append(embeddings.normalise(vector))
+        return out
+
+
+def fake_embedder(monkeypatch, axes: dict[str, int], width: int = 8) -> FakeEmbedder:
+    """Turn semantic search on for one test, with a fake model behind it.
+
+    Patches the three attributes that decide whether the feature is live.
+    `available()` is the one that matters: `_by_meaning()` and the document
+    search both ask it first, so patching `embed` alone would leave the
+    feature off and the test vacuous.
+    """
+    from app.index import embeddings
+
+    fake = FakeEmbedder(axes, width)
+    monkeypatch.setattr(embeddings, "available", lambda: True)
+    monkeypatch.setattr(embeddings, "embed", fake)
+    monkeypatch.setattr(embeddings, "model_name", lambda: "fake-embed")
+    return fake
+
+
+def no_embedder(monkeypatch) -> None:
+    """Turn it off explicitly, for the tests that are about the off state.
+
+    `workspace` already leaves it off, so this changes nothing -- which is the
+    point of saying it out loud. A test named "...without a model" that relies
+    on a fixture default is a test that silently changes meaning the day the
+    default does.
+    """
+    from app.index import embeddings
+
+    monkeypatch.setattr(embeddings, "available", lambda: False)
+
+
+def count_vector_reads(monkeypatch, table: str) -> list[int]:
+    """Count SELECTs that pull vector blobs out of `table`.
+
+    The cost the resident caches exist to remove, and the only way to see
+    they are working: both of them are invisible from the outside except as
+    a query that stops happening.
+    """
+    seen = [0]
+    original = db.query
+
+    def counting(sql, params=()):
+        if f"FROM {table}" in sql and "vector" in sql.split("FROM")[0]:
+            seen[0] += 1
+        return original(sql, params)
+
+    monkeypatch.setattr(db, "query", counting)
+    return seen

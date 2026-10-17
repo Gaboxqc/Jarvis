@@ -22,6 +22,7 @@ import pytest
 from app import db
 from app.index import chunk as chunk_module
 from app.index import embeddings, search, store
+from .conftest import count_vector_reads, fake_embedder
 
 WIDTH = 8
 
@@ -35,30 +36,12 @@ def _clean():
     search._invalidate()
 
 
-class Embedder:
-    """One axis per word, so similarity is word overlap and nothing is random."""
-
-    AXES = {"deposit": 0, "security": 0, "rent": 1, "monthly": 1, "bicycle": 2}
-
-    def __call__(self, texts: list[str]) -> list[np.ndarray] | None:
-        if not embeddings.available():
-            return None
-        out = []
-        for text in texts:
-            vector = np.zeros(WIDTH, dtype=np.float32)
-            for word in text.lower().replace(".", " ").split():
-                axis = self.AXES.get(word.strip("?!,'\""))
-                if axis is not None:
-                    vector[axis] += 1.0
-            out.append(embeddings.normalise(vector))
-        return out
+AXES = {"deposit": 0, "security": 0, "rent": 1, "monthly": 1, "bicycle": 2}
 
 
 @pytest.fixture
 def embedder(monkeypatch):
-    monkeypatch.setattr(embeddings, "available", lambda: True)
-    monkeypatch.setattr(embeddings, "embed", Embedder())
-    monkeypatch.setattr(embeddings, "model_name", lambda: "fake-embed")
+    return fake_embedder(monkeypatch, AXES)
 
 
 def index(path: str, *sections: tuple[str, str]) -> None:
@@ -69,20 +52,6 @@ def index(path: str, *sections: tuple[str, str]) -> None:
     store.replace_document(Path(path), title=path, size=1, mtime=1.0, chunks=chunks)
 
 
-def count_vector_reads(monkeypatch) -> list[int]:
-    """Count SELECTs that pull vector blobs, which is the cost being removed."""
-    seen = [0]
-    original = db.query
-
-    def counting(sql, params=()):
-        if "FROM chunk_vectors" in sql and "vector" in sql.split("FROM")[0]:
-            seen[0] += 1
-        return original(sql, params)
-
-    monkeypatch.setattr(db, "query", counting)
-    return seen
-
-
 # -- the fast path is actually taken --------------------------------------
 
 
@@ -90,7 +59,7 @@ def test_the_matrix_is_built_once_and_reused(workspace, embedder, monkeypatch):
     index("C:/docs/lease.txt", ("Deposit", "the security deposit"))
     index("C:/docs/rent.txt", ("Rent", "the monthly rent"))
 
-    reads = count_vector_reads(monkeypatch)
+    reads = count_vector_reads(monkeypatch, "chunk_vectors")
     assert search.search("deposit", limit=3)
     after_first = reads[0]
     assert after_first > 0, "the first search must read the vectors from somewhere"
