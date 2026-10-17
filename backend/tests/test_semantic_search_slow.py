@@ -95,6 +95,50 @@ def test_an_allergy_question_reaches_a_fact_about_peanuts(real_model):
     assert "Peanuts" in recalled[0].text
 
 
+def test_a_question_about_none_of_them_reaches_none_of_them(real_model):
+    """The other half of the test above, and the one that was missing.
+
+    Nothing here is about France, and before long_term.FACT_SIMILARITY_FLOOR
+    existed all three came back anyway: `rank_matrix()` returns the top rows
+    whatever they score, and the model gives unrelated text around 0.4 rather
+    than 0.0, so there was no score at which the list emptied itself.
+    """
+    long_term.add("Peanuts make me ill")
+    long_term.add("The bicycle needs a new chain")
+    long_term.add("My landlord is called Marta")
+
+    assert long_term.relevant("what is the capital of France") == []
+
+
+def test_the_floor_sits_between_what_this_model_scores_related_and_unrelated(real_model):
+    """Pins the two cosines FACT_SIMILARITY_FLOOR was measured between.
+
+    The constant is a number read off one model's behaviour, so the thing that
+    can quietly invalidate it is that model changing -- a new nomic-embed-text
+    tag, or someone pointing documents.embedding_model somewhere else. Neither
+    would fail any other test: recall would simply go quiet, or go back to
+    handing over unrelated facts, and both look like nothing happening.
+
+    Measured 0.595 and 0.407 when the floor was chosen.
+    """
+    fact = embeddings.embed_one("Peanuts make me ill")
+    related = embeddings.embed_one("am I allergic to anything")
+    unrelated = embeddings.embed_one("what is the capital of France")
+    assert fact is not None and related is not None and unrelated is not None
+
+    related_score = float(related @ fact)
+    unrelated_score = float(unrelated @ fact)
+
+    assert related_score >= long_term.FACT_SIMILARITY_FLOOR, (
+        f"the allergy connection scores {related_score:.3f}, below the floor -- "
+        "the recall embeddings were added for no longer happens"
+    )
+    assert unrelated_score < long_term.FACT_SIMILARITY_FLOOR, (
+        f"an unrelated question scores {unrelated_score:.3f}, above the floor -- "
+        "the model's bands have moved and the number needs measuring again"
+    )
+
+
 def test_an_exact_identifier_still_ranks_first(real_model):
     """The case nearest-neighbour search is worst at, and the reason BM25 stays."""
     index("a.md", "Notes", "The security payment covers any damage to the property.")

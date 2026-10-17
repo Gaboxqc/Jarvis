@@ -220,6 +220,51 @@ def test_a_fact_is_recalled_by_meaning(workspace, embedder):
     assert "Peanuts" in recalled[0].text
 
 
+def test_a_question_about_none_of_them_recalls_nothing(workspace, embedder):
+    """A nearest neighbour is not the same thing as a neighbour.
+
+    `rank_matrix` returns the top `limit` rows whatever they score, so with a
+    model pulled every question used to come back with facts: here both of
+    these score exactly 0.0 against "the weather tomorrow" and both were
+    handed to `prompts.system_prompt()` under "what you already know about
+    this user". Being told an unrelated fact is context for this turn is the
+    failure `_guard_ungrounded_reply` exists to catch, arriving by a different
+    door.
+    """
+    long_term.add("Peanuts make me ill")
+    long_term.add("The bicycle needs a new chain")
+
+    assert long_term.relevant("the weather tomorrow") == []
+
+
+def test_a_name_the_user_typed_is_not_displaced_by_something_that_merely_means(
+    workspace, embedder
+):
+    """What the floor leaves for fusion to do, pinned.
+
+    RRF reads ordering and nothing else, so a fact at rank 1 of the semantic
+    list scores exactly what a fact at rank 1 of the lexical list scores --
+    which was the worry once the semantic list could be empty. It needs no
+    change: `_fuse` is given the lexical ranking first and `sorted` is stable,
+    so an exact match wins the tie, and every surviving semantic entry has now
+    cleared FACT_SIMILARITY_FLOOR instead of possibly being a 0.0. Here the
+    landlord fact is lexically matched and semantically invisible, while the
+    allergy fact is the reverse.
+
+    Swapping those two arguments would silently reverse it, and no other test
+    in the suite would notice.
+    """
+    long_term.add("My landlord is called Marta")
+    long_term.add("Peanuts make me ill")
+
+    recalled = long_term.relevant("marta allergy")
+
+    assert [fact.text for fact in recalled] == [
+        "My landlord is called Marta",
+        "Peanuts make me ill",
+    ]
+
+
 def test_recall_still_works_with_no_model(workspace, monkeypatch):
     monkeypatch.setattr(embeddings, "available", lambda: False)
     long_term.add("Peanuts make me ill")
