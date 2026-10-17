@@ -7,11 +7,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-import numpy as np
 import pytest
 
 from app import db
-from app.index import embeddings
 from app.actions import gate
 from app.memory import long_term, short_term
 from app.scheduler import service as scheduler
@@ -19,33 +17,17 @@ from app.scheduler import store as sched_store
 from app.skills.base import SkillContext, SkillError
 from app.skills.planning import timeparse
 from app.skills.registry import catalog, load_skills
+from .conftest import fake_embedder, no_embedder
 
 
 # -- long-term memory (REQ-7) ---------------------------------------------
 
 
-class _Embedder:
-    """One axis per group of words that mean the same thing, as in
-    test_semantic_search.py. Unrelated text comes out orthogonal, which is the
-    only property the tests below read."""
-
-    AXES = {
-        "allergic": 0, "allergy": 0, "shellfish": 0, "peanuts": 0,
-        "client": 1, "clients": 1, "work": 1,
-        "capital": 2, "france": 2, "paris": 2,
-    }
-    WIDTH = 4
-
-    def __call__(self, texts: list[str]) -> list[np.ndarray] | None:
-        out = []
-        for text in texts:
-            vector = np.zeros(self.WIDTH, dtype=np.float32)
-            for word in text.lower().replace(".", " ").replace("/", " ").split():
-                axis = self.AXES.get(word.strip("?!,'\""))
-                if axis is not None:
-                    vector[axis] += 1.0
-            out.append(embeddings.normalise(vector))
-        return out
+AXES = {
+    "allergic": 0, "allergy": 0, "shellfish": 0, "peanuts": 0,
+    "client": 1, "clients": 1, "work": 1,
+    "capital": 2, "france": 2, "paris": 2,
+}
 
 
 @pytest.fixture(params=[False, True], ids=["no-model", "model"])
@@ -61,11 +43,11 @@ def with_or_without_a_model(request, workspace, monkeypatch):
     for that, so they have to be exercised on the path where it can fail.
     """
     if request.param:
-        monkeypatch.setattr(embeddings, "available", lambda: True)
-        monkeypatch.setattr(embeddings, "embed", _Embedder())
-        monkeypatch.setattr(embeddings, "model_name", lambda: "fake-embed")
+        fake_embedder(monkeypatch, AXES, width=4)
     else:
-        monkeypatch.setattr(embeddings, "available", lambda: False)
+        # Said out loud rather than left to the fixture default, so a test
+        # named "no model" does not change meaning the day that default does.
+        no_embedder(monkeypatch)
     return request.param
 
 

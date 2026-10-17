@@ -20,13 +20,13 @@ model pulled is a test that gets skipped, and a skipped test is not a guard.
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
 
 from app import db
 from app.index import chunk as chunk_module
 from app.index import embeddings, search, store
 from app.memory import long_term
+from .conftest import fake_embedder
 
 
 @pytest.fixture(autouse=True)
@@ -36,54 +36,25 @@ def _clear_cache():
     embeddings.reset_cache()
 
 
-class FakeEmbedder:
-    """Deterministic vectors from a tiny hand-built vocabulary.
-
-    Words that mean the same thing are given the same axis, which is the whole
-    property a real embedding model provides and the only one these tests read.
-    """
-
-    AXES = {
-        # deposit / security payment: the lease example
-        "deposit": 0, "security": 0, "bond": 0,
-        # allergy: the memory example
-        "allergic": 1, "allergy": 1, "peanuts": 1, "nuts": 1,
-        "walnuts": 5,
-        # rent
-        "rent": 2, "monthly": 2,
-        # noise
-        "bicycle": 3, "weather": 4,
-    }
-    WIDTH = 8
-
-    def __init__(self) -> None:
-        self.calls = 0
-
-    def __call__(self, texts: list[str]) -> list[np.ndarray] | None:
-        # Same contract as the real one: None when there is no model. A fake
-        # that ignores this lets tests "turn the model off" and keep getting
-        # vectors, which is how the no-model tests would pass by accident.
-        if not embeddings.available():
-            return None
-        self.calls += 1
-        out = []
-        for text in texts:
-            vector = np.zeros(self.WIDTH, dtype=np.float32)
-            for word in text.lower().replace(".", " ").replace(",", " ").split():
-                axis = self.AXES.get(word.strip("?!'\""))
-                if axis is not None:
-                    vector[axis] += 1.0
-            out.append(embeddings.normalise(vector))
-        return out
+# The vocabulary this file's examples need. The algorithm behind it is shared
+# -- see conftest.fake_embedder -- because four copies of the thing that
+# decides whether a semantic test is real is three too many.
+AXES = {
+    # deposit / security payment: the lease example
+    "deposit": 0, "security": 0, "bond": 0,
+    # allergy: the memory example
+    "allergic": 1, "allergy": 1, "peanuts": 1, "nuts": 1,
+    "walnuts": 5,
+    # rent
+    "rent": 2, "monthly": 2,
+    # noise
+    "bicycle": 3, "weather": 4,
+}
 
 
 @pytest.fixture
 def embedder(monkeypatch):
-    fake = FakeEmbedder()
-    monkeypatch.setattr(embeddings, "available", lambda: True)
-    monkeypatch.setattr(embeddings, "embed", fake)
-    monkeypatch.setattr(embeddings, "model_name", lambda: "fake-embed")
-    return fake
+    return fake_embedder(monkeypatch, AXES)
 
 
 def index(path: str, *sections: tuple[str, str]) -> None:

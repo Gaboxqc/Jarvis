@@ -28,6 +28,7 @@ import pytest
 from app import db
 from app.index import embeddings
 from app.memory import long_term
+from .conftest import count_vector_reads, fake_embedder
 
 WIDTH = 8
 
@@ -41,58 +42,16 @@ def _clean():
     long_term._invalidate()
 
 
-class Embedder:
-    """One axis per idea, so similarity is deliberate rather than random.
-
-    Counts its calls, because "did this make an HTTP request to Ollama" is the
-    question half this file asks.
-    """
-
-    AXES = {
-        "allergic": 0, "allergy": 0, "peanuts": 0, "nuts": 0,
-        "landlord": 1, "hendricks": 1, "rent": 1,
-        "bicycle": 2, "chain": 2,
-    }
-
-    def __init__(self) -> None:
-        self.calls = 0
-
-    def __call__(self, texts: list[str]) -> list[np.ndarray] | None:
-        if not embeddings.available():
-            return None
-        self.calls += 1
-        out = []
-        for text in texts:
-            vector = np.zeros(WIDTH, dtype=np.float32)
-            for word in text.lower().replace(".", " ").split():
-                axis = self.AXES.get(word.strip("?!,'\""))
-                if axis is not None:
-                    vector[axis] += 1.0
-            out.append(embeddings.normalise(vector))
-        return out
+AXES = {
+    "allergic": 0, "allergy": 0, "peanuts": 0, "nuts": 0,
+    "landlord": 1, "hendricks": 1, "rent": 1,
+    "bicycle": 2, "chain": 2,
+}
 
 
 @pytest.fixture
 def embedder(monkeypatch):
-    fake = Embedder()
-    monkeypatch.setattr(embeddings, "available", lambda: True)
-    monkeypatch.setattr(embeddings, "embed", fake)
-    monkeypatch.setattr(embeddings, "model_name", lambda: "fake-embed")
-    return fake
-
-
-def count_vector_reads(monkeypatch) -> list[int]:
-    """Count SELECTs that pull fact vectors, which is the per-turn read."""
-    seen = [0]
-    original = db.query
-
-    def counting(sql, params=()):
-        if "FROM fact_vectors" in sql and "vector" in sql.split("FROM")[0]:
-            seen[0] += 1
-        return original(sql, params)
-
-    monkeypatch.setattr(db, "query", counting)
-    return seen
+    return fake_embedder(monkeypatch, AXES)
 
 
 # -- the embed that is not paid for ---------------------------------------
@@ -193,7 +152,7 @@ def test_the_vectors_are_read_once_and_then_held(workspace, embedder, monkeypatc
     long_term.add("Peanuts make me ill")
     long_term.add("My landlord is called Hendricks")
 
-    reads = count_vector_reads(monkeypatch)
+    reads = count_vector_reads(monkeypatch, "fact_vectors")
     assert long_term.relevant("am I allergic to anything")
     after_first = reads[0]
     assert after_first > 0, "the first recall must read the vectors from somewhere"
